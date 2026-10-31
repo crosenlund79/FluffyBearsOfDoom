@@ -16,11 +16,13 @@ func update(_delta: float) -> void:
 	var v := Vector2.ZERO
 	var bomb := false
 	var steal := false
+	var special := false
 	for p in schemes:
 		v.x += Input.get_action_strength(p + "_right") - Input.get_action_strength(p + "_left")
 		v.y += Input.get_action_strength(p + "_down") - Input.get_action_strength(p + "_up")
 		bomb = bomb or Input.is_action_just_pressed(p + "_bomb")
 		steal = steal or Input.is_action_pressed(p + "_steal")
+		special = special or Input.is_action_just_pressed(p + "_special")
 	var sx := signf(v.x) if absf(v.x) > 0.3 else 0.0
 	var sy := signf(v.y) if absf(v.y) > 0.3 else 0.0
 	if sx != 0.0 and _prev.x == 0.0:
@@ -39,3 +41,5 @@ func update(_delta: float) -> void:
 	if bomb:
 		bear.want_bomb = true
 	bear.want_steal = steal
+	if special:
+		bear.want_special = true

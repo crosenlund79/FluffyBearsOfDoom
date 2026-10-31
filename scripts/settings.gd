@@ -1,104 +1,146 @@
-## Match settings chosen in the menu + input bindings for up to four humans.
+## Match setup, input bindings and saved audio preferences.
 extends Node
 
-const NAMES := ["Player", "Oswald", "Harald", "Theodor"]
-const COLORS := [Color("d9a66b"), Color("8eaecb"), Color("a3bf8c"), Color("c39bcb")]
-const CONTROLLERS := ["human", "easy", "normal", "hard"]
-const CONTROLLER_LABELS := ["Human", "AI: Easy", "AI: Normal", "AI: Hard"]
+const AI_NAMES := ["Oswald", "Harald", "Theodor"]
+const AI_COLORS := [Color("8eaecb"), Color("a3bf8c"), Color("c39bcb")]
+const HUMAN_COLORS := [Color("d9a66b"), Color("e3a1a8")]
+const LEVELS := ["easy", "normal", "hard"]
+const LEVEL_LABELS := ["Easy", "Normal", "Hard"]
+const SAVE_PATH := "user://settings.cfg"
 
-# One entry per slot: "human", "easy", "normal" or "hard".
-var slots: Array = ["human", "normal", "normal", "normal"]
+var human_count := 1
+var ai_levels := ["normal", "normal", "normal"]  # per AI_NAMES
+var sitting_out := 2                              # which AI sits out in two-human mode
 var arena_index := 0
 var round_time_index := 1
 
-const ACTIONS := ["up", "down", "left", "right", "bomb", "steal"]
+# Audio (0..1)
+var master_volume := 0.9
+var music_volume := 0.6
+var sfx_volume := 0.85
+var muted := false
+var shuffle_music := true
 
-# Keyboard schemes per human player (physical keys, layout independent).
+const ACTIONS := ["up", "down", "left", "right", "bomb", "steal", "special"]
+# Keys per scheme. Negative values = left-hand key location, positive modifiers = right-hand.
 const KEYS := [
-	{"up": [KEY_W], "down": [KEY_S], "left": [KEY_A], "right": [KEY_D], "bomb": [KEY_SPACE], "steal": [KEY_E, -KEY_SHIFT]},
-	{"up": [KEY_UP], "down": [KEY_DOWN], "left": [KEY_LEFT], "right": [KEY_RIGHT], "bomb": [KEY_ENTER, KEY_KP_ENTER], "steal": [KEY_SHIFT]},
-	{"up": [KEY_I], "down": [KEY_K], "left": [KEY_J], "right": [KEY_L], "bomb": [KEY_O], "steal": [KEY_U]},
-	{"up": [KEY_KP_8], "down": [KEY_KP_5], "left": [KEY_KP_4], "right": [KEY_KP_6], "bomb": [KEY_KP_0], "steal": [KEY_KP_PERIOD]},
+	{"up": [KEY_W], "down": [KEY_S], "left": [KEY_A], "right": [KEY_D], "bomb": [KEY_SPACE], "steal": [-KEY_SHIFT], "special": [KEY_E]},
+	{"up": [KEY_UP], "down": [KEY_DOWN], "left": [KEY_LEFT], "right": [KEY_RIGHT], "bomb": [KEY_ENTER, KEY_KP_ENTER], "steal": [KEY_CTRL], "special": [KEY_SHIFT]},
 ]
+const MODIFIERS := [KEY_SHIFT, KEY_CTRL, KEY_ALT]
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	if not InputMap.has_action("pause"):
-		InputMap.add_action("pause")
-		_add_key("pause", KEY_ESCAPE)
-		_add_key("pause", KEY_P)
+	_load()
+	_ensure_buses()
+	apply_audio()
+	for a in [["pause", [KEY_ESCAPE, KEY_P], JOY_BUTTON_START], ["next_track", [KEY_N], JOY_BUTTON_BACK]]:
+		if InputMap.has_action(a[0]):
+			continue
+		InputMap.add_action(a[0])
+		for k in a[1]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = k
+			InputMap.action_add_event(a[0], ev)
 		var jb := InputEventJoypadButton.new()
-		jb.button_index = JOY_BUTTON_START
+		jb.button_index = a[2]
 		jb.device = -1
-		InputMap.action_add_event("pause", jb)
+		InputMap.action_add_event(a[0], jb)
 	apply_input_bindings()
 
 
-func human_slots() -> Array:
+## The four bears of the next match: [{name, color, controller, schemes}].
+func roster() -> Array:
 	var out := []
-	for i in slots.size():
-		if slots[i] == "human":
-			out.append(i)
+	if human_count == 0:  # demo / smoke test: a Hard AI plays the player's bear
+		out.append({"name": "Player", "color": HUMAN_COLORS[0], "controller": "hard", "schemes": []})
+	elif human_count == 1:
+		out.append({"name": "Player", "color": HUMAN_COLORS[0], "controller": "human", "schemes": ["p1", "p2"]})
+	else:
+		out.append({"name": "Player 1", "color": HUMAN_COLORS[0], "controller": "human", "schemes": ["p1"]})
+		out.append({"name": "Player 2", "color": HUMAN_COLORS[1], "controller": "human", "schemes": ["p2"]})
+	for i in AI_NAMES.size():
+		if human_count == 2 and i == sitting_out:
+			continue
+		out.append({"name": AI_NAMES[i], "color": AI_COLORS[i], "controller": ai_levels[i], "schemes": []})
 	return out
 
 
-## Which input schemes ("p1".."p4") a human in `slot` listens to.
-func schemes_for_slot(slot: int) -> Array:
-	var humans := human_slots()
-	if humans.size() == 1:
-		return ["p1", "p2"]  # a lone human may use WASD or arrows
-	var idx := humans.find(slot)
-	return ["p%d" % (idx + 1)]
-
-
 func apply_input_bindings() -> void:
-	var solo := human_slots().size() <= 1
-	for p in 4:
+	var solo := human_count <= 1
+	for p in 2:
 		for a in ACTIONS:
 			var action := "p%d_%s" % [p + 1, a]
 			if InputMap.has_action(action):
 				InputMap.erase_action(action)
 			InputMap.add_action(action, 0.4)
-			# Right/left shift are told apart by key location (negative = left).
 			for k in KEYS[p][a]:
 				var ev := InputEventKey.new()
 				ev.physical_keycode = absi(k)
-				if k == KEY_SHIFT:
-					ev.location = KEY_LOCATION_RIGHT
-				elif k == -KEY_SHIFT:
-					ev.location = KEY_LOCATION_LEFT
+				if absi(k) in MODIFIERS:
+					ev.location = KEY_LOCATION_LEFT if k < 0 else KEY_LOCATION_RIGHT
 				InputMap.action_add_event(action, ev)
-			var device := -1 if solo else p
 			if solo and p > 0:
-				continue  # the solo player's pad is bound once, via p1
-			_add_pad(action, a, device)
+				continue  # a lone player's pad (any device) is bound once, via p1
+			_add_pad(action, a, -1 if solo else p)
 
 
 func _add_pad(action: String, a: String, device: int) -> void:
 	var buttons := {"up": [JOY_BUTTON_DPAD_UP], "down": [JOY_BUTTON_DPAD_DOWN], "left": [JOY_BUTTON_DPAD_LEFT],
-		"right": [JOY_BUTTON_DPAD_RIGHT], "bomb": [JOY_BUTTON_A], "steal": [JOY_BUTTON_X, JOY_BUTTON_B]}
+		"right": [JOY_BUTTON_DPAD_RIGHT], "bomb": [JOY_BUTTON_A], "steal": [JOY_BUTTON_X, JOY_BUTTON_B],
+		"special": [JOY_BUTTON_Y, JOY_BUTTON_LEFT_SHOULDER]}
 	for b in buttons[a]:
 		var jb := InputEventJoypadButton.new()
 		jb.button_index = b
 		jb.device = device
 		InputMap.action_add_event(action, jb)
-	var axes := {"up": [JOY_AXIS_LEFT_Y, -1.0], "down": [JOY_AXIS_LEFT_Y, 1.0], "left": [JOY_AXIS_LEFT_X, -1.0], "right": [JOY_AXIS_LEFT_X, 1.0]}
+	var axes := {"up": [JOY_AXIS_LEFT_Y, -1.0], "down": [JOY_AXIS_LEFT_Y, 1.0], "left": [JOY_AXIS_LEFT_X, -1.0],
+		"right": [JOY_AXIS_LEFT_X, 1.0], "steal": [JOY_AXIS_TRIGGER_RIGHT, 1.0]}
 	if axes.has(a):
 		var jm := InputEventJoypadMotion.new()
 		jm.axis = axes[a][0]
 		jm.axis_value = axes[a][1]
 		jm.device = device
 		InputMap.action_add_event(action, jm)
-	if a == "steal":
-		var jt := InputEventJoypadMotion.new()
-		jt.axis = JOY_AXIS_TRIGGER_RIGHT
-		jt.axis_value = 1.0
-		jt.device = device
-		InputMap.action_add_event(action, jt)
 
 
-func _add_key(action: String, key: int) -> void:
-	var ev := InputEventKey.new()
-	ev.physical_keycode = key
-	InputMap.action_add_event(action, ev)
+# --- audio ----------------------------------------------------------------------
+
+func _ensure_buses() -> void:
+	for bus in ["Music", "SFX"]:
+		if AudioServer.get_bus_index(bus) == -1:
+			AudioServer.add_bus()
+			var i := AudioServer.bus_count - 1
+			AudioServer.set_bus_name(i, bus)
+			AudioServer.set_bus_send(i, "Master")
+
+
+func apply_audio() -> void:
+	_set_bus("Master", master_volume)
+	_set_bus("Music", music_volume)
+	_set_bus("SFX", sfx_volume)
+	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), muted)
+
+
+func _set_bus(bus: String, v: float) -> void:
+	var i := AudioServer.get_bus_index(bus)
+	if i >= 0:
+		AudioServer.set_bus_volume_db(i, linear_to_db(maxf(v, 0.0001)))
+
+
+func save() -> void:
+	var cf := ConfigFile.new()
+	for k in ["master_volume", "music_volume", "sfx_volume", "muted", "shuffle_music", "human_count",
+			"ai_levels", "sitting_out", "arena_index", "round_time_index"]:
+		cf.set_value("settings", k, get(k))
+	cf.save(SAVE_PATH)
+
+
+func _load() -> void:
+	var cf := ConfigFile.new()
+	if cf.load(SAVE_PATH) != OK:
+		return
+	for k in cf.get_section_keys("settings"):
+		if k in self:
+			set(k, cf.get_value("settings", k))

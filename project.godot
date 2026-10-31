@@ -16,6 +16,7 @@ config/icon="res://icon.png"
 Settings="*res://scripts/settings.gd"
 Assets="*res://scripts/assets.gd"
 Sfx="*res://scripts/sfx.gd"
+Music="*res://scripts/music.gd"
 
 [display]
 

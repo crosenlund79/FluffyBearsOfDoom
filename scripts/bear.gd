@@ -1,6 +1,7 @@
 ## A teddy bear: grid-corridor movement with fluff-dependent inertia,
 ## bombs, stuns and stuffing theft. Humans and AI drive it through the same
-## three inputs (input_dir, want_bomb, want_steal), so both get identical physics.
+## inputs (input_dir, want_bomb, want_steal, want_special), so both get identical
+## physics - and identical curses.
 extends Node2D
 
 const Tuning = preload("res://scripts/tuning.gd")
@@ -11,6 +12,7 @@ var slot := 0
 var bear_name := ""
 var color := Color.WHITE
 var is_human := false
+var ctrl_label := ""
 var game
 var arena
 var controller
@@ -23,12 +25,24 @@ var facing := Vector2.DOWN
 var input_dir := Vector2.ZERO
 var want_bomb := false
 var want_steal := false
+var want_special := false
 
 # Power-ups
 var bombs_max := Tuning.START_BOMBS
 var bomb_range := Tuning.START_RANGE
 var speed_level := 0
 var active_bombs := 0
+var can_kick := false
+var has_line := false
+var has_rubber := false
+
+# Timed effects
+var immortal_t := 0.0
+var reverse_t := 0.0
+var diarrhea_t := 0.0
+var infect_cd := 0.0          # can't pass reverse on yet
+var reinfect_immune := 0.0    # just cured
+var _diarrhea_cd := 0.0
 
 # State
 var stun_t := 0.0
@@ -48,13 +62,18 @@ var overlay
 var _steal_sfx_t := 0.0
 
 
-## Drawn above the rig: dizzy stars, the human player's marker.
+## Drawn above the rig: cartoon birds and stars, curse icons, the
+## immortality halo, the human players' markers.
 class Overlay extends Node2D:
 	var bear
 	var tex: Texture2D
+	var icons: Texture2D
+	var font: Font
 
 	func _ready() -> void:
 		tex = Assets.tex("effects/effects")
+		icons = Assets.tex("powerups/powerups")
+		font = preload("res://scripts/ui_style.gd").font()
 
 	func _process(_delta: float) -> void:
 		queue_redraw()
@@ -64,17 +83,51 @@ class Overlay extends Node2D:
 		if v == null or v.head == null:
 			return
 		var head: Vector2 = v.head.global_position - global_position
+		var above := head + Vector2(0, -v.head_r - 10.0)
+		var t: float = v.t
+		if bear.immortal_t > 0.0:
+			var a := 0.25 + 0.15 * sin(t * 6.0)
+			if bear.immortal_t < 3.0 and fmod(t * 6.0, 1.0) < 0.5:
+				a *= 0.3
+			draw_set_transform(Vector2(0, -v.head_r), 0.0, Vector2(1.0, 1.15))
+			draw_circle(Vector2.ZERO, v.shadow_w + 14.0, Color(1.0, 0.9, 0.55, a))
+			draw_set_transform(above + Vector2(0, 4), 0.0, Vector2(1.0, 0.3))
+			draw_arc(Vector2.ZERO, 12.0, 0.0, TAU, 20, Color(0.95, 0.78, 0.35, 0.95), 3.0)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		if bear.is_stunned():
-			var region := Assets.region(tex, Assets.EFFECT_CELLS, 3)
-			for i in 3:
-				var a: float = v.t * 4.0 + i * TAU / 3.0
-				var p := head + Vector2(cos(a) * 17.0, sin(a) * 6.0 - 14.0)
-				var s := 13.0 + sin(a) * 2.0
-				draw_texture_rect_region(tex, Rect2(p - Vector2(s, s) * 0.5, Vector2(s, s)), region)
-		elif bear.is_human:
-			var y: float = v.position.y + v.head_top - 12.0
-			var c := Color(bear.color.darkened(0.25), 0.9)
-			draw_colored_polygon(PackedVector2Array([Vector2(-6, y - 8), Vector2(6, y - 8), Vector2(0, y)]), c)
+			# old-cartoon concussion: birds and stars circling above the head
+			var star := Assets.region(tex, Assets.EFFECT_CELLS, 3)
+			var bird := Assets.region(tex, Assets.EFFECT_CELLS, 6)
+			var rx: float = 16.0 + v.head_r * 0.4
+			for i in 4:
+				var a: float = t * 3.5 + i * TAU / 4.0
+				var p := above + Vector2(cos(a) * rx, sin(a) * 6.0)
+				var front := sin(a) > 0.0
+				var sz := (15.0 if front else 12.0)
+				if i % 2 == 0:
+					var flap := 0.75 + 0.25 * sin(t * 30.0 + i)
+					var dir := -1.0 if sin(a) > 0.0 else 1.0  # flies the way it orbits
+					draw_set_transform(p, 0.0, Vector2(dir, flap))
+					draw_texture_rect_region(tex, Rect2(-Vector2(sz, sz) * 0.6, Vector2(sz, sz) * 1.2), bird)
+				else:
+					draw_set_transform(p, t * 4.0, Vector2.ONE)
+					draw_texture_rect_region(tex, Rect2(-Vector2(sz, sz) * 0.5, Vector2(sz, sz)), star)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			return
+		var x := -10.0 if (bear.reverse_t > 0.0 and bear.diarrhea_t > 0.0) else 0.0
+		for curse in [[bear.reverse_t, 8], [bear.diarrhea_t, 9]]:
+			if curse[0] > 0.0:
+				var p := above + Vector2(x, -8.0 + sin(t * 5.0 + x) * 2.0)
+				draw_set_transform(p, sin(t * 7.0 + x) * 0.25, Vector2.ONE)
+				draw_texture_rect_region(icons, Rect2(-10, -10, 20, 20), Assets.region(icons, Assets.POWERUP_CELLS, curse[1]))
+				x += 20.0
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		if bear.is_human:
+			var y: float = above.y - (22.0 if x != 0.0 else 2.0)
+			var c := Color(bear.color.darkened(0.3), 0.95)
+			draw_colored_polygon(PackedVector2Array([Vector2(above.x - 6, y - 8), Vector2(above.x + 6, y - 8), Vector2(above.x, y)]), c)
+			if bear.bear_name.begins_with("Player "):
+				draw_string(font, Vector2(above.x - 20, y - 11), bear.bear_name.substr(7).insert(0, "P"), HORIZONTAL_ALIGNMENT_CENTER, 40, 13, c)
 
 
 func setup(g, s: int, n: String, col: Color, spawn: Vector2i) -> void:
@@ -149,12 +202,30 @@ func _physics_process(delta: float) -> void:
 		input_dir = Vector2.ZERO
 		want_bomb = false
 		want_steal = false
+		want_special = false
 	if stun_t > 0.0:
 		stun_t -= delta
 		if stun_t <= 0.0:
 			_recover()
 	immune_t = maxf(0.0, immune_t - delta)
 	robbed_t = maxf(0.0, robbed_t - delta)
+	immortal_t = maxf(0.0, immortal_t - delta)
+	infect_cd = maxf(0.0, infect_cd - delta)
+	reinfect_immune = maxf(0.0, reinfect_immune - delta)
+	if reverse_t > 0.0:
+		reverse_t -= delta
+		if reverse_t <= 0.0:
+			reverse_t = 0.0
+			reinfect_immune = Tuning.REVERSE_REINFECT_IMMUNE
+	diarrhea_t = maxf(0.0, diarrhea_t - delta)
+	_diarrhea_cd -= delta
+	if diarrhea_t > 0.0 and game.controls_enabled() and not is_stunned() and _diarrhea_cd <= 0.0 and can_place_bomb():
+		_diarrhea_cd = Tuning.DIARRHEA_INTERVAL
+		want_bomb = true  # out it comes, whether you like it or not
+	if want_special:
+		want_special = false
+		if has_line and game.controls_enabled() and not is_stunned():
+			game.place_line(self)
 	if want_bomb:
 		want_bomb = false
 		game.try_place_bomb(self)
@@ -164,7 +235,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_steal(delta: float) -> void:
-	if want_steal and can_act():
+	if want_steal and can_act() and input_dir == Vector2.ZERO:
 		var target = game.find_steal_target(self)
 		if target != null:
 			if not stealing:
@@ -195,6 +266,8 @@ func _move(delta: float) -> void:
 	var ac: float = accel() * tp["accel"]
 	var br: float = brake() * tp["brake"]
 	var dir := input_dir if (can_act() and not stealing) else Vector2.ZERO
+	if reverse_t > 0.0:
+		dir = -dir  # the curse: left is right, up is down
 
 	if dir == Vector2.ZERO:
 		velocity.x = move_toward(velocity.x, 0.0, br * delta)
@@ -270,12 +343,15 @@ func _sweep(axis: int, amount: float) -> bool:
 	var minc: Vector2i = arena.world_to_cell(pos - Vector2(h, h))
 	var maxc: Vector2i = arena.world_to_cell(pos + Vector2(h, h) - Vector2(0.001, 0.001))
 	var hit := false
+	var kicked = null
 	for cx in range(minc.x, maxc.x + 1):
 		for cy in range(minc.y, maxc.y + 1):
 			var c := Vector2i(cx, cy)
 			if not arena.blocks_bear(c, self):
 				continue
 			hit = true
+			if can_kick and arena.bombs.has(c):
+				kicked = arena.bombs[c]
 			if axis == 0:
 				if amount > 0.0:
 					pos.x = minf(pos.x, cx * T - h - 0.001)
@@ -287,7 +363,18 @@ func _sweep(axis: int, amount: float) -> bool:
 				else:
 					pos.y = maxf(pos.y, (cy + 1) * T + h + 0.001)
 	position = pos
+	if kicked != null and not stunned_or_stealing():
+		# only kick a bomb we're roughly lined up with
+		var perp := 1 - axis
+		if absf(position[perp] - kicked.position[perp]) < 14.0:
+			var d := Vector2i.ZERO
+			d[axis] = 1 if amount > 0.0 else -1
+			kicked.kick(d)
 	return hit
+
+
+func stunned_or_stealing() -> bool:
+	return is_stunned() or stealing
 
 
 func _on_wall(axis: int, restitution: float) -> void:
@@ -308,7 +395,7 @@ func _on_wall(axis: int, restitution: float) -> void:
 # --- events -------------------------------------------------------------------------
 
 func stun(from_pos: Vector2) -> void:
-	if is_stunned() or immune_t > 0.0:
+	if is_stunned() or immune_t > 0.0 or immortal_t > 0.0:
 		return
 	stun_t = Tuning.STUN_TIME
 	times_stunned += 1
@@ -318,7 +405,7 @@ func stun(from_pos: Vector2) -> void:
 	if away.length() > 1.0:
 		velocity += away.normalized() * 90.0
 	visual.on_stunned(signf(away.x) if absf(away.x) > 1.0 else 0.0)
-	Sfx.play("stun", randf_range(0.9, 1.1) / sqrt(maxf(fluff_ratio(), 0.35)))
+	Sfx.play("concussion", randf_range(0.95, 1.08) / pow(maxf(fluff_ratio(), 0.35), 0.25))
 	game.on_bear_stunned(self)
 
 

@@ -368,17 +368,28 @@ def make_tiles():
 
 # ---------------------------------------------------------------- objects
 def make_bomb():
+    """A stitched fabric toy bomb. Drawn pale so the game can tint it pastel."""
     c = Canvas(64, 64)
-    # knitted yarn-ball bomb
-    c.ellipse(30, 36, 23, 23, fill=rgba("6b5672"))
-    for i in range(6):
-        a = i * 30
-        c.arc(30, 36, 21, 8 + i * 2, a, a + 180, rgba("856f8c"), 1.6)
-    c.arc(30, 36, 23, 23, 200, 330, rgba("9a86a0"), 2.0)
-    c.ellipse(22, 27, 6, 4, fill=(255, 255, 255, 70))
-    # cork + fuse
-    c.rect(36, 10, 46, 18, fill=rgba("b08d6a"), radius=2)
-    c.line([(41, 12), (46, 6), (52, 5)], rgba("7c6a58"), 2.0)
+    outline = rgba("6e5f57")
+    c.ellipse(31, 37, 23.5, 23.5, fill=outline)
+    c.ellipse(31, 37, 22, 22, fill=rgba("ece6e0"))
+    c.ellipse(29, 34, 19, 19, fill=rgba("fbf9f6"))
+    c.ellipse(23, 27, 6, 4, fill=(255, 255, 255, 200))
+    # ball-panel seams
+    c.dashed_ellipse(31, 37, 10, 21, rgba("a89383"), 1.3, 18, 0.55, 0, 360)
+    c.dashed_line(10, 37, 52, 37, rgba("a89383"), 1.3, 3, 3)
+    # a little heart patch
+    c.ellipse(41, 47, 3.4, 3.4, fill=rgba("e9b9c0"))
+    c.ellipse(46, 47, 3.4, 3.4, fill=rgba("e9b9c0"))
+    c.polygon([(37.8, 48), (49.2, 48), (43.5, 54)], fill=rgba("e9b9c0"))
+    # fabric knot + braided yarn fuse
+    c.rect(34, 11, 46, 19, fill=rgba("c9a98a"), radius=3)
+    c.rect(34, 11, 46, 19, outline=outline, width=1.0, radius=3)
+    c.dashed_line(36, 15, 45, 15, rgba("8a6e57"), 1.0, 2, 2)
+    pts = [(40 + i * 0.9, 11 - math.sin(i * 0.5) * 3 - i * 0.6) for i in range(14)]
+    c.line(pts, rgba("b48f6e"), 2.4)
+    for x, y in pts[::3]:
+        c.ellipse(x, y, 1.0, 1.0, fill=rgba("f3e3cc"))
     return c.result()
 
 
@@ -392,19 +403,34 @@ def make_fluff():
 
 
 # ---------------------------------------------------------------- powerups
-# 4 cells of 64x64: 0 extra bomb, 1 bigger blast, 2 springy stitching (speed), 3 biome shuffle
-def badge(c, ring):
+# 10 cells of 64x64: 0 extra bomb, 1 bigger blast, 2 springy stitching (speed), 3 biome shuffle,
+# 4 bomb kick, 5 line bomb, 6 rubber bomb, 7 immortality, 8 reverse controls (curse), 9 bomb diarrhea (curse)
+CONFETTI = ["f2a7b5", "a7c8e8", "f5dc8a", "a8dcc0", "c9b2e3", "f6c1a0"]
+
+
+def badge(c, ring, bad=False):
     c.ellipse(32, 33, 27, 27, fill=rgba("bfae98", 160))
-    c.ellipse(32, 31, 27, 27, fill=rgba("fbf3e3"))
+    c.ellipse(32, 31, 27, 27, fill=rgba("e9e0ef") if bad else rgba("fbf3e3"))
     c.ellipse(32, 31, 27, 27, outline=rgba(ring), width=3)
     c.dashed_ellipse(32, 31, 22, 22, rgba(ring), 1.1, 22)
+    if bad:  # stitched "x" corners mark a curse
+        for dx, dy in ((-19, -19), (19, -19)):
+            c.line([(32 + dx - 3, 31 + dy - 3), (32 + dx + 3, 31 + dy + 3)], rgba("6f5a7c"), 1.6)
+            c.line([(32 + dx + 3, 31 + dy - 3), (32 + dx - 3, 31 + dy + 3)], rgba("6f5a7c"), 1.6)
+
+
+def mini_bomb(c, x, y, r, col="f2a7b5"):
+    c.ellipse(x, y, r + 1.2, r + 1.2, fill=rgba("6e5f57"))
+    c.ellipse(x, y, r, r, fill=rgba(col))
+    c.dashed_ellipse(x, y, r * 0.45, r * 0.95, rgba("8a6e57"), 0.9, 10)
+    c.ellipse(x - r * 0.35, y - r * 0.4, r * 0.25, r * 0.18, fill=(255, 255, 255, 140))
+    c.line([(x + r * 0.4, y - r * 0.9), (x + r * 0.7, y - r * 1.4)], rgba("b48f6e"), 1.8)
 
 
 def pu_bomb():
     c = Canvas(64, 64)
     badge(c, "8f7aa0")
-    c.ellipse(30, 35, 12, 12, fill=rgba("6b5672"))
-    c.line([(36, 24), (40, 19)], rgba("7c6a58"), 2)
+    mini_bomb(c, 29, 35, 12)
     c.line([(46, 18), (46, 30)], rgba("6c9a63"), 3)
     c.line([(40, 24), (52, 24)], rgba("6c9a63"), 3)
     return c.result()
@@ -413,24 +439,20 @@ def pu_bomb():
 def pu_fire():
     c = Canvas(64, 64)
     badge(c, "d8908a")
-    for i in range(8):
-        a = i * math.pi / 4
-        c.line([(32 + math.cos(a) * 7, 31 + math.sin(a) * 7), (32 + math.cos(a) * 17, 31 + math.sin(a) * 17)],
-               rgba("e39b7f"), 3.5)
-    c.ellipse(32, 31, 8, 8, fill=rgba("f3c56f"))
+    for i in range(10):
+        a = i * math.pi / 5
+        col = rgba(CONFETTI[i % len(CONFETTI)])
+        x, y = 32 + math.cos(a) * 15, 31 + math.sin(a) * 15
+        c.polygon([(x - 3, y - 2), (x + 3, y - 3), (x + 3, y + 2), (x - 3, y + 3)], fill=col)
+    c.ellipse(32, 31, 7, 7, fill=rgba("f5dc8a"))
     return c.result()
 
 
 def pu_speed():
     c = Canvas(64, 64)
     badge(c, "7fa8c2")
-    pts = []
-    for i in range(60):
-        k = i / 59
-        pts.append((24 + k * 16 + math.sin(k * math.pi * 8) * 0, 44 - k * 26 + math.sin(k * math.pi * 8) * 0))
     for i in range(5):
-        y = 44 - i * 6
-        c.arc(32, y, 10, 3.5, 0, 360, rgba("6d8fa6"), 2.4)
+        c.arc(32, 44 - i * 6, 10, 3.5, 0, 360, rgba("6d8fa6"), 2.4)
     c.ellipse(32, 18, 6, 3, fill=rgba("e6b6bc"))
     return c.result()
 
@@ -449,8 +471,76 @@ def pu_shuffle():
     return c.result()
 
 
+def pu_kick():
+    c = Canvas(64, 64)
+    badge(c, "c79a6b")
+    # a stubby plush foot booting a little bomb
+    c.rect(12, 30, 32, 44, fill=rgba("d9a66b"), radius=7)
+    c.ellipse(28, 40, 8, 5, fill=rgba("f7ead8"))
+    mini_bomb(c, 44, 30, 8, "a7c8e8")
+    for i in range(3):
+        c.line([(34 - i, 22 + i * 4), (38 - i, 22 + i * 4)], rgba("8a7563"), 1.4)
+    return c.result()
+
+
+def pu_line():
+    c = Canvas(64, 64)
+    badge(c, "a08bc0")
+    for i, col in enumerate(("f2a7b5", "f5dc8a", "a8dcc0")):
+        mini_bomb(c, 18 + i * 14, 33, 6, col)
+    c.line([(14, 46), (50, 46)], rgba("6f5a7c"), 2.0)
+    c.polygon([(50, 42), (56, 46), (50, 50)], fill=rgba("6f5a7c"))
+    return c.result()
+
+
+def pu_rubber():
+    c = Canvas(64, 64)
+    badge(c, "e0889a")
+    c.ellipse(34, 34, 12, 12, fill=rgba("6e5f57"))
+    c.ellipse(34, 34, 11, 11, fill=rgba("f6b0c0"))
+    for dy in (-5, 0, 5):
+        c.line([(24, 34 + dy), (44, 34 + dy)], rgba("fff4f6"), 2.2)
+    c.arc(18, 30, 9, 12, 100, 260, rgba("c4778a"), 1.6)
+    c.arc(14, 30, 12, 15, 110, 250, rgba("c4778a", 150), 1.4)
+    return c.result()
+
+
+def pu_immortal():
+    c = Canvas(64, 64)
+    badge(c, "d6b45e")
+    c.ellipse(32, 18, 13, 4, outline=rgba("e6c25a"), width=2.5)
+    c.ellipse(27, 32, 7, 7, fill=rgba("f2c4c8"))
+    c.ellipse(37, 32, 7, 7, fill=rgba("f2c4c8"))
+    c.polygon([(20.5, 34), (43.5, 34), (32, 47)], fill=rgba("f2c4c8"))
+    c.ellipse(26, 30, 2.5, 1.6, fill=(255, 255, 255, 170))
+    return c.result()
+
+
+def pu_reverse():
+    c = Canvas(64, 64)
+    badge(c, "6f5a7c", bad=True)
+    c.arc(32, 31, 13, 13, 200, 340, rgba("7b9a6a"), 3.0)
+    c.polygon([(43, 22), (49, 30), (40, 30)], fill=rgba("7b9a6a"))
+    c.arc(32, 31, 13, 13, 20, 160, rgba("b86f8a"), 3.0)
+    c.polygon([(21, 40), (15, 32), (24, 32)], fill=rgba("b86f8a"))
+    c.ellipse(32, 31, 3, 3, fill=rgba("6f5a7c"))
+    return c.result()
+
+
+def pu_diarrhea():
+    c = Canvas(64, 64)
+    badge(c, "6f5a7c", bad=True)
+    mini_bomb(c, 26, 38, 7, "c9d9a0")
+    mini_bomb(c, 40, 38, 7, "c9d9a0")
+    mini_bomb(c, 33, 26, 7, "c9d9a0")
+    for x in (20, 46):
+        c.line([(x, 20), (x + 2, 16), (x, 12)], rgba("8aa06a"), 1.6)
+    return c.result()
+
+
 def make_powerups():
-    cells = [pu_bomb(), pu_fire(), pu_speed(), pu_shuffle()]
+    cells = [pu_bomb(), pu_fire(), pu_speed(), pu_shuffle(), pu_kick(), pu_line(), pu_rubber(),
+             pu_immortal(), pu_reverse(), pu_diarrhea()]
     sheet = Image.new("RGBA", (64 * len(cells), 64), (0, 0, 0, 0))
     for i, im in enumerate(cells):
         paste(sheet, im, i * 64, 0)
@@ -458,37 +548,48 @@ def make_powerups():
 
 
 # ---------------------------------------------------------------- effects
-# 6 cells of 64x64: 0 blast centre puff, 1 blast arm (horizontal), 2 blast end (pointing right),
-# 3 star, 4 dust puff, 5 sparkle
-PUFF = rgba("fff6e8")
-PUFF_SHADE = rgba("f2d3cf")
-
-
-def cloud(c, blobs, shade_off=2.5):
-    for (x, y, r) in blobs:
-        c.ellipse(x, y + shade_off, r, r, fill=PUFF_SHADE)
-    for (x, y, r) in blobs:
-        c.ellipse(x, y, r, r, fill=PUFF)
+# 7 cells of 64x64: 0 confetti burst (blast centre), 1 confetti band (blast arm, horizontal),
+# 2 confetti tip (blast end, pointing right), 3 star, 4 dust puff, 5 sparkle, 6 cartoon bird
+def confetti_pieces(c, n, box, size=(3.5, 2.2), seed=0):
+    rnd = random.Random(seed)
+    x0, y0, x1, y1 = box
+    for i in range(n):
+        x, y = rnd.uniform(x0, x1), rnd.uniform(y0, y1)
+        col = rgba(CONFETTI[i % len(CONFETTI)])
+        a = rnd.uniform(0, math.pi)
+        w, h = size[0] * rnd.uniform(0.8, 1.3), size[1] * rnd.uniform(0.8, 1.3)
+        if i % 4 == 3:
+            c.ellipse(x, y, h * 1.1, h * 1.1, fill=col)
+        else:
+            ca, sa = math.cos(a), math.sin(a)
+            pts = [(x + ca * dx - sa * dy, y + sa * dx + ca * dy) for dx, dy in ((-w, -h), (w, -h), (w, h), (-w, h))]
+            c.polygon(pts, fill=col)
 
 
 def fx_center():
     c = Canvas(64, 64)
-    blobs = [(32, 32, 17)] + [(32 + math.cos(a) * 15, 32 + math.sin(a) * 15, 10)
-                              for a in [i * math.pi / 4 for i in range(8)]]
-    cloud(c, blobs)
-    c.ellipse(32, 32, 7, 7, fill=rgba("fbe3a6"))
+    c.ellipse(32, 32, 26, 26, fill=rgba("fff4e4", 150))
+    for i in range(12):
+        a = i * math.pi / 6
+        c.line([(32 + math.cos(a) * 8, 32 + math.sin(a) * 8), (32 + math.cos(a) * 24, 32 + math.sin(a) * 24)],
+               rgba(CONFETTI[i % len(CONFETTI)], 200), 2.2)
+    confetti_pieces(c, 26, (8, 8, 56, 56), seed=1)
+    c.ellipse(32, 32, 6, 6, fill=rgba("fff6d8"))
     return c.result()
 
 
 def fx_arm():
     c = Canvas(64, 64)
-    cloud(c, [(x, 32 + (4 if i % 2 else -4), 13) for i, x in enumerate(range(0, 72, 12))])
+    c.rect(-4, 18, 68, 46, fill=rgba("fff4e4", 140), radius=12)
+    confetti_pieces(c, 22, (0, 20, 64, 44), seed=2)
     return c.result()
 
 
 def fx_end():
     c = Canvas(64, 64)
-    cloud(c, [(0, 30, 13), (12, 34, 13), (24, 30, 12), (34, 33, 10), (42, 31, 7)])
+    c.rect(-4, 18, 40, 46, fill=rgba("fff4e4", 140), radius=12)
+    c.ellipse(36, 32, 12, 14, fill=rgba("fff4e4", 140))
+    confetti_pieces(c, 16, (0, 20, 46, 44), seed=3)
     return c.result()
 
 
@@ -524,8 +625,26 @@ def fx_sparkle():
     return c.result()
 
 
+def fx_bird():
+    """Old-cartoon tweety bird, facing right."""
+    c = Canvas(64, 64)
+    ink = rgba("5b4636")
+    c.polygon([(14, 34), (4, 28), (6, 38)], fill=rgba("e8c35e"))      # tail
+    c.ellipse(28, 36, 15, 12, fill=ink)
+    c.ellipse(28, 36, 13.5, 10.5, fill=rgba("f6d77a"))                 # body
+    c.ellipse(41, 26, 10, 10, fill=ink)
+    c.ellipse(41, 26, 8.6, 8.6, fill=rgba("f6d77a"))                   # head
+    c.polygon([(48, 25), (57, 28), (48, 31)], fill=rgba("e59a5f"))     # beak
+    c.ellipse(43, 24, 2.2, 2.6, fill=ink)
+    c.ellipse(43.6, 23.2, 0.8, 0.8, fill=(255, 255, 255, 230))
+    c.polygon([(20, 32), (32, 30), (24, 20)], fill=rgba("e8c35e"))     # wing
+    c.line([(26, 47), (25, 53)], rgba("e59a5f"), 1.6)
+    c.line([(31, 47), (32, 53)], rgba("e59a5f"), 1.6)
+    return c.result()
+
+
 def make_effects():
-    cells = [fx_center(), fx_arm(), fx_end(), fx_star(), fx_dust(), fx_sparkle()]
+    cells = [fx_center(), fx_arm(), fx_end(), fx_star(), fx_dust(), fx_sparkle(), fx_bird()]
     sheet = Image.new("RGBA", (64 * len(cells), 64), (0, 0, 0, 0))
     for i, im in enumerate(cells):
         paste(sheet, im, i * 64, 0)

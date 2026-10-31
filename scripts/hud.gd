@@ -6,6 +6,7 @@ const StitchPanel = preload("res://scripts/stitch_panel.gd")
 const BearVisual = preload("res://scripts/bear_visual.gd")
 const Tuning = preload("res://scripts/tuning.gd")
 const Maps = preload("res://scripts/arena_maps.gd")
+const AudioPanel = preload("res://scripts/audio_panel.gd")
 
 var game
 var root: Control
@@ -58,7 +59,7 @@ class BearCard extends Control:
 		draw_circle(c + Vector2(0, rad * 0.25), 2.6, Color("4a3127"))
 		# name + controller
 		draw_string(font, Vector2(84, 32), bear.bear_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, UiStyle.INK)
-		var who: String = "you" if bear.is_human else Settings.slots[bear.slot]
+		var who: String = bear.ctrl_label
 		draw_string(font, Vector2(84, 52), who, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, UiStyle.INK_SOFT)
 		# fluff
 		draw_string(font, Vector2(size.x - 220, 40), "%d" % roundi(shown), HORIZONTAL_ALIGNMENT_RIGHT, 200, 30, UiStyle.INK)
@@ -68,15 +69,26 @@ class BearCard extends Control:
 		var frac := clampf(shown / (Tuning.START_FLUFF * 4.0), 0.0, 1.0)
 		draw_rect(Rect2(bar.position, Vector2(bar.size.x * frac, bar.size.y)), bear.color)
 		draw_rect(Rect2(bar.position + Vector2(bar.size.x * 0.25, 0), Vector2(1, bar.size.y)), Color(0.4, 0.3, 0.25, 0.4))
-		# stats
+		# stats: bombs ready/capacity, blast range, speed, then owned abilities
 		var x := 84.0
+		var vals := ["%d/%d" % [bear.bombs_max - bear.active_bombs, bear.bombs_max], str(bear.bomb_range), str(bear.speed_level)]
 		for i in 3:
-			var val: int = [bear.bombs_max, bear.bomb_range, bear.speed_level][i]
 			draw_texture_rect_region(icons, Rect2(x, 77, 20, 20), Assets.region(icons, Assets.POWERUP_CELLS, i))
-			draw_string(font, Vector2(x + 23, 93), str(val), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, UiStyle.INK)
-			x += 50.0
+			draw_string(font, Vector2(x + 22, 93), vals[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, UiStyle.INK)
+			x += 58.0 if i == 0 else 44.0
+		for ab in [[bear.can_kick, 4], [bear.has_line, 5], [bear.has_rubber, 6]]:
+			if ab[0]:
+				draw_texture_rect_region(icons, Rect2(x, 77, 20, 20), Assets.region(icons, Assets.POWERUP_CELLS, ab[1]))
+				x += 23.0
 		var status := ""
 		var scol := UiStyle.INK_SOFT
+		var timed := []
+		if bear.immortal_t > 0.0:
+			timed.append("immortal %ds" % ceili(bear.immortal_t))
+		if bear.reverse_t > 0.0:
+			timed.append("reversed %ds" % ceili(bear.reverse_t))
+		if bear.diarrhea_t > 0.0:
+			timed.append("bomb diarrhea %ds" % ceili(bear.diarrhea_t))
 		if bear.is_stunned():
 			status = "stunned!"
 			scol = UiStyle.ROSE_DARK
@@ -86,11 +98,14 @@ class BearCard extends Control:
 		elif bear.robbed_t > 0.0:
 			status = "robbed!!"
 			scol = UiStyle.ROSE_DARK
+		elif not timed.is_empty():
+			status = " · ".join(timed)
+			scol = Color("b08a2e") if bear.immortal_t > 0.0 and timed.size() == 1 else Color("7a5a8c")
 		elif g > 2.5:
 			status = "dangerously huggable"
 		elif g < 0.4:
 			status = "sadly deflated"
-		draw_string(font, Vector2(size.x - 260, 93), status, HORIZONTAL_ALIGNMENT_RIGHT, 240, 14, scol)
+		draw_string(font, Vector2(size.x - 230, 93), status, HORIZONTAL_ALIGNMENT_RIGHT, 210, 13, scol)
 
 
 func setup(g) -> void:
@@ -148,12 +163,9 @@ func setup(g) -> void:
 
 
 func _controls_text() -> String:
-	var humans: Array = Settings.human_slots()
-	if humans.size() == 1:
-		return "Move: WASD / Arrows   Bomb: Space / Enter\nSteal (hold, next to a stunned bear): E / Shift   Pause: Esc"
-	if humans.is_empty():
-		return "All bears are AI-controlled. Sit back and watch the stuffing fly.   Pause: Esc"
-	return "P1 WASD Space E  ·  P2 Arrows Enter RShift  ·  P3 IJKL O U  ·  P4 Num8456 Num0 Num.   Pause: Esc"
+	if Settings.human_count == 1:
+		return "Move WASD/Arrows · Bomb Space/Enter · Steal (hold) L-Shift/R-Ctrl\nLine Bomb E/R-Shift · Pause Esc · Next song N"
+	return "P1: WASD · Space bomb · L-Shift steal · E line bomb\nP2: Arrows · Enter bomb · R-Ctrl steal · R-Shift line bomb · Esc pause"
 
 
 func _process(_delta: float) -> void:
@@ -181,6 +193,8 @@ func toast(text: String, col: Color) -> void:
 	l.add_theme_color_override("font_outline_color", Color("fbf5e8"))
 	l.add_theme_constant_override("outline_size", 8)
 	toast_box.add_child(l)
+	if toast_box.get_child_count() > 3:
+		toast_box.get_child(0).queue_free()
 	var tw := create_tween()
 	tw.tween_interval(1.6)
 	tw.tween_property(l, "modulate:a", 0.0, 0.5)
@@ -201,7 +215,7 @@ func show_pause(paused: bool) -> void:
 			pause_panel.queue_free()
 			pause_panel = null
 		return
-	pause_panel = _panel(Vector2(360, 240))
+	pause_panel = _panel(Vector2(360, 300))
 	var v := VBoxContainer.new()
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_theme_constant_override("separation", 12)
@@ -213,6 +227,10 @@ func show_pause(paused: bool) -> void:
 		get_tree().paused = false
 		show_pause(false))
 	v.add_child(resume)
+	v.add_child(_button("Audio settings", func():
+		var ap = AudioPanel.new()
+		ap.position = Vector2(180, 160)
+		root.add_child(ap)))
 	v.add_child(_button("Restart match", game.request_restart))
 	v.add_child(_button("Back to menu", game.request_menu))
 	resume.grab_focus()

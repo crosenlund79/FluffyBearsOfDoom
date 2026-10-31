@@ -39,4 +39,10 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	var a := 1.0 - clampf((age / life - 0.6) / 0.4, 0.0, 1.0)
+	if tex == null:  # a confetti paper piece
+		var flip := 0.35 + 0.65 * absf(sin(age * 14.0 + spin))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, flip))
+		draw_rect(Rect2(-size * 0.5, -size * 0.3, size, size * 0.6), Color(color.r, color.g, color.b, color.a * a))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
 	draw_texture_rect_region(tex, Rect2(-size * 0.5, -size * 0.5, size, size), region, Color(color.r, color.g, color.b, color.a * a))

@@ -1,10 +1,11 @@
-## Title menu: choose controllers / AI difficulty per bear, arena and round length.
+## Title menu: players, AI difficulty, arena, round length, audio, controls.
 extends Control
 
 signal start_requested
 
 const UiStyle = preload("res://scripts/ui_style.gd")
 const StitchPanel = preload("res://scripts/stitch_panel.gd")
+const AudioPanel = preload("res://scripts/audio_panel.gd")
 const BearVisual = preload("res://scripts/bear_visual.gd")
 const Maps = preload("res://scripts/arena_maps.gd")
 
@@ -13,6 +14,8 @@ var holders: Array = []
 var t := 0.0
 var map_desc: Label
 var start_button: Button
+var sit_row: Control
+var overlay: Control
 
 
 func _ready() -> void:
@@ -30,7 +33,9 @@ func _ready() -> void:
 	add_child(sub)
 
 	# A parade of bears at different stuffing levels, waddling back and forth.
-	var fluffs := [35.0, 100.0, 210.0, 360.0]
+	var fluffs := [25.0, 100.0, 210.0, 360.0]
+	var names := ["Player", "Oswald", "Harald", "Theodor"]
+	var colors := [Settings.HUMAN_COLORS[0]] + Settings.AI_COLORS
 	for i in 4:
 		var holder := Node2D.new()
 		holder.position = Vector2(110 + i * 150, 430)
@@ -40,58 +45,88 @@ func _ready() -> void:
 		p.fluff = fluffs[i]
 		var vis := BearVisual.new()
 		vis.source = p
-		vis.tint = Settings.COLORS[i]
+		vis.tint = colors[i]
 		vis.seed_offset = i * 2.0
 		holder.add_child(vis)
 		puppets.append(p)
 		holders.append(holder)
-		var cap := UiStyle.label("%s\n%d fluff" % [Settings.NAMES[i], fluffs[i]], 16, UiStyle.INK_SOFT)
+		var cap := UiStyle.label("%s\n%d fluff" % [names[i], fluffs[i]], 16, UiStyle.INK_SOFT)
 		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cap.position = Vector2(50 + i * 150, 470)
 		cap.size = Vector2(120, 50)
 		add_child(cap)
 
-	var blurb := UiStyle.label("Bombs don't hurt - they stun. Hold Steal beside a stunned bear to pull out its fluff.\nThe more you steal, the rounder, wobblier and harder to stop you become.", 16, UiStyle.INK)
+	var blurb := UiStyle.label("Confetti bombs don't hurt - they stun. Hold Steal beside a stunned bear to pull out its fluff.\nThe more you steal, the rounder, wobblier and harder to stop you become.", 16, UiStyle.INK)
 	blurb.position = Vector2(54, 560)
 	blurb.size = Vector2(640, 60)
 	blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(blurb)
 
 	var panel := StitchPanel.new()
-	panel.position = Vector2(740, 150)
-	panel.size = Vector2(500, 520)
+	panel.position = Vector2(740, 90)
+	panel.size = Vector2(500, 540)
 	add_child(panel)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
+	v.add_theme_constant_override("separation", 8)
 	panel.add_child(v)
-	var hdr := UiStyle.label("The Bears", 26, UiStyle.ROSE_DARK)
-	v.add_child(hdr)
-	for i in 4:
+
+	var prow := HBoxContainer.new()
+	prow.add_theme_constant_override("separation", 12)
+	prow.add_child(_fixed(UiStyle.label("Players", 24, UiStyle.ROSE_DARK), 140))
+	var mode := OptionButton.new()
+	mode.add_item("One Human")
+	mode.add_item("Two Humans")
+	mode.selected = clampi(Settings.human_count, 1, 2) - 1
+	Settings.human_count = mode.selected + 1
+	mode.custom_minimum_size = Vector2(220, 38)
+	mode.item_selected.connect(func(idx):
+		Settings.human_count = idx + 1
+		_refresh()
+		Settings.save())
+	prow.add_child(mode)
+	v.add_child(prow)
+
+	v.add_child(UiStyle.label("Opponents", 22, UiStyle.ROSE_DARK))
+	for i in Settings.AI_NAMES.size():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
 		var sw := ColorRect.new()
-		sw.color = Settings.COLORS[i]
+		sw.color = Settings.AI_COLORS[i]
 		sw.custom_minimum_size = Vector2(22, 22)
 		sw.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(sw)
-		var nl := UiStyle.label(Settings.NAMES[i], 20)
-		nl.custom_minimum_size = Vector2(120, 0)
-		row.add_child(nl)
+		row.add_child(_fixed(UiStyle.label(Settings.AI_NAMES[i], 20), 120))
 		var ob := OptionButton.new()
-		for lbl in Settings.CONTROLLER_LABELS:
+		for lbl in Settings.LEVEL_LABELS:
 			ob.add_item(lbl)
-		ob.selected = Settings.CONTROLLERS.find(Settings.slots[i])
-		ob.custom_minimum_size = Vector2(200, 38)
-		ob.item_selected.connect(func(idx): Settings.slots[i] = Settings.CONTROLLERS[idx])
+		ob.selected = Settings.LEVELS.find(Settings.ai_levels[i])
+		ob.custom_minimum_size = Vector2(170, 36)
+		ob.item_selected.connect(func(idx):
+			Settings.ai_levels[i] = Settings.LEVELS[idx]
+			Settings.save())
 		row.add_child(ob)
 		v.add_child(row)
+	var sr := HBoxContainer.new()
+	sr.add_theme_constant_override("separation", 12)
+	sr.add_child(_fixed(UiStyle.label("Sitting out", 18, UiStyle.INK_SOFT), 154))
+	var sit := OptionButton.new()
+	for n in Settings.AI_NAMES:
+		sit.add_item(n)
+	sit.selected = Settings.sitting_out
+	sit.custom_minimum_size = Vector2(170, 36)
+	sit.item_selected.connect(func(idx):
+		Settings.sitting_out = idx
+		Settings.save())
+	sr.add_child(sit)
+	sit_row = sr
+	v.add_child(sr)
 
 	v.add_child(UiStyle.label("Arena", 22, UiStyle.ROSE_DARK))
 	var arena_ob := OptionButton.new()
 	for m in Maps.MAPS:
 		arena_ob.add_item(m["name"])
 	arena_ob.selected = Settings.arena_index
-	arena_ob.custom_minimum_size = Vector2(0, 38)
+	arena_ob.custom_minimum_size = Vector2(0, 36)
 	v.add_child(arena_ob)
 	map_desc = UiStyle.label(Maps.MAPS[Settings.arena_index]["desc"], 15, UiStyle.INK_SOFT)
 	map_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -99,31 +134,114 @@ func _ready() -> void:
 	v.add_child(map_desc)
 	arena_ob.item_selected.connect(func(idx):
 		Settings.arena_index = idx
-		map_desc.text = Maps.MAPS[idx]["desc"])
+		map_desc.text = Maps.MAPS[idx]["desc"]
+		Settings.save())
 
 	var trow := HBoxContainer.new()
 	trow.add_theme_constant_override("separation", 12)
-	trow.add_child(UiStyle.label("Round length", 20))
+	trow.add_child(_fixed(UiStyle.label("Round length", 20), 140))
 	var time_ob := OptionButton.new()
 	for lbl in ["1:30", "2:30", "4:00"]:
 		time_ob.add_item(lbl)
 	time_ob.selected = Settings.round_time_index
-	time_ob.item_selected.connect(func(idx): Settings.round_time_index = idx)
+	time_ob.item_selected.connect(func(idx):
+		Settings.round_time_index = idx
+		Settings.save())
 	trow.add_child(time_ob)
 	v.add_child(trow)
 
 	start_button = Button.new()
-	start_button.text = "Start the mayhem"
-	start_button.custom_minimum_size = Vector2(0, 56)
+	start_button.text = "Start Game"
+	start_button.custom_minimum_size = Vector2(0, 54)
 	start_button.add_theme_font_size_override("font_size", 26)
-	start_button.pressed.connect(func(): start_requested.emit())
+	start_button.pressed.connect(func():
+		Sfx.play("go")
+		start_requested.emit())
 	v.add_child(start_button)
+	var brow := HBoxContainer.new()
+	brow.add_theme_constant_override("separation", 10)
+	brow.alignment = BoxContainer.ALIGNMENT_CENTER
+	for b in [["Audio", _show_audio], ["Controls", _show_controls], ["Quit", func(): get_tree().quit()]]:
+		var btn := Button.new()
+		btn.text = b[0]
+		btn.custom_minimum_size = Vector2(136, 40)
+		btn.pressed.connect(b[1])
+		brow.add_child(btn)
+	v.add_child(brow)
 
-	var ctl := UiStyle.label("Move WASD / Arrows · Bomb Space / Enter · Steal (hold) E / Shift · Pause Esc\nGamepad: stick / d-pad · A bomb · X, B or RT steal", 13, UiStyle.INK_SOFT)
-	ctl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	ctl.custom_minimum_size = Vector2(440, 0)
-	v.add_child(ctl)
+	for c in _all_buttons(panel):
+		c.focus_entered.connect(func(): Sfx.play("menu", 1.0, -8.0))
+	_refresh()
 	start_button.grab_focus()
+	Music.ensure_playing()
+
+
+func _fixed(c: Control, w: float) -> Control:
+	c.custom_minimum_size = Vector2(w, 0)
+	return c
+
+
+func _all_buttons(n: Node) -> Array:
+	var out := []
+	for c in n.get_children():
+		if c is BaseButton:
+			out.append(c)
+		out.append_array(_all_buttons(c))
+	return out
+
+
+func _refresh() -> void:
+	sit_row.visible = Settings.human_count == 2
+
+
+func _close_overlay() -> void:
+	if overlay:
+		overlay.queue_free()
+		overlay = null
+	start_button.grab_focus()
+
+
+func _show_audio() -> void:
+	_close_overlay()
+	Sfx.play("menu")
+	var ap := AudioPanel.new()
+	ap.position = Vector2(420, 150)
+	add_child(ap)
+	ap.closed.connect(func():
+		overlay = null
+		start_button.grab_focus())
+	overlay = ap
+
+
+func _show_controls() -> void:
+	_close_overlay()
+	Sfx.play("menu")
+	var p := StitchPanel.new()
+	p.position = Vector2(250, 120)
+	p.size = Vector2(780, 470)
+	add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	p.add_child(v)
+	v.add_child(UiStyle.label("Controls", 30, UiStyle.ROSE_DARK))
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 40)
+	grid.add_theme_constant_override("v_separation", 6)
+	for row in [["", "Player 1", "Player 2"], ["Move", "W A S D", "Arrow keys"], ["Place bomb", "Space", "Enter"],
+			["Steal fluff (hold)", "Left Shift", "Right Ctrl"], ["Line Bomb", "E", "Right Shift"],
+			["Gamepad", "stick/d-pad, A, X/B/RT, Y/LB", "second pad"]]:
+		for cell in row:
+			grid.add_child(UiStyle.label(cell, 18, UiStyle.ROSE_DARK if row[0] == "" else UiStyle.INK))
+	v.add_child(grid)
+	var notes := UiStyle.label("Playing alone? Both keyboard layouts work for you.\nBomb Kick: walk into a bomb.  Rubber Bombs: kicked bombs bounce off walls.\nPause: Esc / P    Next music track: N\n\nCurses: Reverse Controls flips your steering and spreads to bears you touch.\nBomb Diarrhea drops bombs on its own. Immortality: no stuns, no theft for 20 s.", 16, UiStyle.INK_SOFT)
+	v.add_child(notes)
+	var close := Button.new()
+	close.text = "Done"
+	close.pressed.connect(_close_overlay)
+	v.add_child(close)
+	close.grab_focus()
+	overlay = p
 
 
 func _process(delta: float) -> void:
@@ -144,11 +262,11 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	UiStyle.draw_wallpaper(self, Rect2(Vector2.ZERO, size))
-	# a rug for the parade
 	draw_rect(Rect2(40, 380, 640, 90), Color(0.9, 0.82, 0.74, 0.8))
 	UiStyle.stitch_rect(self, Rect2(46, 386, 628, 78), Color(0.7, 0.5, 0.48, 0.6), 1.6, 6.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and event.keycode == KEY_ENTER and not start_button.has_focus():
-		start_requested.emit()
+	if event.is_action_pressed("ui_cancel") and overlay:
+		_close_overlay()
+		get_viewport().set_input_as_handled()

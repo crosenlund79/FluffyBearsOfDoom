@@ -49,3 +49,16 @@ const ROBBED_GRUMPY := 2.2       # seconds a robbed bear looks indignant
 const SHUFFLE_WARN := 1.8
 const SHUFFLE_DURATION := 22.0
 const SHUFFLE_REGIONS := 4
+
+# --- Bomb abilities -------------------------------------------------------------
+const KICK_SPEED := 330.0        # px/s of a kicked bomb
+const RUBBER_MAX_BOUNCES := 8
+
+# --- Power-ups & curses -----------------------------------------------------------
+const IMMORTAL_TIME := 20.0
+const REVERSE_TIME := 12.0
+const REVERSE_REINFECT_IMMUNE := 3.0  # after being cured
+const INFECT_DIST := 0.85            # tiles, centre to centre
+const INFECT_DELAY := 1.0            # a freshly infected bear can't pass it on at once
+const DIARRHEA_TIME := 10.0
+const DIARRHEA_INTERVAL := 0.3

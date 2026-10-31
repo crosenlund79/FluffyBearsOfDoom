@@ -1,35 +1,47 @@
-## Tiny procedural placeholder sounds. Drop an .ogg or .wav with the same name
-## into res://assets/audio/ to replace one (e.g. assets/audio/squeak.ogg).
+## Sound effects. Each is a tiny procedural placeholder; drop a file with the
+## same name (ogg / wav / mp3) into res://assets/audio/sfx/ to replace it,
+## e.g. assets/audio/sfx/concussion.ogg.
 extends Node
 
 const RATE := 22050
+const SFX_DIR := "res://assets/audio/sfx/"
 var _streams := {}
 var _players: Array[AudioStreamPlayer] = []
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	for i in 14:
+	for i in 16:
 		var p := AudioStreamPlayer.new()
+		p.bus = "SFX"
 		add_child(p)
 		_players.append(p)
-	_streams["squeak"] = _tone(0.13, 1100.0, 1750.0, 0.5, 28.0, 0.0)
-	_streams["bump"] = _tone(0.09, 700.0, 520.0, 0.4, 0.0, 0.05)
-	_streams["boom"] = _boom()
-	_streams["pop"] = _tone(0.07, 620.0, 300.0, 0.5, 0.0, 0.0)
-	_streams["stun"] = _tone(0.4, 520.0, 170.0, 0.45, 11.0, 0.0)
+	_streams["place"] = _tone(0.09, 420.0, 260.0, 0.5, 0.0, 0.1)
+	_streams["fuse"] = _tone(0.04, 1500.0, 1400.0, 0.2, 0.0, 0.4)
+	_streams["confetti"] = _confetti()
+	_streams["concussion"] = _concat([_bonk(), _samples(0.05, 0.0, 0.0, 0.0, 0.0, 0.0),
+		_samples(0.09, 2300.0, 3100.0, 0.25, 35.0, 0.0), _samples(0.04, 0.0, 0.0, 0.0, 0.0, 0.0),
+		_samples(0.09, 2400.0, 3300.0, 0.25, 35.0, 0.0), _samples(0.12, 2600.0, 2000.0, 0.22, 30.0, 0.0)])
 	_streams["steal"] = _tone(0.05, 1300.0, 1600.0, 0.25, 0.0, 0.15)
 	_streams["pickup"] = _concat([_samples(0.07, 660.0, 660.0, 0.4, 0.0, 0.0), _samples(0.1, 990.0, 990.0, 0.4, 0.0, 0.0)])
+	_streams["curse"] = _concat([_samples(0.18, 400.0, 340.0, 0.4, 7.0, 0.0), _samples(0.3, 330.0, 220.0, 0.4, 7.0, 0.0)])
+	_streams["squeak"] = _tone(0.13, 1100.0, 1750.0, 0.5, 28.0, 0.0)
+	_streams["bump"] = _tone(0.09, 700.0, 520.0, 0.4, 0.0, 0.05)
+	_streams["kick"] = _tone(0.08, 220.0, 120.0, 0.6, 0.0, 0.3)
+	_streams["boing"] = _tone(0.25, 300.0, 600.0, 0.45, 18.0, 0.0)
+	_streams["pop"] = _tone(0.07, 620.0, 300.0, 0.5, 0.0, 0.0)
+	_streams["menu"] = _tone(0.04, 900.0, 1100.0, 0.3, 0.0, 0.0)
 	_streams["tick"] = _tone(0.08, 880.0, 880.0, 0.35, 0.0, 0.0)
 	_streams["go"] = _concat([_samples(0.08, 660.0, 660.0, 0.4, 0.0, 0.0), _samples(0.08, 880.0, 880.0, 0.4, 0.0, 0.0), _samples(0.2, 1320.0, 1320.0, 0.4, 6.0, 0.0)])
 	_streams["shuffle"] = _tone(0.6, 250.0, 950.0, 0.3, 9.0, 0.35)
-	_streams["boing"] = _tone(0.25, 300.0, 600.0, 0.45, 18.0, 0.0)
-	_streams["fanfare"] = _concat([_samples(0.14, 523.0, 523.0, 0.4, 0.0, 0.0), _samples(0.14, 659.0, 659.0, 0.4, 0.0, 0.0), _samples(0.14, 784.0, 784.0, 0.4, 0.0, 0.0), _samples(0.4, 1046.0, 1046.0, 0.4, 5.0, 0.0)])
+	_streams["immortal"] = _concat([_samples(0.1, 784.0, 784.0, 0.35, 0.0, 0.0), _samples(0.1, 988.0, 988.0, 0.35, 0.0, 0.0), _samples(0.25, 1568.0, 1568.0, 0.3, 8.0, 0.0)])
+	_streams["victory"] = _concat([_samples(0.14, 523.0, 523.0, 0.4, 0.0, 0.0), _samples(0.14, 659.0, 659.0, 0.4, 0.0, 0.0), _samples(0.14, 784.0, 784.0, 0.4, 0.0, 0.0), _samples(0.4, 1046.0, 1046.0, 0.4, 5.0, 0.0)])
 	for n in _streams.keys():
-		for ext in ["ogg", "wav"]:
-			var path := "res://assets/audio/%s.%s" % [n, ext]
+		for ext in ["ogg", "wav", "mp3"]:
+			var path: String = SFX_DIR + n + "." + ext
 			if ResourceLoader.exists(path):
 				_streams[n] = load(path)
+				break
 
 
 func play(sound: String, pitch := 1.0, volume_db := 0.0) -> void:
@@ -61,19 +73,34 @@ func _samples(dur: float, f0: float, f1: float, vol: float, vibrato: float, nois
 	return out
 
 
-func _boom() -> AudioStreamWAV:
-	# A soft pillowy "fwump" rather than a lethal bang.
-	var n := int(0.45 * RATE)
+## Cartoon "BONK": a hollow wood-block knock with a falling pitch.
+func _bonk() -> PackedFloat32Array:
+	var n := int(0.16 * RATE)
 	var out := PackedFloat32Array()
 	out.resize(n)
-	var lp := 0.0
-	var phase := 0.0
+	var ph := 0.0
 	for i in n:
 		var k := float(i) / n
-		lp = lerpf(lp, randf_range(-1.0, 1.0), 0.08)
-		phase += TAU * lerpf(120.0, 45.0, k) / RATE
-		var env := minf(1.0, k * 60.0) * pow(1.0 - k, 2.2)
-		out[i] = (lp * 1.6 + sin(phase) * 0.7) * env * 0.55
+		ph += TAU * lerpf(820.0, 380.0, pow(k, 0.5)) / RATE
+		out[i] = (sin(ph) * 0.8 + sin(ph * 2.7) * 0.25) * pow(1.0 - k, 3.0) * 0.7
+	return out
+
+
+## A party-popper: a sharp pop followed by papery crackle.
+func _confetti() -> AudioStreamWAV:
+	var n := int(0.5 * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	for i in n:
+		var k := float(i) / n
+		ph += TAU * lerpf(300.0, 90.0, k) / RATE
+		var pop := sin(ph) * pow(maxf(0.0, 1.0 - k * 6.0), 2.0)
+		var crackle := 0.0
+		if randf() < 0.05 * (1.0 - k):
+			crackle = randf_range(-1.0, 1.0)
+		var hiss := randf_range(-1.0, 1.0) * 0.25 * pow(1.0 - k, 2.0)
+		out[i] = (pop * 0.8 + crackle * 0.6 + hiss) * 0.55
 	return _wav(out)
 
 

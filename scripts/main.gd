@@ -17,7 +17,8 @@ func _ready() -> void:
 			return
 	# `godot -- --autotest` runs an all-AI match and prints the result (for CI / smoke tests).
 	if "--autotest" in OS.get_cmdline_user_args():
-		Settings.slots = ["hard", "easy", "normal", "hard"]
+		Settings.human_count = 0
+		Settings.ai_levels = ["easy", "normal", "hard"]
 		Settings.round_time_index = 0
 		for a in OS.get_cmdline_user_args():
 			if a.begins_with("--arena="):
@@ -29,6 +30,15 @@ func _ready() -> void:
 		if "--fat" in OS.get_cmdline_user_args():
 			current.bears[0].fluff = 340.0  # see an overstuffed bear in action
 			current.bears[1].fluff = 15.0
+		if "--abilities" in OS.get_cmdline_user_args():
+			for b in current.bears:
+				b.can_kick = true
+				b.has_line = true
+				b.bombs_max = 4
+			current.bears[1].has_rubber = true
+			current.infect(current.bears[2])
+			current.bears[3].diarrhea_t = 10.0
+			current.bears[0].immortal_t = 20.0
 		_autotest.call_deferred()
 		return
 	show_menu()

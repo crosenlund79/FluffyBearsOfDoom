@@ -58,6 +58,7 @@ var face_idx := -1
 # Exposed for the owner (shadow size, star position).
 var shadow_w := 20.0
 var head_top := -50.0
+var head_r := 18.0
 
 
 class Wrinkles extends Node2D:
@@ -258,10 +259,11 @@ func _process(delta: float) -> void:
 	# --- proportions, all continuous in g ---
 	var gb := maxf(g, 0.0)
 	var bsx := 0.62 + 0.38 * pow(gb, 0.9)
-	var bsy := (0.68 + 0.32 * pow(gb, 0.75)) * (1.0 - 0.08 * sag)
+	var bsy := (0.68 + 0.32 * pow(gb, 0.75)) * (1.0 - 0.22 * sag)
+	bsx = lerpf(bsx, 0.8, sag * 0.6)  # an empty bear flattens like a pillowcase
 	var s := squash + breathe
 	if stunned:
-		s += 0.08
+		s += 0.08 + 0.05 * minf(g, 4.0)  # a big bear collapses into a heap
 	var sx := bsx * (1.0 + s)
 	var sy := bsy * (1.0 - s)
 	body.scale = Vector2(sx, sy) * unit
@@ -284,7 +286,7 @@ func _process(delta: float) -> void:
 	# Head sits on the body, grows a little, lags a little more.
 	var hs := 0.9 + 0.12 * sqrt(gb)
 	head.scale = Vector2(hs * (1.0 + s * 0.3), hs * (1.0 - s * 0.3)) * unit
-	var head_r := 50.0 * PART_SCALE * hs
+	head_r = 50.0 * PART_SCALE * hs
 	head.position = Vector2(body_off.x * 1.1 + sin(phase) * 1.2 * moving, body_y - body_hh * 0.82 - head_r * 0.55 + body_off.y * 0.7 + bob * 0.3)
 	head.rotation = sway * 0.7 + sag * sin(t * 1.3) * 0.08 - lean * 0.25
 	head_top = head.position.y - head_r

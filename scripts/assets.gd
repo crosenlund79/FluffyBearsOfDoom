@@ -9,8 +9,8 @@ const ROOT := "res://assets/sprites/"
 # the image, so replacements may use any resolution).
 const BEAR_CELLS := 10      # body, belly, head, ear, arm, leg, face x4
 const TILE_CELLS := 9       # rug, rug alt, ice, honey, bouncy, conveyor, pillar, cushion block, border
-const POWERUP_CELLS := 4    # extra bomb, blast range, springy stitching, biome shuffle
-const EFFECT_CELLS := 6     # blast centre, blast arm, blast end, star, dust, sparkle
+const POWERUP_CELLS := 10    # bomb, blast, speed, shuffle, kick, line, rubber, immortal, reverse, diarrhea
+const EFFECT_CELLS := 7     # confetti centre, confetti arm, confetti end, star, dust, sparkle, bird
 
 var _cache := {}
 

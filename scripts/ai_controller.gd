@@ -6,8 +6,11 @@
 ## NORMAL - understands blast lines, escapes, bombs opponents in line,
 ##          seeks power-ups and theft, releases the stick to brake in time.
 ## HARD   - predicts chain reactions and timing, traps opponents, prefers
-##          rich targets, weighs theft risk, counter-steers to brake, and
-##          avoids ice when it is heavy.
+##          rich targets, weighs theft risk, counter-steers to brake, avoids
+##          ice when it is heavy, kicks bombs and lays line bombs at rivals,
+##          and charges recklessly while immortal.
+## Everyone struggles under Reverse Controls: the curse flips the AI's stick
+## too, and it only sometimes remembers to compensate.
 extends RefCounted
 
 const Tuning = preload("res://scripts/tuning.gd")
@@ -20,6 +23,8 @@ const THINK_TIME := [0.5, 0.26, 0.13]
 const NOTICE_DANGER := [0.6, 0.93, 1.0]
 const DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const FAR := 999.0
+const COMPENSATE := [0.15, 0.45, 0.62]  # chance to correctly counter-steer while cursed
+const PowerupScript = preload("res://scripts/powerup.gd")
 
 var bear
 var game
@@ -36,6 +41,9 @@ var last_pos := Vector2.ZERO
 var steal_victim = null
 var steal_budget := 0.0
 var clock := 0.0
+var curse_t := 0.0
+var compensating := false
+var hesitate_t := 0.0
 var bad_spots := {}  # Vector2i -> clock time until which bombing there is pointless
 
 
@@ -65,7 +73,7 @@ func update(delta: float) -> void:
 	if think_t <= 0.0:
 		think_t = THINK_TIME[level] * rng.randf_range(0.8, 1.25)
 		_think()
-	_steer()
+	_steer(delta)
 
 
 # --- decision making -----------------------------------------------------------
@@ -73,6 +81,13 @@ func update(delta: float) -> void:
 func _think() -> void:
 	var me: Vector2i = bear.cell()
 	var danger: Dictionary = game.compute_danger(level == HARD)
+	var fearless: bool = level > EASY and bear.immortal_t > 2.5
+	if fearless:
+		danger = {}  # can't be stunned: ignore blasts entirely
+
+	# 0. Kick a nearby bomb at a rival.
+	if bear.can_kick and level > EASY and _try_kick(me):
+		return
 
 	# 1. Get out of blast lines.
 	if danger.has(me) and rng.randf() < NOTICE_DANGER[level]:
@@ -99,7 +114,7 @@ func _think() -> void:
 		if reason != "":
 			var esc := _escape_after_bomb(me, danger)
 			var careless: bool = level == EASY and rng.randf() < 0.12
-			if not esc.is_empty() or careless:
+			if not esc.is_empty() or careless or fearless:
 				bear.want_bomb = true
 				path = esc
 				goal = "flee"
@@ -108,9 +123,59 @@ func _think() -> void:
 				bad_spots[me] = clock + 8.0  # nowhere to hide from here; pick another spot
 				goal = "idle"
 
+	# 4. Lay a line of bombs toward a rival.
+	if bear.has_line and level > EASY and bear.bombs_max - bear.active_bombs >= 2 and _try_line(me, danger, fearless):
+		return
+
 	if goal == "flee" and not path.is_empty():
 		return
 	_choose_goal(me, danger)
+
+
+func _targetable(b) -> bool:
+	return b != bear and not b.is_stunned() and b.immortal_t <= 0.5 and b.immune_t <= 0.4
+
+
+func _try_kick(me: Vector2i) -> bool:
+	for d in DIRS:
+		var n: Vector2i = me + d
+		var bomb = arena.bombs.get(n)
+		if bomb == null or bomb.is_moving() or bomb.fuse < 0.6:
+			continue
+		var c: Vector2i = n + d
+		for i in 9:
+			if arena.is_solid(c) or arena.bombs.has(c):
+				break
+			for b in game.bears:
+				if _targetable(b) and b.cell() == c and (level == HARD or rng.randf() < 0.5):
+					path = [n]
+					goal = "kick"
+					return true
+			c += d
+	return false
+
+
+func _try_line(me: Vector2i, danger: Dictionary, fearless: bool) -> bool:
+	var cells: Array = game.line_cells(bear)
+	if cells.size() < 2:
+		return false
+	var d2 := danger.duplicate()
+	for c in cells:
+		for x in game.blast_cells(c, bear.bomb_range):
+			d2[x] = minf(d2.get(x, FAR), Tuning.BOMB_FUSE)
+	var hits := false
+	for b in game.bears:
+		if _targetable(b) and d2.has(b.cell()) and not danger.has(b.cell()):
+			hits = true
+	if not hits:
+		return false
+	var esc := _escape_path(me, d2, Tuning.BOMB_FUSE - 0.45)
+	if not fearless and (esc.is_empty() or d2.has(esc[esc.size() - 1])):
+		return false
+	bear.want_special = true
+	path = esc
+	goal = "flee"
+	return true
 
 
 func _should_steal(victim, danger: Dictionary) -> bool:
@@ -147,7 +212,7 @@ func _nearest_threat(max_dist: int):
 func _bomb_reason(me: Vector2i) -> String:
 	var blast: Array = game.blast_cells(me, bear.bomb_range)
 	for b in game.bears:
-		if b == bear or b.is_stunned() or b.immune_t > 0.4:
+		if not _targetable(b):
 			continue
 		var bc: Vector2i = b.cell()
 		if blast.has(bc):
@@ -235,10 +300,20 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 				continue
 			var kind: int = game.powerups[c].kind
 			var value := 35.0
+			match kind:
+				PowerupScript.REVERSE, PowerupScript.DIARRHEA:
+					if level != EASY:
+						continue  # Easy doesn't read the labels
+				PowerupScript.IMMORTAL:
+					value = 55.0
+				PowerupScript.KICK, PowerupScript.LINE:
+					value = 32.0 if not (bear.can_kick if kind == PowerupScript.KICK else bear.has_line) else 8.0
+				PowerupScript.RUBBER:
+					value = 22.0 if not bear.has_rubber else 6.0
 			if level == HARD:
-				if kind == 3:
+				if kind == PowerupScript.SHUFFLE:
 					value = 30.0 if bear.fluff_ratio() < 1.3 else 12.0
-				elif kind == 2:
+				elif kind == PowerupScript.SPEED:
 					value = 30.0 + 10.0 * bear.fluff_ratio()
 			var score: float = value - dist[c] * 4.0
 			if score > best_score:
@@ -263,7 +338,7 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 
 	# Hunt opponents.
 	for b in game.bears:
-		if b == bear or b.is_stunned():
+		if not _targetable(b):
 			continue
 		var c: Vector2i = b.cell()
 		if not dist.has(c):
@@ -344,6 +419,8 @@ func _dijkstra(start: Vector2i, danger: Dictionary, limit := 30.0) -> Array:
 		for d in DIRS:
 			var n: Vector2i = c + d
 			if not arena.is_walkable(n):
+				continue
+			if level != EASY and game.powerups.has(n) and game.powerups[n].kind in PowerupScript.BAD:
 				continue
 			var s: int = steps[c] + 1
 			if _unsafe(n, s * tpt, danger):
@@ -450,7 +527,7 @@ func _escape_after_bomb(me: Vector2i, danger: Dictionary) -> Array:
 
 # --- steering ------------------------------------------------------------------------
 
-func _steer() -> void:
+func _steer(delta: float) -> void:
 	if bear.stealing or (bear.want_steal and goal == "steal"):
 		bear.input_dir = Vector2.ZERO
 		return
@@ -486,7 +563,24 @@ func _steer() -> void:
 			var margin := 1.15 if level == HARD else 1.0
 			if dist < need * margin + 2.0:
 				dir = -dir if (level == HARD and dist < need * 0.8) else Vector2.ZERO
-	bear.input_dir = dir
+	bear.input_dir = _cursed(dir, delta)
+
+
+## Under Reverse Controls the bear flips our stick. We only sometimes remember
+## to flip it back, and now and then freeze up in confusion.
+func _cursed(dir: Vector2, delta: float) -> Vector2:
+	if bear.reverse_t <= 0.0:
+		return dir
+	curse_t -= delta
+	hesitate_t -= delta
+	if curse_t <= 0.0:
+		curse_t = rng.randf_range(0.3, 0.9)
+		compensating = rng.randf() < COMPENSATE[level]
+		if rng.randf() < 0.25:
+			hesitate_t = rng.randf_range(0.15, 0.45)
+	if hesitate_t > 0.0:
+		return Vector2.ZERO
+	return -dir if compensating else dir
 
 
 ## The centre of the last cell before the path turns or ends.
