@@ -1,0 +1,51 @@
+## Every gameplay number lives here, so the game is easy to tune.
+extends RefCounted
+
+# --- Arena -------------------------------------------------------------------
+const TILE := 48.0
+const COLS := 15
+const ROWS := 13
+const BLOCK_DENSITY := 0.72
+const POWERUP_CHANCE := 0.34
+
+# --- Fluff --------------------------------------------------------------------
+const START_FLUFF := 100.0
+const ROUND_TIMES := [90.0, 150.0, 240.0]
+
+# --- Movement (for a bear holding START_FLUFF on a normal rug) ----------------
+const BASE_SPEED := 165.0        # px/s top speed
+const BASE_ACCEL := 1500.0       # px/s^2
+const BASE_BRAKE := 1900.0       # px/s^2 friction when not pushing
+const MASS_MIN := 0.45           # mass of a completely empty bear
+const MASS_PER_RATIO := 0.55     # extra mass per START_FLUFF of stuffing
+const SPEED_MASS_FALLOFF := 0.25 # top speed lost per unit of extra mass
+const ACCEL_EXP := 1.9           # accel = BASE_ACCEL / mass^ACCEL_EXP
+const BRAKE_EXP := 2.3           # brake = BASE_BRAKE / mass^BRAKE_EXP (heavy bears can't stop)
+const ALIGN_ACCEL := 1.7         # how hard bears steer back into corridor lanes
+const LANE_PULL := 14.0          # lane alignment speed per px of offset
+const HITBOX_HALF := 17.0        # collision box half size; never changes with size
+const BUMP_MIN_SPEED := 70.0     # wall impact speed that makes a squeak
+const SPEED_UP_SPEED := 16.0     # top speed per Springy Stitching power-up
+const SPEED_UP_ACCEL := 0.15     # extra acceleration per Springy Stitching
+const MAX_SPEED_LEVEL := 4
+
+# --- Bombs ---------------------------------------------------------------------
+const BOMB_FUSE := 2.6
+const FLAME_TIME := 0.55
+const START_BOMBS := 1
+const START_RANGE := 2
+const MAX_BOMBS := 8
+const MAX_RANGE := 8
+
+# --- Stun & stealing ----------------------------------------------------------
+const STUN_TIME := 3.6
+const STUN_IMMUNE := 1.3         # invulnerability after waking up
+const STEAL_RANGE := 1.3         # in tiles, centre to centre
+const STEAL_RATE := 24.0         # fluff per second
+const STUN_SPILL := 6.0          # fluff that pops out when stunned
+const ROBBED_GRUMPY := 2.2       # seconds a robbed bear looks indignant
+
+# --- Biome Shuffle --------------------------------------------------------------
+const SHUFFLE_WARN := 1.8
+const SHUFFLE_DURATION := 22.0
+const SHUFFLE_REGIONS := 4
