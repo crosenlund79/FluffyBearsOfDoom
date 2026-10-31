@@ -25,16 +25,27 @@ Line Bomb (special key: lays all free bombs in a line) · Rubber Bombs (kicked b
 Immortality (20 s, can't be stunned or robbed) · Biome Shuffle (reshuffles floor terrain after a warning) ·
 **curses:** Reverse Controls (12 s, contagious on contact) · Bomb Diarrhea (10 s, bombs drop by themselves).
 
+## Doom Duck Parade
+Every now and then a portal opens in a wooden pillar. A wind-up mother duck marches out with
+three ducklings and wanders the corridors for about 12 seconds, ticking faster as she goes.
+In the last 3 seconds she flashes and the cells she will hit are outlined. Then she bursts,
+and the confetti **flows around corners** for up to 4 grid steps, stunning any bear it reaches.
+Spawn timing, countdown, speed and reach are the `DUCK_*` values in `scripts/tuning.gd`.
+
 ## Music & sound
-- **Music:** put `.mp3`, `.ogg` or `.wav` files in `assets/audio/music/`. Tracks are found
-  automatically, play in sequence, and loop, with optional shuffle. This also works in
-  exported builds. To add music after exporting, put `.mp3`/`.ogg` files in a `music/` folder
-  next to the game executable, or in `user://music/`.
+- **Menu music:** `assets/audio/music/menu/`. **Gameplay music:** `assets/audio/music/gameplay/`.
+  Put `.mp3`, `.ogg` or `.wav` files there; they are found automatically. Tracks play in
+  sequence or shuffled and loop. Music fades out when you switch between the menu and a match,
+  and an empty folder just means silence. Godot imports these files, so they are packed into
+  exported Windows builds (the `Windows Desktop` preset in `export_presets.cfg`).
+- **After exporting**, you can also add `.mp3`/`.ogg` files without re-exporting by placing them in
+  `music/menu/` or `music/gameplay/` next to the `.exe`, or in `user://music/<menu|gameplay>/`.
 - **Sound effects:** put a file named after the sound in `assets/audio/sfx/` (ogg/wav/mp3) to
   replace the generated placeholder. The names are `place fuse confetti concussion steal pickup
-  curse squeak bump kick boing pop menu tick go shuffle immortal victory`.
-- Volumes, mute and shuffle are set from Menu → Audio (also available from the pause menu) and
-  saved to `user://settings.cfg`.
+  curse squeak bump kick boing pop menu tick go shuffle immortal victory`. Duck parade sounds:
+  `portal clock_tick quack duckling_quack duck_warning duck_confetti`.
+- Volumes, mute and shuffle are set from Menu → Audio (also in the pause menu) and saved to
+  `user://settings.cfg`. One music volume covers both playlists. N skips to the next track.
 
 ## Replacing the art
 Every placeholder is named `template_<name>.png`. To replace one, put `<name>.png` in the **same
@@ -49,6 +60,7 @@ Draw each part centred in its cell.
 | `tiles/template_tiles.png` | 576×64 | 9 cells: rug, rug alt, ice, honey, bouncy, conveyor (pointing right), pillar, cushion block, border |
 | `objects/template_bomb.png` | 64×64 | Draw the fabric bomb pale, because it is tinted pastel per bear. Rubber bombs get stripes drawn on top. The fuse tip sits near the top right. |
 | `objects/template_fluff.png` | 32×32 | a tuft of stuffing |
+| `objects/template_duck.png` | 128×64 | 2 cells: wind-up pull-along duck facing right (shared by mother and ducklings at different scales), wind-up key |
 | `powerups/template_powerups.png` | 640×64 | 10 cells: bomb, blast, speed, shuffle, kick, line, rubber, immortality, reverse, diarrhea |
 | `effects/template_effects.png` | 448×64 | 7 cells: confetti centre, confetti arm (horizontal), confetti end (pointing right), star, dust, sparkle, cartoon bird (facing right) |
 

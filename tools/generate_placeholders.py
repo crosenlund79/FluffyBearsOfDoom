@@ -651,6 +651,62 @@ def make_effects():
     return sheet
 
 
+# ---------------------------------------------------------------- duck
+# 2 cells of 64x64: 0 wind-up pull-along duck (facing right, wheels included), 1 wind-up key.
+# Mother and ducklings share cell 0 at different scales.
+def duck_body():
+    c = Canvas(64, 64)
+    ink = rgba("6e5a45")
+    # wooden base + wheels
+    c.rect(12, 46, 52, 52, fill=rgba("b48f6e"), radius=2)
+    for x in (18, 46):
+        c.ellipse(x, 53, 6, 6, fill=ink)
+        c.ellipse(x, 53, 4.6, 4.6, fill=rgba("e9b9c0"))
+        c.ellipse(x, 53, 1.6, 1.6, fill=ink)
+    # tail, body, stitched wing
+    c.polygon([(9, 34), (2, 26), (5, 38)], fill=ink)
+    c.polygon([(10, 34), (4, 28), (7, 37)], fill=rgba("f3dc93"))
+    c.ellipse(28, 36, 19, 12, fill=ink)
+    c.ellipse(28, 36, 17.6, 10.6, fill=rgba("f6e2a0"))
+    c.ellipse(24, 33, 7, 3, fill=(255, 255, 255, 110))
+    c.polygon([(16, 33), (34, 31), (26, 42)], fill=rgba("ead08a"))
+    c.dashed_line(18, 34, 32, 32, rgba("a8895a"), 1.0, 2, 2)
+    c.dashed_line(18, 34, 26, 41, rgba("a8895a"), 1.0, 2, 2)
+    # neck + head
+    c.ellipse(44, 22, 11, 11, fill=ink)
+    c.ellipse(44, 22, 9.6, 9.6, fill=rgba("f6e2a0"))
+    c.rect(36, 24, 48, 34, fill=rgba("f6e2a0"))
+    c.dashed_line(36, 30, 47, 30, rgba("e9b9c0"), 1.6, 3, 2)  # ribbon collar
+    # beak + button eye + blush
+    c.polygon([(51, 21), (61, 24), (51, 27)], fill=rgba("e59a5f"))
+    c.line([(51, 24), (59, 24)], rgba("b86f45"), 0.8)
+    c.ellipse(46, 19, 2.6, 2.6, fill=rgba("2b2220"))
+    c.ellipse(45.2, 18.2, 0.9, 0.9, fill=(255, 255, 255, 220))
+    c.ellipse(45, 25, 3, 1.8, fill=rgba("f0a9ad", 150))
+    return c.result()
+
+
+def duck_key():
+    c = Canvas(64, 64)
+    ink = rgba("6e5a45")
+    c.rect(29, 30, 35, 50, fill=rgba("c9a98a"))
+    c.ellipse(22, 22, 9, 9, fill=ink)
+    c.ellipse(42, 22, 9, 9, fill=ink)
+    c.ellipse(22, 22, 7.5, 7.5, fill=rgba("d9c08a"))
+    c.ellipse(42, 22, 7.5, 7.5, fill=rgba("d9c08a"))
+    c.ellipse(22, 22, 2.5, 2.5, fill=ink)
+    c.ellipse(42, 22, 2.5, 2.5, fill=ink)
+    c.rect(28, 18, 36, 28, fill=rgba("d9c08a"))
+    return c.result()
+
+
+def make_duck():
+    sheet = Image.new("RGBA", (128, 64), (0, 0, 0, 0))
+    paste(sheet, duck_body(), 0, 0)
+    paste(sheet, duck_key(), 64, 0)
+    return sheet
+
+
 def make_icon():
     # a tinted bear head for the project icon
     bear = make_bear()
@@ -686,6 +742,7 @@ if __name__ == "__main__":
     save(make_tiles(), "tiles", "template_tiles.png")
     save(make_bomb(), "objects", "template_bomb.png")
     save(make_fluff(), "objects", "template_fluff.png")
+    save(make_duck(), "objects", "template_duck.png")
     save(make_powerups(), "powerups", "template_powerups.png")
     save(make_effects(), "effects", "template_effects.png")
     make_icon().save(os.path.join(ROOT, "..", "..", "icon.png"))

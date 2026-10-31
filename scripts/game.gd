@@ -19,6 +19,7 @@ const HumanController = preload("res://scripts/human_controller.gd")
 const AiController = preload("res://scripts/ai_controller.gd")
 const HudScript = preload("res://scripts/hud.gd")
 const UiStyle = preload("res://scripts/ui_style.gd")
+const DuckParade = preload("res://scripts/duck_parade.gd")
 
 enum State { COUNTDOWN, PLAYING, ENDED }
 
@@ -48,6 +49,9 @@ var fx_tex: Texture2D
 var fluff_tex: Texture2D
 var _steal_fx_t := 0.0
 var _last_count := 4
+var duck_layer: Node2D
+var parade = null
+var duck_timer := 0.0
 
 
 func _ready() -> void:
@@ -64,6 +68,8 @@ func _ready() -> void:
 
 	powerup_layer = _layer(1)
 	bomb_layer = _layer(2)
+	duck_layer = _layer(4)
+	duck_timer = rng.randf_range(Tuning.DUCK_FIRST_DELAY[0], Tuning.DUCK_FIRST_DELAY[1])
 	flame_layer = _layer(3)
 	bear_layer = _layer(5)
 	bear_layer.y_sort_enabled = true
@@ -83,7 +89,7 @@ func _ready() -> void:
 			b.controller = AiController.new(b, self, Settings.LEVELS.find(r["controller"]))
 			b.ctrl_label = Settings.LEVEL_LABELS[Settings.LEVELS.find(r["controller"])] + " AI"
 		bears.append(b)
-	Music.ensure_playing()
+	Music.play_context("gameplay")
 
 	hud = HudScript.new()
 	add_child(hud)
@@ -126,6 +132,7 @@ func _physics_process(delta: float) -> void:
 				Sfx.play("go")
 		State.PLAYING:
 			time_left -= delta
+			_update_ducks(delta)
 			if time_left <= 0.0:
 				time_left = 0.0
 				_end_match()
@@ -239,6 +246,18 @@ func explode(bomb) -> void:
 				break
 	for c in hit:
 		flames[c] = Tuning.FLAME_TIME
+	_break_blocks(broken)
+	_finish_bomb(bomb, origin, hit, segs, chain)
+
+
+func _finish_bomb(bomb, origin: Vector2i, hit: Array, segs: Array, chain: Array) -> void:
+	bomb.queue_free()
+	_apply_blast(origin, hit, segs, chain, 14)
+	arena.add_shake(4.0)
+	Sfx.play("confetti", randf_range(0.85, 1.15))
+
+
+func _break_blocks(broken: Array) -> void:
 	for c in broken:
 		var kind: int = arena.destroy_block(c)
 		spawn_dust(arena.cell_center(c), 4)
@@ -250,15 +269,16 @@ func explode(bomb) -> void:
 			p.position = arena.cell_center(c)
 			powerup_layer.add_child(p)
 			powerups[c] = p
+
+
+## Shared by bombs and the duck: confetti visuals, chained bombs, stuns.
+func _apply_blast(origin: Vector2i, hit: Array, segs: Array, chain: Array, confetti: int) -> void:
 	var ex = ExplosionScript.new()
 	ex.segments = segs
 	flame_layer.add_child(ex)
-	_confetti(arena.cell_center(origin), 14)
+	_confetti(arena.cell_center(origin), confetti)
 	for i in range(1, hit.size(), 2):
 		_confetti(arena.cell_center(hit[i]), 2)
-	bomb.queue_free()
-	arena.add_shake(4.0)
-	Sfx.play("confetti", randf_range(0.85, 1.15))
 	for other in chain:
 		if is_instance_valid(other) and not other.exploded:
 			other.fuse = minf(other.fuse, 0.06)
@@ -282,8 +302,84 @@ func _check_flame_hits(origin: Vector2i) -> void:
 			b.stun(src)
 
 
+# --- Doom Duck Parade ------------------------------------------------------------
+
+func _update_ducks(delta: float) -> void:
+	if not Tuning.DUCK_ENABLED or parade != null:
+		return
+	duck_timer -= delta
+	if duck_timer <= 0.0 and time_left > Tuning.DUCK_TIME + 4.0:
+		start_duck_parade()
+
+
+func start_duck_parade() -> void:
+	var walls := []
+	for y in arena.rows:
+		for x in arena.cols:
+			var c := Vector2i(x, y)
+			var below := c + Vector2i(0, 1)
+			if arena.cell_type(c) == ArenaScript.WALL and arena.cell_type(below) == ArenaScript.EMPTY and not arena.bombs.has(below):
+				walls.append(c)
+	if walls.is_empty():
+		duck_timer = 5.0
+		return
+	parade = DuckParade.new()
+	duck_layer.add_child(parade)
+	parade.setup(self, walls[rng.randi() % walls.size()])
+	hud.banner("Doom Duck Parade!", 1.6)
+
+
+## Flood fill from `origin` along walkable cells, up to `reach` steps. Turns
+## corners; permanent walls block it; cushion blocks stop it (and break).
+func duck_blast_cells(origin: Vector2i, reach: int) -> Array:
+	var dist := {origin: 0}
+	var out := [origin]
+	var queue := [origin]
+	while not queue.is_empty():
+		var c: Vector2i = queue.pop_front()
+		if dist[c] >= reach:
+			continue
+		for d in DIRS:
+			var n: Vector2i = c + d
+			if dist.has(n):
+				continue
+			var t: int = arena.cell_type(n)
+			if t == ArenaScript.WALL or t == ArenaScript.BORDER:
+				continue
+			dist[n] = dist[c] + 1
+			out.append(n)
+			if t != ArenaScript.BLOCK:
+				queue.append(n)
+	return out
+
+
+func duck_explode(p) -> void:
+	var origin: Vector2i = p.mother_cell()
+	var hit := duck_blast_cells(origin, Tuning.DUCK_BLAST_RANGE)
+	var broken := []
+	var chain := []
+	var segs := []
+	for c in hit:
+		flames[c] = Tuning.FLAME_TIME
+		if arena.cell_type(c) == ArenaScript.BLOCK:
+			broken.append(c)
+		if arena.bombs.has(c):
+			chain.append(arena.bombs[c])
+		segs.append({"pos": arena.cell_center(c), "kind": 0, "rot": rng.randf() * TAU})
+	_break_blocks(broken)
+	_apply_blast(origin, hit, segs, chain, 30)
+	for c in hit:
+		_confetti(arena.cell_center(c), 2)
+	arena.add_shake(8.0)
+	Sfx.play("duck_confetti")
+	parade = null
+	duck_timer = rng.randf_range(Tuning.DUCK_INTERVAL[0], Tuning.DUCK_INTERVAL[1])
+
+
 ## Danger map for the AI: cell -> seconds until it is ablaze (0 = burning now).
-func compute_danger(chain: bool) -> Dictionary:
+## level: 0 easy, 1 normal, 2 hard.
+func compute_danger(level: int) -> Dictionary:
+	var chain := level == 2
 	var d := {}
 	for c in flames:
 		d[c] = 0.0
@@ -300,6 +396,17 @@ func compute_danger(chain: bool) -> Dictionary:
 	for b in bombs:
 		for c in blast_cells(b.cell, b.blast_range):
 			d[c] = minf(d.get(c, 999.0), times[b])
+	# The duck: Easy only notices at the very end, Hard plans for its walk.
+	if parade != null and is_instance_valid(parade) and parade.armed():
+		var rem: float = parade.countdown
+		if level == 2 or (level == 1 and rem < 6.0) or (level == 0 and rem < 2.5):
+			var reach: int = Tuning.DUCK_BLAST_RANGE + (1 if level == 2 else 0)
+			var origins := [parade.mother_cell()]
+			if level == 2:
+				origins.append(parade.next_cell)
+			for o in origins:
+				for c in duck_blast_cells(o, reach):
+					d[c] = minf(d.get(c, 999.0), rem)
 	return d
 
 
@@ -541,6 +648,9 @@ func _update_shuffles(delta: float) -> void:
 
 func _end_match() -> void:
 	state = State.ENDED
+	if parade != null and is_instance_valid(parade):
+		parade.queue_free()  # the ducks wind down quietly
+		parade = null
 	for b in bears:
 		b.stealing = false
 	var ranking := bears.duplicate()

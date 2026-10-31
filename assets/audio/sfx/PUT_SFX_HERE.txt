@@ -1,1 +1,3 @@
-Drop replacement sound effects here (ogg/wav/mp3), named like: place fuse confetti concussion steal pickup curse squeak bump kick boing pop menu tick go shuffle immortal victory
+Drop replacement sound effects here (ogg/wav/mp3), named like:
+place fuse confetti concussion steal pickup curse squeak bump kick boing pop menu tick go shuffle immortal victory
+Doom Duck Parade: portal clock_tick quack duckling_quack duck_warning duck_confetti

@@ -36,6 +36,13 @@ func _ready() -> void:
 	_streams["shuffle"] = _tone(0.6, 250.0, 950.0, 0.3, 9.0, 0.35)
 	_streams["immortal"] = _concat([_samples(0.1, 784.0, 784.0, 0.35, 0.0, 0.0), _samples(0.1, 988.0, 988.0, 0.35, 0.0, 0.0), _samples(0.25, 1568.0, 1568.0, 0.3, 8.0, 0.0)])
 	_streams["victory"] = _concat([_samples(0.14, 523.0, 523.0, 0.4, 0.0, 0.0), _samples(0.14, 659.0, 659.0, 0.4, 0.0, 0.0), _samples(0.14, 784.0, 784.0, 0.4, 0.0, 0.0), _samples(0.4, 1046.0, 1046.0, 0.4, 5.0, 0.0)])
+	# Doom Duck Parade
+	_streams["portal"] = _concat([_samples(0.5, 200.0, 1200.0, 0.3, 14.0, 0.25), _samples(0.25, 1200.0, 900.0, 0.2, 20.0, 0.1)])
+	_streams["clock_tick"] = _tone(0.025, 2600.0, 2200.0, 0.35, 0.0, 0.6)
+	_streams["quack"] = _wav(_quack(0.2, 330.0))
+	_streams["duckling_quack"] = _wav(_quack(0.11, 560.0))
+	_streams["duck_warning"] = _tone(0.06, 1760.0, 1760.0, 0.3, 0.0, 0.0)
+	_streams["duck_confetti"] = _concat([_quack(0.16, 300.0), _confetti_samples(0.9)])
 	for n in _streams.keys():
 		for ext in ["ogg", "wav", "mp3"]:
 			var path: String = SFX_DIR + n + "." + ext
@@ -86,9 +93,28 @@ func _bonk() -> PackedFloat32Array:
 	return out
 
 
+## A nasal, buzzy toy quack: square-ish wave with a pitch dip, two humps.
+func _quack(dur: float, f: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	for i in n:
+		var k := float(i) / n
+		ph += TAU * f * (1.0 + 0.25 * sin(k * PI) - 0.3 * k) / RATE
+		var w := signf(sin(ph)) * 0.5 + sin(ph * 3.0) * 0.3 + sin(ph * 5.0) * 0.15
+		var env := minf(1.0, k * 25.0) * (1.0 - k) * (0.7 + 0.3 * sin(k * TAU * 2.0))
+		out[i] = w * env * 0.35
+	return out
+
+
 ## A party-popper: a sharp pop followed by papery crackle.
 func _confetti() -> AudioStreamWAV:
-	var n := int(0.5 * RATE)
+	return _wav(_confetti_samples(0.5))
+
+
+func _confetti_samples(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
 	var out := PackedFloat32Array()
 	out.resize(n)
 	var ph := 0.0
@@ -101,7 +127,7 @@ func _confetti() -> AudioStreamWAV:
 			crackle = randf_range(-1.0, 1.0)
 		var hiss := randf_range(-1.0, 1.0) * 0.25 * pow(1.0 - k, 2.0)
 		out[i] = (pop * 0.8 + crackle * 0.6 + hiss) * 0.55
-	return _wav(out)
+	return out
 
 
 func _tone(dur: float, f0: float, f1: float, vol: float, vibrato: float, noise: float) -> AudioStreamWAV:

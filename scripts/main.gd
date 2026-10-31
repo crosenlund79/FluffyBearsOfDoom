@@ -39,6 +39,8 @@ func _ready() -> void:
 			current.infect(current.bears[2])
 			current.bears[3].diarrhea_t = 10.0
 			current.bears[0].immortal_t = 20.0
+		if "--duck" in OS.get_cmdline_user_args():
+			current.duck_timer = 3.0
 		_autotest.call_deferred()
 		return
 	show_menu()
@@ -47,15 +49,16 @@ func _ready() -> void:
 func _autotest() -> void:
 	var g = current
 	while g.state != g.State.ENDED:
-		await get_tree().create_timer(2.0).timeout
+		await get_tree().create_timer(0.5 if "--duck" in OS.get_cmdline_user_args() else 2.0).timeout
 		var line := "t=%5.1f " % g.time_left
 		for b in g.bears:
 			line += "%s:%d%s[%s %s] " % [b.bear_name, roundi(b.fluff), "(z)" if b.is_stunned() else "", b.controller.goal, b.cell()]
 		print(line)
 		for a in OS.get_cmdline_user_args():
 			if a.begins_with("--shots="):
-				get_viewport().get_texture().get_image().save_png("%s/shot_%03d.png" % [a.get_slice("=", 1), int(90.0 - g.time_left)])
+				get_viewport().get_texture().get_image().save_png("%s/shot_%03d.png" % [a.get_slice("=", 1), int((90.0 - g.time_left) * 10.0)])
 	await get_tree().create_timer(1.0).timeout
+	print("music context=%s menu_tracks=%d gameplay_tracks=%d playing=%s" % [Music.context, Music.playlists["menu"].size(), Music.playlists["gameplay"].size(), Music.title])
 	for b in g.bears:
 		print("%s fluff=%d stole=%d stunned=%d bombs=%d range=%d speed=%d" % [b.bear_name, roundi(b.fluff), roundi(b.stolen_total), b.times_stunned, b.bombs_max, b.bomb_range, b.speed_level])
 	get_tree().quit()

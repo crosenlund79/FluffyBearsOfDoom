@@ -80,7 +80,7 @@ func update(delta: float) -> void:
 
 func _think() -> void:
 	var me: Vector2i = bear.cell()
-	var danger: Dictionary = game.compute_danger(level == HARD)
+	var danger: Dictionary = game.compute_danger(level)
 	var fearless: bool = level > EASY and bear.immortal_t > 2.5
 	if fearless:
 		danger = {}  # can't be stunned: ignore blasts entirely
@@ -90,7 +90,7 @@ func _think() -> void:
 		return
 
 	# 1. Get out of blast lines.
-	if danger.has(me) and rng.randf() < NOTICE_DANGER[level]:
+	if _threat(danger, me) and rng.randf() < NOTICE_DANGER[level]:
 		bear.want_steal = false
 		if level == HARD or goal != "flee" or path.is_empty() or not _path_safe(path, danger):
 			path = _escape_path(me, danger, FAR)
@@ -178,8 +178,13 @@ func _try_line(me: Vector2i, danger: Dictionary, fearless: bool) -> bool:
 	return true
 
 
+## Imminent danger (a far-off duck countdown isn't worth panicking over yet).
+func _threat(danger: Dictionary, c: Vector2i) -> bool:
+	return danger.has(c) and danger[c] < 4.0
+
+
 func _should_steal(victim, danger: Dictionary) -> bool:
-	if danger.has(bear.cell()):
+	if _threat(danger, bear.cell()):
 		return false
 	if victim != steal_victim:
 		steal_victim = victim

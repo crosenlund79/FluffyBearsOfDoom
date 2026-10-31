@@ -173,7 +173,7 @@ func _ready() -> void:
 		c.focus_entered.connect(func(): Sfx.play("menu", 1.0, -8.0))
 	_refresh()
 	start_button.grab_focus()
-	Music.ensure_playing()
+	Music.play_context("menu")
 
 
 func _fixed(c: Control, w: float) -> Control:

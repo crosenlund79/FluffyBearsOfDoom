@@ -46,7 +46,7 @@ func _ready() -> void:
 	shuf.button_pressed = Settings.shuffle_music
 	shuf.toggled.connect(func(on):
 		Settings.shuffle_music = on
-		Music.order.clear()
+		Music.reshuffle()
 		Settings.save())
 	v.add_child(shuf)
 	var h2 := HBoxContainer.new()
@@ -74,6 +74,6 @@ func _ready() -> void:
 
 func _on_track(title: String) -> void:
 	if not Music.has_tracks():
-		now_playing.text = "No music found. Add mp3/ogg/wav files to assets/audio/music/"
+		now_playing.text = "No %s music found. Add mp3/ogg/wav files to assets/audio/music/%s/" % [Music.context, Music.context]
 	else:
 		now_playing.text = "Now playing: " + (title if title != "" else "-")

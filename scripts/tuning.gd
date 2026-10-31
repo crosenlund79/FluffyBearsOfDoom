@@ -62,3 +62,13 @@ const INFECT_DIST := 0.85            # tiles, centre to centre
 const INFECT_DELAY := 1.0            # a freshly infected bear can't pass it on at once
 const DIARRHEA_TIME := 10.0
 const DIARRHEA_INTERVAL := 0.3
+
+# --- Doom Duck Parade --------------------------------------------------------------
+const DUCK_ENABLED := true
+const DUCK_FIRST_DELAY := [20.0, 35.0]   # seconds into a match before the first parade (min, max)
+const DUCK_INTERVAL := [35.0, 55.0]      # pause between parades (min, max)
+const DUCK_TIME := 12.0                  # countdown from emerging to detonation
+const DUCK_SPEED := 62.0                 # px/s waddling speed
+const DUCK_BLAST_RANGE := 4              # flood-fill reach in grid steps (turns corners)
+const DUCK_WARNING := 3.0                # last seconds: danger zone shown, frantic wobble
+const DUCKLING_SPACING := 22.0           # px between ducks in the procession
