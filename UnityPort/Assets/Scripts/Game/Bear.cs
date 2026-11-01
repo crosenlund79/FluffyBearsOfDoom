@@ -28,7 +28,8 @@ namespace FBD
 
         // Power-ups
         public int bombsMax = Tuning.START_BOMBS, bombRange = Tuning.START_RANGE, speedLevel, activeBombs;
-        public bool canKick, hasLine, hasRubber;
+        public bool canKick = true;   // every bear can kick bombs
+        public bool hasLine, hasRubber, hasRemote;
 
         // State
         public float stunT, immuneT, robbedT;
@@ -40,6 +41,10 @@ namespace FBD
         // Timed effects
         public float immortalT, reverseT, diarrheaT, infectCd, reinfectImmune;
         float diarrheaCd;
+
+        // Horror footprints (cosmetic)
+        public float bloodFeet;
+        float stride, footSide = 1f;
 
         // Taunts (purely cosmetic)
         public Bear lastHitBy;
@@ -126,7 +131,8 @@ namespace FBD
             if (wantSpecial)
             {
                 wantSpecial = false;
-                if (hasLine && game.ControlsEnabled && !IsStunned) game.PlaceLine(this);
+                // special: detonate your remote bombs first, otherwise lay a Line Bomb
+                if (game.ControlsEnabled && !IsStunned && !game.DetonateRemote(this) && hasLine) game.PlaceLine(this);
             }
             if (wantBomb) { wantBomb = false; game.TryPlaceBomb(this); }
             UpdateSteal(delta);
@@ -142,6 +148,7 @@ namespace FBD
                 {
                     if (!stealing) { Sfx.Play("squeak", 1.4f, -4f); game.OnStealStarted(this, target); }
                     stealing = true;
+                    bloodFeet = 1f; // (Horror) grubby paws from rummaging in the stuffing
                     stealTarget = target;
                     float amount = Mathf.Min(Tuning.STEAL_RATE * delta, target.fluff);
                     target.fluff -= amount;
@@ -168,9 +175,10 @@ namespace FBD
             terrainId = arena.TerrainAt(Cell);
             var tp = Terrain.Props(terrainId);
             onBouncy = terrainId == Terrain.BOUNCY;
-            float ms = MaxSpeed * tp.speed, ac = Accel * tp.accel, br = Brake * tp.brake;
+            float ms = MaxSpeed * tp.speed, ac = Accel * tp.accel, br = Mathf.Max(Brake * tp.brake, tp.brakeMin);
             Vector2 dir = (CanAct && !stealing) ? inputDir : Vector2.zero;
             if (reverseT > 0f) dir = -dir; // the curse: left is right, up is down
+            float lane = 0f;
             if (dir == Vector2.zero)
             {
                 velocity.x = Gd.MoveToward(velocity.x, 0f, br * delta);
@@ -179,7 +187,7 @@ namespace FBD
             else
             {
                 facing = dir;
-                float lane = LaneOffset(dir);
+                lane = LaneOffset(dir);
                 float laneV = Gd.Clamp(lane * Tuning.LANE_PULL, -ms, ms);
                 if (dir.x != 0f)
                 {
@@ -192,10 +200,33 @@ namespace FBD
                     velocity.x = Align(velocity.x, laneV, ac * Tuning.ALIGN_ACCEL, br * Tuning.ALIGN_ACCEL, delta);
                 }
             }
+            // Gentle corridor-centering: slide into the lane you're steering for, whatever
+            // your mass. Momentum is untouched; this only nudges position sideways.
+            if (dir != Vector2.zero && lane != 0f && Mathf.Abs(lane) < arena.T * 0.45f)
+                Sweep(dir.x != 0f ? 1 : 0, Gd.Sign(lane) * Mathf.Min(Mathf.Abs(lane), Tuning.CENTER_ASSIST_SPEED * delta), false);
+
+            Vector2 before = position;
             Vector2 motion = (velocity + tp.push) * delta;
             float restitution = tp.bounce + 0.06f * Mathf.Min(FluffRatio, 4f);
             if (Sweep(0, motion.x)) OnWall(0, restitution);
             if (Sweep(1, motion.y)) OnWall(1, restitution);
+            Footprints(position - before);
+        }
+
+        /// Horror mode: bloody feet leave a fading trail of footprints.
+        void Footprints(Vector2 moved)
+        {
+            if (!ModeTheme.Horror) return;
+            if (game.flames.ContainsKey(Cell) || game.IsBloody(Cell)) bloodFeet = 1f; // stepped in it
+            if (bloodFeet <= 0.02f || IsStunned) return;
+            stride += moved.magnitude;
+            if (stride < Tuning.FOOTPRINT_STRIDE) return;
+            stride = 0f;
+            footSide = -footSide;
+            Vector2 d = moved.magnitude > 0.01f ? moved.normalized : facing;
+            Vector2 side = new Vector2(-d.y, d.x) * footSide * (3f + 1.2f * Mathf.Min(FluffRatio, 3f));
+            game.AddFootprint(position + new Vector2(0, 12) + side, d, bloodFeet);
+            bloodFeet = Mathf.Max(0f, bloodFeet - Tuning.BLOOD_PER_PRINT);
         }
 
         /// Accelerate along the pressed axis; reversing uses brake + accel.
@@ -215,35 +246,40 @@ namespace FBD
         }
 
         /// Offset (along the perpendicular axis) to the lane centre that leads in `dir`.
+        /// Includes a turn look-ahead: pressed a little early? Keep sliding to the next opening.
         float LaneOffset(Vector2 dir)
         {
             Vector2Int c = Cell;
-            Vector2 ctr = arena.CellCenter(c);
-            if (dir.x != 0f)
+            int m = dir.x != 0f ? 0 : 1;   // axis we want to move along
+            int pa = 1 - m;                 // lanes are spaced along the other axis
+            int step = (int)dir[m];
+            float posP = position[pa];
+            float centerP = arena.CellCenter(c)[pa];
+            float off = posP - centerP;
+            var cand = new System.Collections.Generic.List<int> { c[pa] };
+            if (Mathf.Abs(off) > 2f) cand.Add(c[pa] + (off > 0f ? 1 : -1));
+            if (Mathf.Abs(velocity[pa]) > 30f)
             {
-                float off = position.y - ctr.y;
-                int n = Mathf.Abs(off) > 2f ? 2 : 1;
-                for (int k = 0; k < n; k++)
-                {
-                    int r = k == 0 ? c.y : c.y + (off > 0f ? 1 : -1);
-                    if (!arena.BlocksBear(new Vector2Int(c.x, r), this) && !arena.BlocksBear(new Vector2Int(c.x + (int)dir.x, r), this))
-                        return arena.CellCenter(new Vector2Int(c.x, r)).y - position.y;
-                }
-                return ctr.y - position.y;
+                int ahead = c[pa] + (velocity[pa] > 0f ? 1 : -1);
+                if (!cand.Contains(ahead)) cand.Add(ahead);
             }
-            float offx = position.x - ctr.x;
-            int nx = Mathf.Abs(offx) > 2f ? 2 : 1;
-            for (int k = 0; k < nx; k++)
+            float best = float.PositiveInfinity, bestOff = centerP - posP;
+            foreach (int lane in cand)
             {
-                int q = k == 0 ? c.x : c.x + (offx > 0f ? 1 : -1);
-                if (!arena.BlocksBear(new Vector2Int(q, c.y), this) && !arena.BlocksBear(new Vector2Int(q, c.y + (int)dir.y), this))
-                    return arena.CellCenter(new Vector2Int(q, c.y)).x - position.x;
+                Vector2Int here = c;
+                here[pa] = lane;
+                Vector2Int next = here;
+                next[m] += step;
+                if (arena.BlocksBear(here, this) || arena.BlocksBear(next, this)) continue;
+                float laneOff = arena.CellCenter(here)[pa] - posP;
+                if (lane != c[pa] && Mathf.Abs(laneOff) > Tuning.TURN_LOOKAHEAD * arena.T) continue;
+                if (Mathf.Abs(laneOff) < best) { best = Mathf.Abs(laneOff); bestOff = laneOff; }
             }
-            return ctr.x - position.x;
+            return bestOff;
         }
 
         /// Moves along one axis; clamps against solid cells. Returns true on contact.
-        bool Sweep(int axis, float amount)
+        bool Sweep(int axis, float amount, bool allowKick = true)
         {
             if (amount == 0f) return false;
             float h = Tuning.HITBOX_HALF, T = arena.T;
@@ -259,7 +295,7 @@ namespace FBD
                     var c = new Vector2Int(cx, cy);
                     if (!arena.BlocksBear(c, this)) continue;
                     hit = true;
-                    if (canKick && arena.bombs.TryGetValue(c, out Bomb bb)) kicked = bb;
+                    if (canKick && allowKick && arena.bombs.TryGetValue(c, out Bomb bb)) kicked = bb;
                     if (axis == 0)
                     {
                         if (amount > 0f) pos.x = Mathf.Min(pos.x, cx * T - h - 0.001f);
@@ -307,6 +343,7 @@ namespace FBD
         {
             if (IsStunned || immuneT > 0f || immortalT > 0f) return;
             stunT = Tuning.STUN_TIME;
+            bloodFeet = 1f; // (Horror) bleeds into its own trail when it gets up
             timesStunned++;
             fluffAtStun = fluff;
             stealing = false;

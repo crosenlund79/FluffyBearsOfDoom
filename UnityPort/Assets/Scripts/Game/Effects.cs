@@ -161,10 +161,14 @@ namespace FBD
     /// A collectible power-up badge on a grid cell.
     public class Powerup : Entity
     {
-        public const int BOMB = 0, FIRE = 1, SPEED = 2, SHUFFLE = 3, KICK = 4, LINE = 5, RUBBER = 6, IMMORTAL = 7, REVERSE = 8, DIARRHEA = 9;
+        public const int BOMB = 0, FIRE = 1, SPEED = 2, SHUFFLE = 3, KICK = 4, LINE = 5, RUBBER = 6, IMMORTAL = 7, REVERSE = 8, DIARRHEA = 9, REMOTE = 10;
         public static readonly string[] NAMES = { "Extra Bomb", "Bigger Blast", "Springy Stitching", "Biome Shuffle", "Bomb Kick",
-            "Line Bomb", "Rubber Bombs", "Immortality", "Reverse Controls!", "Bomb Diarrhea!" };
-        public static readonly float[] WEIGHTS = { 22f, 20f, 9f, 6f, 9f, 7f, 5f, 4f, 9f, 7f };
+            "Line Bomb", "Rubber Bombs", "Immortality", "Reverse Controls!", "Bomb Diarrhea!", "Remote Detonator" };
+        // Every bear can kick now, so Bomb Kick no longer drops (its sheet cell is kept for compatibility).
+        public static readonly float[] WEIGHTS = { 22f, 20f, 9f, 6f, 0f, 7f, 5f, 4f, 9f, 7f, 7f };
+        /// Sheet cell per kind. The Remote Detonator reuses the bomb badge plus a drawn
+        /// antenna, so existing 10-cell replacement sheets keep working.
+        public static readonly int[] CELL = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 };
         public static bool IsBad(int kind) => kind == REVERSE || kind == DIARRHEA;
 
         public int kind;
@@ -183,8 +187,22 @@ namespace FBD
             p.Circle(Vector2.zero, s * 0.38f, new Color(0.3f, 0.2f, 0.15f, 0.2f));
             float wob = IsBad(kind) ? Mathf.Sin(t * 9f) * 0.12f : Mathf.Sin(t * 2f) * 0.08f; // curses twitch suspiciously
             p.SetTransform(new Vector2(0, -2 + bob), wob, Vector2.one);
-            p.TextureRect(Assets.Get("powerups/powerups").Region(Assets.POWERUP_CELLS, kind), new Rect(-s * 0.5f, -s * 0.5f, s, s));
+            p.TextureRect(Assets.Get("powerups/powerups").Region(Assets.POWERUP_CELLS, CELL[kind]), new Rect(-s * 0.5f, -s * 0.5f, s, s));
+            if (kind == REMOTE) DrawRemoteAntenna(p, new Vector2(s * 0.18f, -s * 0.2f), s / 38f, t, new Color(0.9f, 0.2f, 0.25f));
             p.ResetTransform();
+        }
+
+        /// A little radio antenna with a blinking tip and signal arcs (remote bombs and their badge).
+        /// Draws in the painter's current local space.
+        public static void DrawRemoteAntenna(Painter p, Vector2 bse, float sc, float t, Color tip)
+        {
+            Vector2 top = bse + new Vector2(4, -12) * sc;
+            p.Line(bse, top, new Color(0.25f, 0.18f, 0.15f), 2f * sc);
+            bool on = (t * 2.5f) % 1f < 0.55f;
+            p.Circle(top, 2.8f * sc, on ? tip : Gd.Darkened(tip, 0.5f));
+            if (on)
+                for (int k = 0; k < 2; k++)
+                    p.Arc(top, (5f + k * 3.5f) * sc, -Gd.PI * 0.85f, -Gd.PI * 0.15f, 6, new Color(tip.r, tip.g, tip.b, 0.75f - k * 0.3f), 1.4f * sc);
         }
     }
 

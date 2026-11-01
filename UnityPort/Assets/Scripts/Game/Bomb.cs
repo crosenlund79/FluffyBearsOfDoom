@@ -1,5 +1,6 @@
-// A stitched fabric toy bomb on a grid cell (port of bomb.gd). Can be kicked;
-// rubber bombs bounce off obstacles instead of stopping.
+// A stitched fabric toy bomb on a grid cell (port of bomb.gd). Every bomb can
+// be kicked; rubber bombs bounce off obstacles; remote bombs wait for their
+// owner's detonator. A ring in the owner's colour shows whose bomb it is.
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -13,7 +14,7 @@ namespace FBD
         public Vector2Int cell;
         public int blastRange = 2;
         public float fuse = Tuning.BOMB_FUSE;
-        public bool exploded, rubber;
+        public bool exploded, rubber, remote;
         public readonly List<Bear> passThrough = new List<Bear>();
         public Vector2Int moveDir;
         public Vector2 position;
@@ -27,6 +28,8 @@ namespace FBD
         {
             game = g; arena = g.arena; owner = bear; cell = c; blastRange = r;
             rubber = bear.hasRubber;
+            remote = bear.hasRemote;
+            if (remote) fuse = Tuning.REMOTE_BACKUP_FUSE;
             position = arena.CellCenter(c);
             tint = ModeTheme.BombTint(bear.color, rubber); // pastel version of the owner's colour
         }
@@ -129,7 +132,11 @@ namespace FBD
                 sy *= horiz ? 0.9f : 1.12f;
             }
             p.SetTransform(new Vector2(0, T * 0.32f), 0f, new Vector2(1f, 0.35f));
-            p.Circle(Vector2.zero, s * 0.36f, new Color(0.3f, 0.2f, 0.15f, 0.22f));
+            p.Circle(Vector2.zero, s * 0.4f, new Color(0.15f, 0.1f, 0.08f, 0.38f));
+            // owner ring on the floor
+            Color own = owner.color;
+            p.Arc(Vector2.zero, s * 0.5f, 0f, Gd.TAU, 28, new Color(own.r, own.g, own.b, 0.95f), 4f);
+            p.Arc(Vector2.zero, s * 0.5f, 0f, Gd.TAU, 28, Gd.WithAlpha(Gd.Darkened(own, 0.5f), 0.6f), 1.5f);
             float twitch = Mathf.Sin(t * 47f) * 0.08f * fin;
             p.SetTransform(new Vector2(0, T * 0.3f - hop), twitch + (IsMoving ? Mathf.Sin(t * 12f) * 0.1f : 0f), new Vector2(sx, sy));
             Color col = tint;
@@ -146,6 +153,12 @@ namespace FBD
                     float hw = Mathf.Sqrt(Mathf.Max(0f, 0.09f - k * k)) * s;
                     p.Line(new Vector2(c.x - hw, y), new Vector2(c.x + hw, y), new Color(1, 1, 1, 0.75f), s * 0.05f);
                 }
+            }
+            if (remote)
+            {
+                // radio antenna in the owner's colour instead of a burning fuse
+                Powerup.DrawRemoteAntenna(p, new Vector2(s * 0.24f, -s * 0.98f), s / 40f, t, Gd.Lightened(owner.color, 0.2f));
+                if (fuse > Tuning.BOMB_FUSE) { p.ResetTransform(); return; }
             }
             // brightening stitched fuse spark
             Vector2 spark = new Vector2(s * 0.26f, -s * 1.02f);

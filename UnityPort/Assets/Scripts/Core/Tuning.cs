@@ -75,5 +75,19 @@ namespace FBD
         public const int DUCK_BLAST_RANGE = 4;
         public const float DUCK_WARNING = 3f;
         public const float DUCKLING_SPACING = 22f;
+
+        // --- Corridor assistance ---
+        public const float CENTER_ASSIST_SPEED = 90f;   // px/s nudge toward the corridor you steer into
+        public const float TURN_LOOKAHEAD = 1.15f;      // tiles ahead along the motion to look for that corridor
+
+        // --- Remote Detonator ---
+        public const float REMOTE_BACKUP_FUSE = 10f;    // a remote bomb still goes off on its own after this long
+        public const float REMOTE_THREAT_TIME = 1.5f;   // how soon other AIs assume someone else's remote bomb may blow
+
+        // --- Horror footprints ---
+        public const float FOOTPRINT_STRIDE = 13f;
+        public const float FOOTPRINT_LIFE = 7f;
+        public const int FOOTPRINT_MAX = 220;
+        public const float BLOOD_PER_PRINT = 0.045f;
     }
 }

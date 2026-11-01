@@ -23,12 +23,24 @@ original Godot project.
 | Move | WASD | Arrow keys |
 | Place bomb | Space | Enter |
 | Steal fluff (hold) | Left Shift | Right Ctrl |
-| Line Bomb (special) | E | Right Shift |
+| Special (remote detonate / Line Bomb) | E | Right Shift |
 
 A lone player can use either layout. Gamepad (XInput axis layout on Windows): left stick or d-pad,
 A bomb, X/B/RT steal, Y/LB special, Start pause. In two-player mode pad 1 drives Player 1 and pad
 2 drives Player 2. Esc/P pauses, N skips to the next music track. Menus work with the mouse,
 arrows/WASD + Enter/Space, or the d-pad + A.
+
+## Gameplay notes
+- Every bear can **kick** bombs by walking into one. A kicked bomb slides along the corridor until something blocks it.
+  A ring in the owner's colour on the floor shows whose bomb it is.
+- **Remote Detonator** power-up: your bombs wait, shown with an antenna in your colour, until you press the special key.
+  A backup fuse sets them off after 10 s. Without remote bombs out, the special key lays a Line Bomb.
+- Power-ups lying in a blast are destroyed; ones uncovered by that same blast survive.
+- Ice is slippery but controllable. Even overstuffed bears keep a minimum braking force there.
+- A gentle corridor assist helps bears turn into side corridors, including when the turn is pressed a little early.
+- Horror mode: bears with blood on their feet leave fading footprints.
+- Menu → **Settings**: volumes, mute, shuffle and **Bear outlines** (a dark outline for visibility).
+  A "Now playing" note appears briefly whenever a track starts.
 
 ## Replacing art and audio (works in built games too)
 All art and audio live in `Assets/StreamingAssets` and are loaded at runtime.
@@ -49,7 +61,7 @@ cell size is `image width / cell count`.
 | `objects/template_bomb.png` | 1 (tinted per bear) |
 | `objects/template_fluff.png` | 1 |
 | `objects/template_duck.png` | 2: wind-up duck (→), wind-up key |
-| `powerups/template_powerups.png` | 10: bomb, blast, speed, shuffle, kick, line, rubber, immortality, reverse, diarrhea |
+| `powerups/template_powerups.png` | 10: bomb, blast, speed, shuffle, kick, line, rubber, immortality, reverse, diarrhea (the Remote Detonator reuses the bomb cell with a drawn antenna) |
 | `effects/template_effects.png` | 8: blast centre, arm, end (→), star, dust, sparkle, bird (→), floor splat |
 
 Horror placeholders exist for `bears`, `tiles` and `effects`.
@@ -72,7 +84,7 @@ Settings (volumes, mute, shuffle, mode, players, AI levels, arena, round length)
 - `Core/`: `Tuning` (every gameplay number), `Terrain`, `ArenaMaps`, `Settings`, `ModeTheme` (+ `Taunts`), `Assets` (sprite loader), `Controls` (input), `Gd` (math helpers).
 - `Game/`: `Game` (match logic), `Arena`, `Bear` (physics, theft, curses, taunts), `BearVisual` (procedural plush rig), `AiController`, `HumanController`, `Bomb`, `DuckParade`, `Effects` (blasts, particles, pickups, power-ups, decals).
 - `Render/`: `Painter` (batched 2D drawing in 1280×720 canvas space), `Xf` (2D transforms).
-- `UI/`: `Menu`, `Hud`, `AudioPanel`, `Gui` (widgets), `UiStyle` (palettes).
+- `UI/`: `Menu`, `Hud`, `AudioPanel` (the Settings panel), `NowPlaying`, `Gui` (widgets), `UiStyle` (palettes).
 - `Audio/`: `Sfx` (procedural placeholders + replacements), `Music` (playlists, fades), `AudioHub`.
 - `App.cs`: bootstrap, camera, scene flow.
 

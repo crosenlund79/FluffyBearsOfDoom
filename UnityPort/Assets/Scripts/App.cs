@@ -32,6 +32,7 @@ namespace FBD
             Assets.Ensure();
             SetupCamera();
             gameObject.AddComponent<AudioHub>();
+            NowPlaying.Init();
             painter = new Painter();
             gui = new Gui(painter);
             ShowMenu();
@@ -117,6 +118,7 @@ namespace FBD
                 hud.Update(dt);
             }
             else menu?.Update(dt);
+            NowPlaying.Update(dt);
         }
 
         void FixedUpdate()
@@ -129,8 +131,8 @@ namespace FBD
             Letterbox();
             painter.BeginFrame();
             gui.Begin(CanvasMouse());
-            if (game != null) { game.Draw(painter); hud.Draw(); }
-            else menu?.Draw();
+            if (game != null) { game.Draw(painter); hud.Draw(); NowPlaying.Draw(painter, new Vector2(40, 10)); }
+            else { menu?.Draw(); NowPlaying.Draw(painter, new Vector2(54, 664)); }
             gui.End();
             painter.Flush(cam);
             if (pending != null) { var a = pending; pending = null; a(); }

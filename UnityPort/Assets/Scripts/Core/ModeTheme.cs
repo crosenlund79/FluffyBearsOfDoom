@@ -31,14 +31,21 @@ namespace FBD
         /// Bear fabric colour: faded, grimy and cold in Horror.
         public static Color BearColor(Color c) => Horror ? Gd.Darkened(Gd.Lerp(c, new Color(0.5f, 0.46f, 0.46f), 0.5f), 0.12f) : c;
 
-        /// Bomb fabric: pastel in Normal, dirty and dim in Horror.
+        /// Bomb fabric: darker than the floor and cushions so bombs stand out.
         public static Color BombTint(Color c, bool rubber)
         {
             float h = Gd.Hue(c);
-            if (Horror) return Gd.FromHsv(h, rubber ? 0.3f : 0.18f, rubber ? 0.62f : 0.5f);
-            if (rubber) return Gd.FromHsv(Gd.PosMod(h + 0.08f, 1f), 0.55f, 1f);
-            return Gd.FromHsv(h, 0.32f, 1f);
+            if (Horror) return Gd.FromHsv(h, rubber ? 0.35f : 0.25f, rubber ? 0.48f : 0.36f);
+            if (rubber) return Gd.FromHsv(Gd.PosMod(h + 0.08f, 1f), 0.62f, 0.78f);
+            return Gd.FromHsv(h, 0.48f, 0.66f);
         }
+
+        /// Tint for permanent walls/pillars and the border (darker than cushions and floor).
+        public static Color WallTint => Horror ? new Color(0.7f, 0.62f, 0.62f) : new Color(0.62f, 0.52f, 0.46f);
+        public static Color BorderTint => Horror ? new Color(0.75f, 0.68f, 0.68f) : new Color(0.74f, 0.64f, 0.58f);
+
+        /// Bear outline colour (Settings > Bear outlines).
+        public static Color OutlineColor => Horror ? new Color(0.05f, 0.02f, 0.02f, 0.95f) : new Color(0.24f, 0.15f, 0.11f, 0.9f);
 
         public static Color StuffingColor => Horror ? new Color(0.8f, 0.28f, 0.3f) : Color.white;
         public static Color SplatColor => Horror ? new Color(0.5f, 0.03f, 0.07f, 0.85f) : new Color(1f, 1f, 1f, 0.8f);

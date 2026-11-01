@@ -144,27 +144,31 @@ namespace FBD
             bool stunned = source.IsStunned;
 
             // Body lags behind acceleration (delayed mass), less damping when stuffed.
+            float wob = 1.45f + 0.3f * Mathf.Min(g, 4f);   // overall wobble gain, grows with stuffing
             float kb = 160f / soft;
-            float zb = Gd.Clamp(0.55f / (0.6f + 0.35f * g), 0.12f, 0.8f);
+            float zb = Gd.Clamp(0.55f / (0.6f + 0.5f * g), 0.09f, 0.8f);
             float cb = 2f * Mathf.Sqrt(kb) * zb;
-            bodyV += (-kb * bodyOff - cb * bodyV - acc * 0.010f * soft) * delta;
+            bodyV += (-kb * bodyOff - cb * bodyV - acc * 0.010f * soft * wob) * delta;
             bodyOff += bodyV * delta;
-            bodyOff = Gd.LimitLength(bodyOff, 8f + 4f * g);
+            bodyOff = Gd.LimitLength(bodyOff, 10f + 7f * g);
 
             // Belly: a softer secondary spring riding on the body.
             float kl = 110f / soft;
-            float zl = Gd.Clamp(0.32f / (0.6f + 0.4f * g), 0.07f, 0.6f);
+            float zl = Gd.Clamp(0.32f / (0.6f + 0.55f * g), 0.05f, 0.6f);
             float cl = 2f * Mathf.Sqrt(kl) * zl;
-            bellyV += (-kl * bellyOff - cl * bellyV - acc * 0.008f * soft - bodyV * 0.5f) * delta;
+            bellyV += (-kl * bellyOff - cl * bellyV - acc * 0.008f * soft * wob * 1.2f - bodyV * 0.6f) * delta;
             bellyOff += bellyV * delta;
-            bellyOff = Gd.LimitLength(bellyOff, 6f + 5f * g);
+            bellyOff = Gd.LimitLength(bellyOff, 8f + 8f * g);
+
+            // Sudden speed or direction changes (starting, turning, braking) squash the plush.
+            squashV += Gd.Clamp(acc.magnitude / 4000f, 0f, 1f) * (0.8f + 0.6f * Mathf.Min(g, 4f)) * delta * 9f;
 
             var sq = Spring(squash, squashV, 0f, 260f / soft, Gd.Clamp(0.3f / (0.6f + 0.4f * g), 0.07f, 0.5f), delta);
-            squash = Gd.Clamp(sq.x, -0.4f, 0.4f);
+            squash = Gd.Clamp(sq.x, -0.5f, 0.5f);
             squashV = sq.y;
 
             // Delayed leaning into motion and away from braking.
-            float leanTarget = Gd.Clamp(vel.x / 300f, -1f, 1f) * (0.1f + 0.04f * g) - Gd.Clamp(acc.x / 3000f, -1f, 1f) * 0.14f * soft;
+            float leanTarget = Gd.Clamp(vel.x / 300f, -1f, 1f) * (0.12f + 0.06f * g) - Gd.Clamp(acc.x / 3000f, -1f, 1f) * 0.2f * soft;
             if (stunned) leanTarget = 0f;
             var ln = Spring(lean, leanV, leanTarget, 70f / soft, Gd.Clamp(0.45f / (0.6f + 0.4f * g), 0.1f, 0.7f), delta);
             lean = ln.x; leanV = ln.y;
@@ -184,11 +188,11 @@ namespace FBD
             float prevPhase = phase;
             phase += speed * delta / stride * (stunned ? 0f : 1f);
             if (Mathf.FloorToInt(phase / Gd.PI) != Mathf.FloorToInt(prevPhase / Gd.PI) && moving > 0.3f) OnStep(moving);
-            float bob = -Mathf.Abs(Mathf.Sin(phase)) * (1.2f + 1.3f * g) * moving;
-            float sway = Mathf.Sin(phase) * (0.035f + 0.045f * g) * moving;
+            float bob = -Mathf.Abs(Mathf.Sin(phase)) * (1.4f + 1.6f * g) * moving;
+            float sway = Mathf.Sin(phase) * (0.045f + 0.06f * g) * moving;
             float idle = 1f - moving;
             float breathe = Mathf.Sin(t * 2.4f + seedOffset) * 0.025f * (0.5f + 0.5f * g) * idle;
-            sway += Mathf.Sin(t * 1.7f + seedOffset) * 0.012f * Mathf.Max(g - 0.8f, 0f) * idle;
+            sway += Mathf.Sin(t * 1.7f + seedOffset) * 0.02f * Mathf.Max(g - 0.8f, 0f) * idle;
 
             // Bouncy floors make bears boing.
             if (source.OnBouncy && !stunned)
@@ -335,12 +339,32 @@ namespace FBD
         /// Head centre in bear-local coordinates (for stars/bubbles above it).
         public Vector2 HeadLocal() => Xf.TRS(rigPos, rigRot, Vector2.one).Apply(head.pos);
 
-        Xf DrawPart(Painter p, Xf parent, Part part, Tex cell, float a)
+        const float OUTLINE_TEXELS = 8f;   // outline width in sprite texels (like the Godot shader)
+        static readonly Vector2[] OUTLINE_DIRS = BuildDirs();
+        static Vector2[] BuildDirs()
+        {
+            var d = new Vector2[8];
+            for (int i = 0; i < 8; i++) d[i] = new Vector2(Mathf.Cos(i * Gd.PI / 4f), Mathf.Sin(i * Gd.PI / 4f));
+            return d;
+        }
+
+        Xf DrawPart(Painter p, Xf parent, Part part, Tex cell, float a, bool outline = false)
         {
             Xf x = parent * Xf.TRS(part.pos, part.rot, part.scale);
             p.SetBase(x);
             p.ResetTransform();
             float w = cw, h = cw;
+            if (outline && Settings.bear_outlines)
+            {
+                // optional outline (Settings > Bear outlines): the part's silhouette, nudged
+                // in 8 directions and filled with a dark colour, just under the part itself
+                Color oc = ModeTheme.OutlineColor;
+                oc.a *= a;
+                // the cell may come from a replacement sprite of any size: keep the width in texels
+                float k = cw / Mathf.Max(cell.size.x, 1f) * OUTLINE_TEXELS;
+                foreach (var d in OUTLINE_DIRS)
+                    p.TextureSilhouette(cell, new Rect(-w * 0.5f + part.offset.x + d.x * k, -h * 0.5f + part.offset.y + d.y * k, w, h), oc);
+            }
             p.TextureRect(cell, new Rect(-w * 0.5f + part.offset.x, -h * 0.5f + part.offset.y, w, h), Gd.WithAlpha(part.col, part.col.a * a));
             return x;
         }
@@ -350,8 +374,8 @@ namespace FBD
             Tex sheet = Assets.Get("bears/bear");
             float a = alpha * extraAlpha;
             Xf rig = RigXf(bearXf);
-            for (int i = 0; i < 2; i++) DrawPart(p, rig, legs[i], sheet.Region(Assets.BEAR_CELLS, 5), a);
-            Xf bodyX = DrawPart(p, rig, body, sheet.Region(Assets.BEAR_CELLS, 0), a);
+            for (int i = 0; i < 2; i++) DrawPart(p, rig, legs[i], sheet.Region(Assets.BEAR_CELLS, 5), a, true);
+            Xf bodyX = DrawPart(p, rig, body, sheet.Region(Assets.BEAR_CELLS, 0), a, true);
             DrawPart(p, bodyX, belly, sheet.Region(Assets.BEAR_CELLS, 1), a);
             if (wrinkles >= 0.05f)
             {
@@ -367,10 +391,10 @@ namespace FBD
                 p.Arc(new Vector2(-22, 10), 10f, -Gd.PI * 0.2f, Gd.PI * 0.4f, 6, c, 3f);
                 p.Arc(new Vector2(22, 10), 10f, Gd.PI * 0.6f, Gd.PI * 1.2f, 6, c, 3f);
             }
-            for (int i = 0; i < 2; i++) DrawPart(p, rig, arms[i], sheet.Region(Assets.BEAR_CELLS, 4), a);
+            for (int i = 0; i < 2; i++) DrawPart(p, rig, arms[i], sheet.Region(Assets.BEAR_CELLS, 4), a, true);
             Xf headX = rig * Xf.TRS(head.pos, head.rot, head.scale);
-            for (int i = 0; i < 2; i++) DrawPart(p, headX, ears[i], sheet.Region(Assets.BEAR_CELLS, 3), a); // behind the head
-            DrawPart(p, rig, head, sheet.Region(Assets.BEAR_CELLS, 2), a);
+            for (int i = 0; i < 2; i++) DrawPart(p, headX, ears[i], sheet.Region(Assets.BEAR_CELLS, 3), a, true); // behind the head
+            DrawPart(p, rig, head, sheet.Region(Assets.BEAR_CELLS, 2), a, true);
             if (faceVisible) DrawPart(p, headX, face, sheet.Region(Assets.BEAR_CELLS, 6 + faceIdx), a);
             p.SetBase(Xf.Identity);
             p.ResetTransform();

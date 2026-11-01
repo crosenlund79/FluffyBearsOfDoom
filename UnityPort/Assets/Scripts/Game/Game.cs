@@ -34,6 +34,10 @@ namespace FBD
         readonly List<Entity> fx = new List<Entity>();
         readonly List<ShuffleEvent> shuffleEvents = new List<ShuffleEvent>();
         public DuckParade parade;
+        // Horror footprints: [pos.x, pos.y, angle, strength, age]
+        readonly List<float[]> footprints = new List<float[]>();
+        readonly Dictionary<Vector2Int, float> bloody = new Dictionary<Vector2Int, float>(); // cell -> clock until a splat lies there
+        float clock;
         public float duckTimer;
         float stealFxT, flicker;
         Color worldTint = Color.white;
@@ -85,6 +89,7 @@ namespace FBD
         public void PhysicsStep(float delta)
         {
             if (paused) return;
+            clock += delta;
             switch (state)
             {
                 case State.COUNTDOWN:
@@ -116,6 +121,11 @@ namespace FBD
             arena.Process(delta);
             foreach (var b in bears) b.visual.Update(delta);
             ProcessList(decals, delta);
+            if (footprints.Count > 0)
+            {
+                foreach (var f in footprints) f[4] += delta;
+                footprints.RemoveAll(f => f[4] >= Tuning.FOOTPRINT_LIFE);
+            }
             ProcessList(floorItems, delta);
             ProcessList(blasts, delta);
             ProcessList(fx, delta);
@@ -231,11 +241,48 @@ namespace FBD
                 }
             }
             foreach (var c in hit) { flames[c] = Tuning.FLAME_TIME; flameOwner[c] = bomb.owner; }
+            DestroyPowerups(hit);
             BreakBlocks(broken);
             ApplyBlast(origin, hit, segs, chain, 14);
             arena.AddShake(4f);
             Sfx.Play("confetti", rng.Range(0.85f, 1.15f));
         }
+
+        /// Power-ups lying in a blast are destroyed (ones revealed by this blast survive).
+        void DestroyPowerups(List<Vector2Int> cells)
+        {
+            bool destroyed = false;
+            foreach (var c in cells)
+            {
+                if (!powerups.TryGetValue(c, out Powerup p)) continue;
+                powerups.Remove(c);
+                SpawnDust(p.position, 4);
+                Burst(p.position, "effects/effects", Assets.EFFECT_CELLS, 5, 5, 11f, new Color(1f, 0.9f, 0.75f));
+                p.dead = true;
+                destroyed = true;
+            }
+            if (destroyed) Sfx.Play("pop", 0.7f, -4f);
+        }
+
+        /// Detonate all of `bear`'s remote bombs. Returns true if there were any.
+        public bool DetonateRemote(Bear bear)
+        {
+            bool any = false;
+            foreach (var b in bombs)
+                if (b.remote && b.owner == bear && !b.exploded) { b.fuse = 0f; any = true; }
+            if (any) Sfx.Play("tick", 1.6f, -2f);
+            return any;
+        }
+
+        public void AddFootprint(Vector2 pos, Vector2 dir, float strength)
+        {
+            footprints.Add(new[] { pos.x, pos.y, Gd.Angle(dir), strength, 0f });
+            if (footprints.Count > Tuning.FOOTPRINT_MAX) footprints.RemoveAt(0);
+        }
+
+        public int FootprintCount => footprints.Count;
+
+        public bool IsBloody(Vector2Int c) => bloody.TryGetValue(c, out float until) && until > clock;
 
         void BreakBlocks(List<Vector2Int> broken)
         {
@@ -352,6 +399,7 @@ namespace FBD
                 if (arena.bombs.TryGetValue(c, out Bomb b)) chain.Add(b);
                 segs.Add(new Segment { pos = arena.CellCenter(c), kind = 0, rot = rng.F() * Gd.TAU });
             }
+            DestroyPowerups(hit);
             BreakBlocks(broken);
             ApplyBlast(origin, hit, segs, chain, 30);
             foreach (var c in hit) Confetti(arena.CellCenter(c), 2);
@@ -362,13 +410,14 @@ namespace FBD
         }
 
         /// Danger map for the AI: cell -> seconds until ablaze (0 = now). level 0 easy .. 2 hard.
-        public Dictionary<Vector2Int, float> ComputeDanger(int level)
+        public Dictionary<Vector2Int, float> ComputeDanger(int level, Bear asker = null)
         {
             bool chain = level == 2;
             var d = new Dictionary<Vector2Int, float>();
             foreach (var c in flames.Keys) d[c] = 0f;
             var times = new Dictionary<Bomb, float>();
-            foreach (var b in bombs) times[b] = b.fuse;
+            foreach (var b in bombs)
+                times[b] = b.remote && b.owner != asker ? Mathf.Min(b.fuse, Tuning.REMOTE_THREAT_TIME) : b.fuse; // could be set off any moment
             if (chain)
                 for (int it = 0; it < 4; it++)
                     foreach (var b in bombs)
@@ -432,7 +481,9 @@ namespace FBD
         /// Floor mark where a bear went down (stuffing / blood). Old ones are recycled.
         void Splat(Vector2 pos, float size)
         {
-            decals.Add(new Decal(rng) { position = pos, size = size, color = ModeTheme.SplatColor });
+            var dc = new Decal(rng) { position = pos, size = size, color = ModeTheme.SplatColor };
+            decals.Add(dc);
+            if (ModeTheme.Horror) bloody[arena.WorldToCell(pos)] = clock + dc.life;
             if (decals.Count > 30) decals.RemoveAt(0);
         }
 
@@ -502,8 +553,9 @@ namespace FBD
                 case Powerup.SPEED: b.speedLevel = Mathf.Min(b.speedLevel + 1, Tuning.MAX_SPEED_LEVEL); break;
                 case Powerup.SHUFFLE: BiomeShuffle(); break;
                 case Powerup.KICK: b.canKick = true; break;
+                case Powerup.REMOTE: b.hasRemote = true; break;
                 case Powerup.LINE: b.hasLine = true; break;
-                case Powerup.RUBBER: b.hasRubber = true; b.canKick = true; break; // rubber bombs need a kick to start bouncing
+                case Powerup.RUBBER: b.hasRubber = true; break;
                 case Powerup.IMMORTAL: b.immortalT = Tuning.IMMORTAL_TIME; Sfx.Play("immortal"); break;
                 case Powerup.REVERSE: Infect(b); break;
                 case Powerup.DIARRHEA: b.diarrheaT = Tuning.DIARRHEA_TIME; break;
@@ -708,6 +760,7 @@ namespace FBD
             arena.Draw(p);
             Vector2 o = arena.Position;
             foreach (var e in decals) e.Draw(p, o);
+            DrawFootprints(p, o);
             foreach (var e in floorItems) e.Draw(p, o);
             foreach (var b in bombs) b.Draw(p);
             foreach (var e in blasts) e.Draw(p, o);
@@ -720,6 +773,25 @@ namespace FBD
             p.SetBase(Xf.Identity);
             p.ResetTransform();
             if (ModeTheme.Horror) DrawVignette(p);
+        }
+
+        /// A little plush paw print per footprint: pad + three toe beans.
+        void DrawFootprints(Painter p, Vector2 o)
+        {
+            foreach (var f in footprints)
+            {
+                float fade = 1f - Gd.Clamp(f[4] / Tuning.FOOTPRINT_LIFE, 0f, 1f);
+                float a = 0.75f * f[3] * fade;
+                if (a < 0.02f) continue;
+                var col = new Color(0.42f, 0.02f, 0.06f, a);
+                Vector2 pos = o + new Vector2(f[0], f[1]);
+                float rot = f[2] + Gd.PI * 0.5f;
+                p.SetBase(Xf.TRS(pos, rot, new Vector2(1f, 1.25f)));
+                p.Circle(new Vector2(0, 1.5f), 3.2f, col, 10);
+                p.SetBase(Xf.TRS(pos, rot, Vector2.one));
+                for (int k = 0; k < 3; k++) p.Circle(new Vector2((k - 1) * 2.6f, -3.6f + Mathf.Abs(k - 1) * 0.8f), 1.25f, col, 8);
+            }
+            p.SetBase(Xf.Identity);
         }
 
         /// Radial vignette centred on the arena (Horror mode), like the Godot GradientTexture2D.

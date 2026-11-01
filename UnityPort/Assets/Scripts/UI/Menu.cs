@@ -134,7 +134,7 @@ namespace FBD
             if (gui.Button(new Rect(x, y, w, 54), "Start Game", 26)) { Sfx.Play("go"); StartRequested?.Invoke(); }
             y += 62;
             float bx = x + (w - (136 * 3 + 20)) * 0.5f;
-            if (gui.Button(new Rect(bx, y, 136, 40), "Audio", 18)) { Sfx.Play("menu"); overlay = "audio"; gui.Focus(0); }
+            if (gui.Button(new Rect(bx, y, 136, 40), "Settings", 18)) { Sfx.Play("menu"); overlay = "audio"; gui.Focus(0); }
             if (gui.Button(new Rect(bx + 146, y, 136, 40), "Controls", 18)) { Sfx.Play("menu"); overlay = "controls"; gui.Focus(0); }
             if (gui.Button(new Rect(bx + 292, y, 136, 40), "Quit", 18)) QuitRequested?.Invoke();
         }
@@ -176,7 +176,7 @@ namespace FBD
                 y += 28;
             }
             y += 6;
-            y += p.Text(new Vector2(x, y), "Playing alone? Both keyboard layouts work for you.\nBomb Kick: walk into a bomb.  Rubber Bombs: kicked bombs bounce off walls.\nPause: Esc / P    Next music track: N\n\nCurses: Reverse Controls flips your steering and spreads to bears you touch.\nBomb Diarrhea drops bombs on its own. Immortality: no stuns, no theft for 20 s.", 16, UiStyle.INK_SOFT) + 10;
+            y += p.Text(new Vector2(x, y), "Playing alone? Both keyboard layouts work for you.\nKick: every bear kicks bombs by walking into them.  Rubber Bombs bounce off walls.\nRemote Detonator: the special key (E / R-Shift) sets off your remote bombs.\nPause: Esc / P    Next music track: N\n\nCurses: Reverse Controls flips your steering and spreads to bears you touch.\nBomb Diarrhea drops bombs on its own. Immortality: no stuns, no theft for 20 s.", 16, UiStyle.INK_SOFT) + 10;
             if (gui.Button(new Rect(x, y, r.width - 44, 40), "Done", 18)) CloseOverlay();
         }
     }

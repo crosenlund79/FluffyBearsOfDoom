@@ -77,8 +77,8 @@ namespace FBD
         static string ControlsText()
         {
             if (Settings.human_count == 1)
-                return "Move WASD/Arrows · Bomb Space/Enter · Steal (hold) L-Shift/R-Ctrl\nLine Bomb E/R-Shift · Pause Esc · Next song N";
-            return "P1: WASD · Space bomb · L-Shift steal · E line bomb\nP2: Arrows · Enter bomb · R-Ctrl steal · R-Shift line bomb · Esc pause";
+                return "Move WASD/Arrows · Bomb Space/Enter · Steal (hold) L-Shift/R-Ctrl\nSpecial (remote / line bomb) E/R-Shift · Pause Esc · Next song N";
+            return "P1: WASD · Space bomb · L-Shift steal · E special\nP2: Arrows · Enter bomb · R-Ctrl steal · R-Shift special · Esc pause";
         }
 
         // ---- drawing ----
@@ -166,9 +166,16 @@ namespace FBD
                 p.String(new Vector2(x + 22, 93), vals[i], HAlign.Left, -1, 15, UiStyle.INK);
                 x += i == 0 ? 58f : 44f;
             }
-            bool[] has = { bear.canKick, bear.hasLine, bear.hasRubber };
+            // (every bear can kick now, so kick isn't listed)
+            bool[] has = { bear.hasRemote, bear.hasLine, bear.hasRubber };
+            int[] kinds = { Powerup.REMOTE, Powerup.LINE, Powerup.RUBBER };
             for (int i = 0; i < 3; i++)
-                if (has[i]) { p.TextureRect(icons.Region(Assets.POWERUP_CELLS, 4 + i), new Rect(x, 77, 20, 20)); x += 23f; }
+            {
+                if (!has[i]) continue;
+                p.TextureRect(icons.Region(Assets.POWERUP_CELLS, Powerup.CELL[kinds[i]]), new Rect(x, 77, 20, 20));
+                if (kinds[i] == Powerup.REMOTE) Powerup.DrawRemoteAntenna(p, new Vector2(x + 13, 82), 0.55f, Time.realtimeSinceStartup, new Color(0.9f, 0.2f, 0.25f));
+                x += 23f;
+            }
             string status = "";
             Color scol = UiStyle.INK_SOFT;
             var timed = new List<string>();
@@ -233,7 +240,7 @@ namespace FBD
             y += 50;
             if (gui.Button(new Rect(x, y, w, 44), "Resume", 20)) { game.TogglePause(); return; }
             y += 50;
-            if (gui.Button(new Rect(x, y, w, 44), "Audio settings", 20)) { audioOpen = true; gui.Focus(0); }
+            if (gui.Button(new Rect(x, y, w, 44), "Settings", 20)) { audioOpen = true; gui.Focus(0); }
             y += 50;
             if (gui.Button(new Rect(x, y, w, 44), "Restart match", 20)) { game.RequestRestart(); return; }
             y += 50;

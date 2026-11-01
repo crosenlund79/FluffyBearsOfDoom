@@ -203,6 +203,13 @@ namespace FBD
         }
         public void TextureRect(Tex t, Rect dst) => TextureRect(t, dst, Color.white);
 
+        /// The sprite's alpha only, filled with `col` (silhouettes / outlines).
+        public void TextureSilhouette(Tex t, Rect dst, Color col)
+        {
+            Quad(Assets.Atlas, true, dst.min, new Vector2(dst.xMax, dst.yMin), dst.max, new Vector2(dst.xMin, dst.yMax),
+                new Vector2(t.uv.xMin, t.uv.yMax), new Vector2(t.uv.xMax, t.uv.yMax), new Vector2(t.uv.xMax, t.uv.yMin), new Vector2(t.uv.xMin, t.uv.yMin), col);
+        }
+
         /// A whole non-atlas texture (e.g. the generated Horror vignette).
         public void RawTexture(Texture tex, Rect dst, Color col)
         {

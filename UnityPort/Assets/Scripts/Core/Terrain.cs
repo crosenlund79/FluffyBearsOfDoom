@@ -7,9 +7,10 @@ namespace FBD
 {
     public struct TerrainProps
     {
-        public string name; public float accel, brake, speed, bounce; public Vector2 push; public int tile; public Color color;
-        public TerrainProps(string n, float a, float b, float s, float bo, Vector2 p, int t, Color c)
-        { name = n; accel = a; brake = b; speed = s; bounce = bo; push = p; tile = t; color = c; }
+        public string name; public float accel, brake, speed, bounce, brakeMin; public Vector2 push; public int tile; public Color color;
+        // brakeMin = braking (px/s^2) a bear always keeps here, however stuffed (keeps ice controllable)
+        public TerrainProps(string n, float a, float b, float s, float bo, Vector2 p, int t, Color c, float bmin = 0f)
+        { name = n; accel = a; brake = b; speed = s; bounce = bo; push = p; tile = t; color = c; brakeMin = bmin; }
     }
 
     public static class Terrain
@@ -20,7 +21,7 @@ namespace FBD
         public static readonly TerrainProps[] PROPS =
         {
             new TerrainProps("Rug", 1f, 1f, 1f, 0.15f, Vector2.zero, 0, new Color(0.94f, 0.9f, 0.82f)),
-            new TerrainProps("Ice", 0.28f, 0.1f, 1.15f, 0.35f, Vector2.zero, 2, new Color(0.75f, 0.9f, 0.97f)),
+            new TerrainProps("Ice", 0.5f, 0.22f, 1.08f, 0.3f, Vector2.zero, 2, new Color(0.75f, 0.9f, 0.97f), 110f),
             new TerrainProps("Honey", 0.75f, 2.6f, 0.45f, 0f, Vector2.zero, 3, new Color(0.93f, 0.72f, 0.3f)),
             new TerrainProps("Bouncy", 1f, 0.8f, 1.05f, 0.95f, Vector2.zero, 4, new Color(0.95f, 0.68f, 0.76f)),
             new TerrainProps("Conveyor", 1f, 1f, 1f, 0.15f, new Vector2(75, 0), 5, new Color(0.67f, 0.71f, 0.75f)),

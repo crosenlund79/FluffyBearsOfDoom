@@ -69,9 +69,12 @@ namespace FBD
         void Think()
         {
             Vector2Int me = bear.Cell;
-            var danger = game.ComputeDanger(level);
+            var danger = game.ComputeDanger(level, bear);
             bool fearless = level > EASY && bear.immortalT > 2.5f;
             if (fearless) danger = new Dictionary<Vector2Int, float>(); // can't be stunned: ignore blasts
+
+            // 0a. Set off our remote bombs when a rival is in a blast and we're clear of all of them.
+            if (bear.hasRemote && TryDetonate(me)) return;
 
             // 0. Kick a nearby bomb at a rival.
             if (bear.canKick && level > EASY && TryKick(me)) return;
@@ -124,6 +127,28 @@ namespace FBD
 
             if (goal == "flee" && path.Count > 0) return;
             ChooseGoal(me, danger);
+        }
+
+        bool TryDetonate(Vector2Int me)
+        {
+            var zone = new HashSet<Vector2Int>();
+            bool any = false;
+            foreach (var b in game.bombs)
+            {
+                if (!b.remote || b.owner != bear || b.exploded) continue;
+                any = true;
+                foreach (var c in game.BlastCells(b.cell, b.blastRange)) zone.Add(c);
+            }
+            if (!any) return false;
+            if (zone.Contains(me) && level > EASY) return false; // Easy sometimes blows itself up
+            foreach (var o in game.bears)
+                if (Targetable(o) && zone.Contains(o.Cell))
+                {
+                    if (level == EASY && rng.F() < 0.5f) return false;
+                    bear.wantSpecial = true;
+                    return true;
+                }
+            return false;
         }
 
         bool Targetable(Bear b) => b != bear && !b.IsStunned && b.immortalT <= 0.5f && b.immuneT <= 0.4f;
@@ -294,6 +319,7 @@ namespace FBD
                     else if (kind == Powerup.KICK) value = !bear.canKick ? 32f : 8f;
                     else if (kind == Powerup.LINE) value = !bear.hasLine ? 32f : 8f;
                     else if (kind == Powerup.RUBBER) value = !bear.hasRubber ? 22f : 6f;
+                    else if (kind == Powerup.REMOTE) value = !bear.hasRemote ? (level == HARD ? 36f : 30f) : 5f;
                     if (level == HARD)
                     {
                         if (kind == Powerup.SHUFFLE) value = bear.FluffRatio < 1.3f ? 30f : 12f;

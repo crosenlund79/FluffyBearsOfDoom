@@ -164,7 +164,8 @@ namespace FBD
                 for (int x = 0; x < cols; x++)
                 {
                     int ct = cells[y * cols + x];
-                    if (ct == WALL || ct == BLOCK) p.Rect(new Rect(x * T + 5, y * T + 8, T - 2, T - 4), new Color(0.3f, 0.2f, 0.15f, 0.16f));
+                    if (ct == WALL) p.Rect(new Rect(x * T + 5, y * T + 8, T - 2, T - 4), new Color(0.2f, 0.12f, 0.08f, 0.3f));
+                    else if (ct == BLOCK) p.Rect(new Rect(x * T + 5, y * T + 8, T - 2, T - 4), new Color(0.3f, 0.2f, 0.15f, 0.16f));
                 }
             // shuffle warnings: pulsing stitched squares showing the coming terrain
             if (warn.Count > 0)
@@ -179,14 +180,16 @@ namespace FBD
                     Stitch(p, Grow(r, -5), new Color(0.55f, 0.3f, 0.35f, 0.5f + 0.5f * pulse));
                 }
             }
-            // walls, pillars and cushion blocks with a little pseudo height
+            // walls, pillars and cushion blocks with a little pseudo height.
+            // Permanent walls are tinted darker so they read clearly against floor and cushions.
+            Color wallCol = ModeTheme.WallTint, borderCol = ModeTheme.BorderTint;
             for (int y = 0; y < rows; y++)
                 for (int x = 0; x < cols; x++)
                 {
                     int ct = cells[y * cols + x];
                     var r = new Rect(x * T, y * T, T, T);
-                    if (ct == BORDER) p.TextureRect(tiles.Region(Assets.TILE_CELLS, 8), r);
-                    else if (ct == WALL) p.TextureRect(tiles.Region(Assets.TILE_CELLS, 6), new Rect(r.position - new Vector2(0, 6), new Vector2(T, T + 6)));
+                    if (ct == BORDER) p.TextureRect(tiles.Region(Assets.TILE_CELLS, 8), r, borderCol);
+                    else if (ct == WALL) p.TextureRect(tiles.Region(Assets.TILE_CELLS, 6), new Rect(r.position - new Vector2(0, 6), new Vector2(T, T + 6)), wallCol);
                     else if (ct == BLOCK)
                     {
                         float squish = 1f + 0.02f * Mathf.Sin(animT * 2f + x * 1.3f + y * 0.7f);

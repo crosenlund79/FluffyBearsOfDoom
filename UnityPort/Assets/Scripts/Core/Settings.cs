@@ -20,6 +20,7 @@ namespace FBD
         public int human_count = 1, sitting_out = 2, arena_index = 0, round_time_index = 1;
         public string[] ai_levels = { "normal", "normal", "normal" };
         public string mode = "normal";
+        public bool bear_outlines = true;
     }
 
     public static class Settings
@@ -42,6 +43,7 @@ namespace FBD
         public static bool muted = false;
         public static bool shuffle_music = true;
         public static string mode = "normal";
+        public static bool bear_outlines = true;   // dark outline around bears for visibility
 
         /// Set false by the headless test harness (no files, no engine).
         public static bool persist = true;
@@ -82,7 +84,7 @@ namespace FBD
             {
                 master_volume = master_volume, music_volume = music_volume, sfx_volume = sfx_volume, muted = muted,
                 shuffle_music = shuffle_music, human_count = human_count, ai_levels = (string[])ai_levels.Clone(),
-                sitting_out = sitting_out, arena_index = arena_index, round_time_index = round_time_index, mode = mode,
+                sitting_out = sitting_out, arena_index = arena_index, round_time_index = round_time_index, mode = mode, bear_outlines = bear_outlines,
             };
             try { File.WriteAllText(SavePath, JsonUtility.ToJson(d, true)); }
             catch (Exception e) { Debug.LogWarning("Could not save settings: " + e.Message); }
@@ -104,6 +106,7 @@ namespace FBD
                         arena_index = Mathf.Clamp(d.arena_index, 0, ArenaMaps.MAPS.Length - 1);
                         round_time_index = Mathf.Clamp(d.round_time_index, 0, Tuning.ROUND_TIMES.Length - 1);
                         mode = d.mode;
+                        bear_outlines = d.bear_outlines;
                     }
                 }
                 catch (Exception e) { Debug.LogWarning("Could not load settings: " + e.Message); }
