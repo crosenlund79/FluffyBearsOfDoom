@@ -31,10 +31,10 @@ namespace FBD
     {
         public const int BEAR_CELLS = 10;    // body, belly, head, ear, arm, leg, face x4
         public const int TILE_CELLS = 9;     // rug, rug alt, ice, honey, bouncy, conveyor, pillar, cushion block, border
-        public const int POWERUP_CELLS = 10; // bomb, blast, speed, shuffle, kick, line, rubber, immortal, reverse, diarrhea
+        public const int POWERUP_CELLS = 10; // bomb, blast, speed, shuffle, kick, line, rubber, immortal, reverse, diarrhea (Remote reuses bomb)
         public const int EFFECT_CELLS = 8;   // blast centre, blast arm, blast end, star, dust, sparkle, bird, floor splat
 
-        public static readonly string[] SHEETS = { "bears/bear", "tiles/tiles", "objects/bomb", "objects/fluff", "objects/duck", "powerups/powerups", "effects/effects" };
+        public static readonly string[] SHEETS = { "bears/bear", "bears/bunny", "bears/dino", "bears/princess", "objects/chair", "tiles/tiles", "objects/bomb", "objects/fluff", "objects/duck", "powerups/powerups", "effects/effects" };
 
         public static Texture2D Atlas;
         public static Vector2 WhiteUV;

@@ -34,6 +34,9 @@ namespace FBD
         readonly List<Entity> fx = new List<Entity>();
         readonly List<ShuffleEvent> shuffleEvents = new List<ShuffleEvent>();
         public DuckParade parade;
+        public CraneEvent crane;   // the crane event in progress
+        public Chair chair;        // a delivered chair waiting to be looted
+        public float craneTimer;
         // Horror footprints: [pos.x, pos.y, angle, strength, age]
         readonly List<float[]> footprints = new List<float[]>();
         readonly Dictionary<Vector2Int, float> bloody = new Dictionary<Vector2Int, float>(); // cell -> clock until a splat lies there
@@ -57,6 +60,7 @@ namespace FBD
             arena = new Arena { origin = ARENA_ORIGIN };
             arena.Setup(ArenaMaps.MAPS[Settings.arena_index], rng, Powerup.WEIGHTS);
             duckTimer = rng.Range(Tuning.DUCK_FIRST_DELAY[0], Tuning.DUCK_FIRST_DELAY[1]);
+            craneTimer = rng.Range(Tuning.CRANE_FIRST_DELAY[0], Tuning.CRANE_FIRST_DELAY[1]);
             var roster = Settings.Roster();
             for (int i = 0; i < roster.Count; i++)
             {
@@ -67,13 +71,13 @@ namespace FBD
                 {
                     b.isHuman = true;
                     b.controller = new HumanController(b, r.schemes);
-                    b.ctrlLabel = Settings.human_count == 1 ? "you" : (r.schemes[0] == "p1" ? "WASD" : "Arrows");
+                    b.ctrlLabel = Species.Info(b.species).label + " · " + (Settings.human_count == 1 ? "you" : (r.schemes[0] == "p1" ? "WASD" : "Arrows"));
                 }
                 else
                 {
                     int lvl = Array.IndexOf(Settings.LEVELS, r.controller);
                     b.controller = new AiController(b, this, lvl);
-                    b.ctrlLabel = Settings.LEVEL_LABELS[lvl] + " AI";
+                    b.ctrlLabel = Species.Info(b.species).label + " · " + Settings.LEVEL_LABELS[lvl] + " AI";
                 }
                 bears.Add(b);
             }
@@ -101,6 +105,7 @@ namespace FBD
                 case State.PLAYING:
                     timeLeft -= delta;
                     UpdateDucks(delta);
+                    UpdateCrane(delta);
                     if (timeLeft <= 0f) { timeLeft = 0f; EndMatch(); }
                     break;
             }
@@ -111,6 +116,7 @@ namespace FBD
             UpdateContagion();
             foreach (var b in bombs.ToArray()) if (!b.exploded) b.PhysicsUpdate(delta);
             if (parade != null) { parade.PhysicsUpdate(delta); if (parade != null && parade.done) parade = null; }
+            if (crane != null) { crane.PhysicsUpdate(delta); if (crane != null && crane.done) crane = null; }
             foreach (var b in bears) b.PhysicsUpdate(delta);
         }
 
@@ -127,6 +133,7 @@ namespace FBD
                 footprints.RemoveAll(f => f[4] >= Tuning.FOOTPRINT_LIFE);
             }
             ProcessList(floorItems, delta);
+            chair?.Process(delta);
             ProcessList(blasts, delta);
             ProcessList(fx, delta);
             if (ModeTheme.Horror)
@@ -242,6 +249,7 @@ namespace FBD
             }
             foreach (var c in hit) { flames[c] = Tuning.FLAME_TIME; flameOwner[c] = bomb.owner; }
             DestroyPowerups(hit);
+            BlastChair(hit);
             BreakBlocks(broken);
             ApplyBlast(origin, hit, segs, chain, 14);
             arena.AddShake(4f);
@@ -296,6 +304,8 @@ namespace FBD
                     var p = new Powerup { kind = kind, cell = c, position = arena.CellCenter(c) };
                     floorItems.Add(p);
                     powerups[c] = p;
+                    // a little reveal flourish
+                    Burst(p.position, "effects/effects", Assets.EFFECT_CELLS, 5, 6, 13f, Powerup.GlowColor(kind));
                 }
             }
         }
@@ -400,6 +410,7 @@ namespace FBD
                 segs.Add(new Segment { pos = arena.CellCenter(c), kind = 0, rot = rng.F() * Gd.TAU });
             }
             DestroyPowerups(hit);
+            BlastChair(hit);
             BreakBlocks(broken);
             ApplyBlast(origin, hit, segs, chain, 30);
             foreach (var c in hit) Confetti(arena.CellCenter(c), 2);
@@ -407,6 +418,89 @@ namespace FBD
             Sfx.Play("duck_confetti");
             parade = null;
             duckTimer = rng.Range(Tuning.DUCK_INTERVAL[0], Tuning.DUCK_INTERVAL[1]);
+        }
+
+        // ---- crane chair drop ----
+        void UpdateCrane(float delta)
+        {
+            if (chair != null && chair.fluff <= 0.5f) RemoveChair(false);   // looted bare
+            if (!Tuning.CRANE_ENABLED || crane != null || chair != null || parade != null) return;
+            craneTimer -= delta;
+            if (craneTimer <= 0f && timeLeft > 14f) StartCrane();
+        }
+
+        public void StartCrane()
+        {
+            var cells = new List<Vector2Int>();
+            for (int y = 0; y < arena.rows; y++)
+                for (int x = 0; x < arena.cols; x++)
+                {
+                    var c = new Vector2Int(x, y);
+                    if (!arena.IsWalkable(c) || powerups.ContainsKey(c) || arena.IsSpawnZone(c)) continue;
+                    int open = 0;
+                    foreach (var d in DIRS) if (arena.IsWalkable(c + d)) open++;
+                    if (open >= 2) cells.Add(c);
+                }
+            if (cells.Count == 0) { craneTimer = 5f; return; }
+            crane = new CraneEvent();
+            crane.Setup(this, cells[rng.Int(cells.Count)]);
+            hud.Banner(ModeTheme.Horror ? "Something is coming down..." : "Special delivery!", 1.6f);
+        }
+
+        public void LandChair(Vector2Int c)
+        {
+            chair = new Chair();
+            chair.Setup(this, c);
+            SpawnDust(arena.CellCenter(c) + new Vector2(0, 14), 6);
+            Burst(arena.CellCenter(c) + new Vector2(0, -10), "objects/fluff", 1, 0, 5, 12f, ModeTheme.StuffingColor);
+            arena.AddShake(6f);
+            Sfx.Play("chair_thud");
+            foreach (var b in bears) b.visual.Kick(0.15f);   // everyone jiggles at the thud
+        }
+
+        /// A landed chair within stealing reach of `thief`, or null.
+        public Chair FindChair(Bear thief)
+        {
+            if (chair == null || chair.fluff <= 0.5f) return null;
+            return Vector2.Distance(thief.position, chair.position) <= Tuning.STEAL_RANGE * arena.T ? chair : null;
+        }
+
+        /// A blast bursts the chair open: its remaining stuffing flies out as pickups.
+        void BlastChair(List<Vector2Int> cells)
+        {
+            if (chair == null || !cells.Contains(chair.cell)) return;
+            float left = chair.fluff;
+            int n = Mathf.Clamp(Mathf.CeilToInt(left / 12f), 1, 5);
+            var spots = new List<Vector2Int>();
+            for (int dy = -2; dy <= 2; dy++)
+                for (int dx = -2; dx <= 2; dx++)
+                {
+                    var c = chair.cell + new Vector2Int(dx, dy);
+                    if (arena.IsWalkable(c) && Mathf.Abs(dx) + Mathf.Abs(dy) <= 2) spots.Add(c);
+                }
+            for (int i = 0; i < n; i++)
+            {
+                Vector2Int dest = spots.Count > 0 ? spots[rng.Int(spots.Count)] : chair.cell;
+                var p = new FluffPickup
+                {
+                    amount = left / n, from = chair.position, cell = dest,
+                    to = arena.CellCenter(dest) + new Vector2(rng.Range(-6, 6), rng.Range(-6, 6)),
+                };
+                p.Init();
+                floorItems.Add(p);
+                pickups.Add(p);
+            }
+            RemoveChair(true);
+        }
+
+        void RemoveChair(bool burst)
+        {
+            Vector2 pos = chair.position;
+            SpawnDust(pos, burst ? 8 : 5);
+            Burst(pos + new Vector2(0, -10), "objects/fluff", 1, 0, burst ? 8 : 4, 13f, ModeTheme.StuffingColor);
+            Sfx.Play("pop", burst ? 0.55f : 0.8f);
+            chair = null;
+            craneTimer = rng.Range(Tuning.CRANE_INTERVAL[0], Tuning.CRANE_INTERVAL[1]);
         }
 
         /// Danger map for the AI: cell -> seconds until ablaze (0 = now). level 0 easy .. 2 hard.
@@ -507,7 +601,7 @@ namespace FBD
             }
         }
 
-        public void OnStealStarted(Bear thief, Bear victim)
+        public void OnStealStarted(Bear thief, Lootable victim)
         {
             if (rng.F() < 0.7f) thief.Taunt(thief.FluffRatio > 2.5f ? "greedy" : "steal");
         }
@@ -561,6 +655,7 @@ namespace FBD
                 case Powerup.DIARRHEA: b.diarrheaT = Tuning.DIARRHEA_TIME; break;
             }
             bool bad = Powerup.IsBad(p.kind);
+            fx.Add(new PickupFx { kind = p.kind, position = p.position });
             Sfx.Play(bad ? "curse" : "pickup");
             b.visual.Kick(0.2f);
             Burst(p.position, "effects/effects", Assets.EFFECT_CELLS, 5, 6, 12f, bad ? new Color(0.8f, 0.95f, 0.75f) : new Color(1f, 0.95f, 0.8f));
@@ -725,6 +820,7 @@ namespace FBD
         {
             state = State.ENDED;
             parade = null; // the ducks wind down quietly
+            crane = null;
             foreach (var b in bears) b.stealing = false;
             var ranking = new List<Bear>(bears);
             // stable sort, highest fluff first (like Godot's sort_custom)
@@ -767,8 +863,15 @@ namespace FBD
             parade?.Draw(p);
             var sorted = new List<Bear>(bears);
             sorted.Sort((a, b) => a.position.y.CompareTo(b.position.y));
-            foreach (var b in sorted) b.Draw(p);
+            bool chairDrawn = chair == null;   // the chair is y-sorted with the bears
+            foreach (var b in sorted)
+            {
+                if (!chairDrawn && chair.position.y <= b.position.y) { chair.Draw(p, o); chairDrawn = true; }
+                b.Draw(p);
+            }
+            if (!chairDrawn) chair.Draw(p, o);
             foreach (var e in fx) e.Draw(p, o);
+            crane?.Draw(p);   // the crane swings in above everything
             p.Modulate = Color.white;
             p.SetBase(Xf.Identity);
             p.ResetTransform();

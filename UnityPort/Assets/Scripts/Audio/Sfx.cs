@@ -60,6 +60,9 @@ namespace FBD
             streams["quack"] = Clip("quack", Quack(0.2f, 330));
             streams["duckling_quack"] = Clip("duckling_quack", Quack(0.11f, 560));
             streams["duck_warning"] = Tone("duck_warning", 0.06f, 1760, 1760, 0.3f, 0, 0);
+            // Crane chair drop
+            streams["crane"] = Concat("crane", Samples(0.35f, 140, 118, 0.35f, 5, 0.3f), Samples(0.35f, 150, 112, 0.3f, 6, 0.35f));
+            streams["chair_thud"] = Concat("chair_thud", Bonk(), Samples(0.25f, 110, 55, 0.5f, 0, 0.45f));
             streams["duck_confetti"] = Concat("duck_confetti", Quack(0.16f, 300), ConfettiSamples(0.9f));
             streams["taunt"] = Concat("taunt", Samples(0.07f, 700, 1100, 0.35f, 0, 0), Samples(0.07f, 900, 1300, 0.35f, 0, 0), Samples(0.12f, 800, 1500, 0.35f, 12, 0));
             streams["mode"] = Concat("mode", Samples(0.08f, 784, 784, 0.35f, 0, 0), Samples(0.08f, 988, 988, 0.35f, 0, 0), Samples(0.2f, 1175, 1175, 0.3f, 6, 0));

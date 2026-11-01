@@ -28,7 +28,7 @@ namespace FBD
             {
                 var pp = new Puppet { fluff = FLUFFS[i] };
                 puppets.Add(pp);
-                visuals.Add(new BearVisual(pp, ModeTheme.BearColor(colors[i]), i * 2f));
+                visuals.Add(new BearVisual(pp, ModeTheme.BearColor(colors[i]), i * 2f, Species.ForName(NAMES[i])));
             }
             gui.Focus(IndexOfStart());
             Music.PlayContext("menu");
@@ -70,7 +70,7 @@ namespace FBD
             {
                 visuals[i].Draw(p, Xf.TRS(new Vector2(holderX[i], 430), 0f, new Vector2(1.6f, 1.6f)));
                 p.SetBase(Xf.Identity);
-                p.Text(new Vector2(50 + i * 150, 470), NAMES[i] + "\n" + (int)FLUFFS[i] + " fluff", 16, UiStyle.INK_SOFT, 120, HAlign.Center);
+                p.Text(new Vector2(30 + i * 150, 470), NAMES[i] + "\n" + Species.Info(Species.ForName(NAMES[i])).label, 16, UiStyle.INK_SOFT, 160, HAlign.Center);
             }
             p.Text(new Vector2(54, 560), ModeTheme.Text(ModeTheme.BLURB), 16, UiStyle.INK, 640);
 

@@ -170,6 +170,34 @@ namespace FBD
         /// antenna, so existing 10-cell replacement sheets keep working.
         public static readonly int[] CELL = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 };
         public static bool IsBad(int kind) => kind == REVERSE || kind == DIARRHEA;
+        /// Short pickup labels for the floating text.
+        public static readonly string[] SHORT = { "+1 Bomb", "+Blast", "Speed!", "Shuffle!", "Kick", "Line Bomb", "Rubber!",
+            "Immortal!", "Reversed!", "Diarrhea!", "Remote!" };
+        /// Kinds that get orbiting sparkles (the rare, exciting ones).
+        public static bool IsSpecial(int kind) => kind == SHUFFLE || kind == LINE || kind == RUBBER || kind == IMMORTAL || kind == REMOTE;
+        static readonly Rng jitter = new Rng();
+
+        /// Halo / feedback colour for a kind, styled for the current mode.
+        public static Color GlowColor(int k)
+        {
+            bool horror = ModeTheme.Horror;
+            if (IsBad(k)) return horror ? new Color(0.55f, 0.85f, 0.2f) : new Color(0.62f, 0.86f, 0.3f);
+            if (horror)
+            {
+                if (k == IMMORTAL) return new Color(0.95f, 0.85f, 0.55f);
+                if (k == SHUFFLE || k == REMOTE) return new Color(0.75f, 0.35f, 0.95f);
+                return new Color(0.92f, 0.18f, 0.15f);
+            }
+            switch (k)
+            {
+                case BOMB: case FIRE: return new Color(1f, 0.72f, 0.3f);
+                case SPEED: return new Color(0.45f, 0.85f, 1f);
+                case SHUFFLE: return new Color(0.75f, 0.55f, 1f);
+                case IMMORTAL: return new Color(1f, 0.92f, 0.45f);
+                case REMOTE: return new Color(1f, 0.45f, 0.5f);
+                default: return new Color(1f, 0.85f, 0.45f);
+            }
+        }
 
         public int kind;
         public Vector2Int cell;
@@ -180,16 +208,80 @@ namespace FBD
         public override void Draw(Painter p, Vector2 origin)
         {
             Base(p, origin);
+            bool horror = ModeTheme.Horror;
+            bool bad = IsBad(kind);
+            Color col = GlowColor(kind);
             float appear = Gd.Clamp(t * 4f, 0f, 1f);
-            float s = 38f * (appear + 0.2f * Mathf.Sin(appear * Gd.PI));
+            // pop in with an overshoot, then breathe
+            float s = 40f * (appear + 0.25f * Mathf.Sin(appear * Gd.PI)) * (1f + 0.04f * Mathf.Sin(t * 4.2f));
             float bob = Mathf.Sin(t * 3f) * 2.5f;
-            p.SetTransform(new Vector2(0, 14), 0f, new Vector2(1f, 0.35f));
-            p.Circle(Vector2.zero, s * 0.38f, new Color(0.3f, 0.2f, 0.15f, 0.2f));
-            float wob = IsBad(kind) ? Mathf.Sin(t * 9f) * 0.12f : Mathf.Sin(t * 2f) * 0.08f; // curses twitch suspiciously
-            p.SetTransform(new Vector2(0, -2 + bob), wob, Vector2.one);
-            p.TextureRect(Assets.Get("powerups/powerups").Region(Assets.POWERUP_CELLS, CELL[kind]), new Rect(-s * 0.5f, -s * 0.5f, s, s));
-            if (kind == REMOTE) DrawRemoteAntenna(p, new Vector2(s * 0.18f, -s * 0.2f), s / 38f, t, new Color(0.9f, 0.2f, 0.25f));
+            // shadow shrinks as the badge bobs up
+            p.SetTransform(new Vector2(0, 15), 0f, new Vector2(1f, 0.35f));
+            p.Circle(Vector2.zero, s * (0.4f - bob * 0.01f), new Color(0.1f, 0.05f, 0.05f, horror ? 0.3f : 0.2f));
             p.ResetTransform();
+            Vector2 c = new Vector2(0, -2 + bob);
+            // pulsing halo: soft disc + ring, flickering in horror
+            float pulse = 0.5f + 0.5f * Mathf.Sin(t * 4f);
+            if (horror) pulse *= 0.75f + 0.25f * ((t * 7.3f) % 1f < 0.85f ? 1f : 0f);
+            for (int i = 0; i < 3; i++) p.Circle(c, s * (0.62f - i * 0.07f), new Color(col.r, col.g, col.b, (0.08f + 0.07f * pulse) * appear));
+            p.Arc(c, s * 0.58f + pulse * 2f, 0f, Gd.TAU, 28, new Color(col.r, col.g, col.b, 0.55f * appear), 2f);
+            // light rays behind the special ones (normal) / dripping blood (horror)
+            if (IsSpecial(kind) && !horror)
+                for (int i = 0; i < 6; i++)
+                {
+                    float a = t * 0.8f + i * Gd.TAU / 6f;
+                    Vector2 dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+                    p.Line(c + dir * s * 0.5f, c + dir * s * (0.85f + 0.1f * pulse), new Color(col.r, col.g, col.b, 0.35f * appear), 3f);
+                }
+            if (horror && !bad)
+                for (int i = 0; i < 2; i++)
+                {
+                    float dy = (t * 14f + i * 11f) % 22f;
+                    float dx = -s * 0.15f + i * s * 0.3f;
+                    p.Circle(c + new Vector2(dx, s * 0.32f + dy), 2.2f * (1f - dy / 22f), new Color(0.55f, 0.05f, 0.05f, 0.8f * (1f - dy / 22f)));
+                }
+            float wob = Mathf.Sin(t * 2f) * 0.08f;
+            Vector2 off = Vector2.zero;
+            if (bad)
+            {
+                wob = Mathf.Sin(t * 9f) * 0.12f;   // curses twitch suspiciously
+                if (t % 1.7f < 0.12f) off = new Vector2(jitter.Range(-2f, 2f), jitter.Range(-2f, 2f));
+            }
+            var rect = new Rect(-s * 0.5f, -s * 0.5f, s, s);
+            Tex region = Assets.Get("powerups/powerups").Region(Assets.POWERUP_CELLS, CELL[kind]);
+            // chunky silhouette: the badge drawn dark and slightly bigger behind itself
+            Color outline = horror ? new Color(0.12f, 0.02f, 0.02f, 0.85f * appear) : new Color(0.3f, 0.18f, 0.12f, 0.6f * appear);
+            p.SetTransform(c + off, wob, Vector2.one * 1.12f);
+            p.TextureSilhouette(region, rect, outline);
+            p.SetTransform(c + off, wob, Vector2.one);
+            p.TextureRect(region, rect, new Color(1, 1, 1, appear));
+            if (kind == REMOTE) DrawRemoteAntenna(p, new Vector2(s * 0.18f, -s * 0.2f), s / 38f, t, new Color(0.9f, 0.2f, 0.25f));
+            // a glint sweeping across the badge every couple of seconds
+            float g = (t * 0.55f + (cell.x + cell.y) * 0.13f) % 1f;
+            if (g < 0.25f && !horror)
+            {
+                float gx = Gd.Lerp(-s * 0.45f, s * 0.45f, g / 0.25f);
+                p.Line(new Vector2(gx - 4, s * 0.3f), new Vector2(gx + 6, -s * 0.3f), new Color(1, 1, 1, 0.55f), 3f);
+            }
+            p.ResetTransform();
+            // orbiting sparkles (special kinds), sick bubbles (curses)
+            if (bad)
+                for (int i = 0; i < 3; i++)
+                {
+                    float k = (t * 0.7f + i / 3f) % 1f;
+                    Vector2 q = c + new Vector2(Mathf.Sin(t * 3f + i * 2f) * s * 0.35f, -s * 0.3f - k * 22f);
+                    p.Arc(q, 2f + 2.5f * k, 0f, Gd.TAU, 10, new Color(col.r, col.g, col.b, 0.8f * (1f - k)), 1.4f);
+                }
+            else if (IsSpecial(kind))
+                for (int i = 0; i < 3; i++)
+                {
+                    float a = t * 2.4f + i * Gd.TAU / 3f;
+                    Vector2 q = c + new Vector2(Mathf.Cos(a) * s * 0.62f, Mathf.Sin(a) * s * 0.25f);
+                    float r = 2.6f + 1.2f * Mathf.Sin(t * 6f + i);
+                    Color sc = horror ? new Color(1f, 0.4f, 0.3f) : new Color(1f, 0.95f, 0.8f);
+                    p.Line(q - new Vector2(r, 0), q + new Vector2(r, 0), sc, 1.6f);
+                    p.Line(q - new Vector2(0, r), q + new Vector2(0, r), sc, 1.6f);
+                }
         }
 
         /// A little radio antenna with a blinking tip and signal arcs (remote bombs and their badge).
@@ -227,6 +319,43 @@ namespace FBD
             float a = color.a * Gd.Clamp((life - age) / 3f, 0f, 1f);
             float s = size * (0.6f + 0.4f * grow);
             p.TextureRect(Assets.Get("effects/effects").Region(Assets.EFFECT_CELLS, 7), new Rect(-s * 0.5f, -s * 0.5f, s, s), new Color(color.r, color.g, color.b, a));
+        }
+    }
+
+    /// Pickup feedback: a shockwave ring, the badge popping up and away, and a
+    /// floating label saying what you got (port of pickup_fx.gd).
+    public class PickupFx : Entity
+    {
+        const float LIFE = 1.1f;
+        public int kind;
+        float age;
+
+        public override void Process(float delta)
+        {
+            age += delta;
+            if (age >= LIFE) dead = true;
+        }
+
+        public override void Draw(Painter p, Vector2 origin)
+        {
+            Base(p, origin);
+            float k = Mathf.Min(age / LIFE, 1f);
+            Color col = Powerup.GlowColor(kind);
+            // shockwave ring
+            float r = 10f + 46f * Mathf.Sqrt(k);
+            p.Arc(Vector2.zero, r, 0f, Gd.TAU, 32, new Color(col.r, col.g, col.b, 0.9f * (1f - k)), 5f * (1f - k) + 1f);
+            p.Arc(Vector2.zero, r * 0.7f, 0f, Gd.TAU, 24, new Color(1, 1, 1, 0.5f * (1f - k)), 2f);
+            // badge pops up and floats away
+            float up = -34f * (1f - Mathf.Pow(1f - k, 3f));
+            float s = 38f * (1f + 0.6f * Mathf.Sin(Mathf.Min(k * 3f, 1f) * Gd.PI * 0.5f)) * (1f - 0.5f * k);
+            float a = 1f - Gd.Clamp((k - 0.5f) / 0.5f, 0f, 1f);
+            p.TextureRect(Assets.Get("powerups/powerups").Region(Assets.POWERUP_CELLS, Powerup.CELL[kind]),
+                new Rect(new Vector2(-s * 0.5f, up - s * 0.5f), new Vector2(s, s)), new Color(1, 1, 1, a));
+            // floating label
+            float y = -30f - 40f * k;
+            Color outline = ModeTheme.Horror ? new Color(0.08f, 0.04f, 0.04f, a) : new Color(1f, 0.98f, 0.94f, a);
+            p.StringOutlined(new Vector2(-60, y), Powerup.SHORT[kind], HAlign.Center, 120, 15, Gd.WithAlpha(Gd.Darkened(col, 0.35f), a), outline, 1.5f);
+            p.ResetTransform();
         }
     }
 }

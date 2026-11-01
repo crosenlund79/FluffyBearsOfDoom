@@ -37,7 +37,7 @@ namespace FBD
         Vector2Int goalCell = new Vector2Int(-1, -1);
         float thinkT, stuckT;
         Vector2 lastPos;
-        Bear stealVictim;
+        Lootable stealVictim;
         float stealBudget, clock, curseT, hesitateT;
         bool compensating;
         readonly Dictionary<Vector2Int, float> badSpots = new Dictionary<Vector2Int, float>();
@@ -93,7 +93,8 @@ namespace FBD
             if (level > EASY && path.Count > 0 && !PathSafe(path, danger)) path.Clear();
 
             // 2. Rob a stunned bear right next to us.
-            Bear victim = game.FindStealTarget(bear);
+            Lootable victim = game.FindStealTarget(bear);
+            if (victim == null) victim = game.FindChair(bear);   // or loot a delivered chair
             if (victim != null && ShouldSteal(victim, danger))
             {
                 bear.wantSteal = true;
@@ -199,7 +200,7 @@ namespace FBD
         /// Imminent danger (a far-off duck countdown isn't worth panicking over yet).
         static bool Threat(Dictionary<Vector2Int, float> danger, Vector2Int c) => danger.TryGetValue(c, out float t) && t < 4f;
 
-        bool ShouldSteal(Bear victim, Dictionary<Vector2Int, float> danger)
+        bool ShouldSteal(Lootable victim, Dictionary<Vector2Int, float> danger)
         {
             if (Threat(danger, bear.Cell)) return false;
             if (victim != stealVictim)
@@ -303,6 +304,15 @@ namespace FBD
                 float score = level == EASY ? (rng.F() < 0.5f ? 45f : -FAR) : level == NORMAL ? 70f : 40f + b.fluff * 0.4f;
                 score -= d * 4f;
                 if (score > bestScore) { bestScore = score; bestCell = c; bestGoal = "rob"; }
+            }
+
+            // A crane-delivered chair stuffed with fluff.
+            if (game.chair != null && game.chair.fluff > 1f && dist.TryGetValue(game.chair.cell, out float cd))
+            {
+                float cv = 40f + 0.5f * game.chair.fluff;
+                if (level == EASY) cv = rng.F() < 0.6f ? 30f : -FAR;
+                float score = cv - cd * 3f;
+                if (score > bestScore) { bestScore = score; bestCell = game.chair.cell; bestGoal = "loot"; }
             }
 
             // Power-ups.

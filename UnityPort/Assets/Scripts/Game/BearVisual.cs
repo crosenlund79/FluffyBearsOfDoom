@@ -53,12 +53,13 @@ namespace FBD
         struct Part { public Vector2 pos; public float rot; public Vector2 scale; public Vector2 offset; public Color col; }
 
         public IBearSource source;
+        public readonly SpeciesSpec spec;
         public Color tint = Color.white;
         public float seedOffset;
         readonly Rng rng = new Rng();
 
         float cw = 128f, unit = PART_SCALE;
-        Part body, belly, head, face;
+        Part body, belly, head, face, tail, skirt, topper;
         readonly Part[] legs = new Part[2], arms = new Part[2], ears = new Part[2];
         bool faceVisible = true;
         float wrinkles;
@@ -79,9 +80,10 @@ namespace FBD
         float tauntT, twitchT = 3f, twitch;
         bool horror;
 
-        public BearVisual(IBearSource src, Color col, float seed)
+        public BearVisual(IBearSource src, Color col, float seed, string speciesId = "bear")
         {
             source = src; tint = col; seedOffset = seed;
+            spec = Species.Info(speciesId);
             horror = Settings.mode == "horror";
             // the cell width only scales parts; textures may be any resolution
             cw = BASE_CELL;
@@ -91,12 +93,16 @@ namespace FBD
             {
                 legs[i] = new Part { offset = new Vector2(0, -0.12f * cw), col = tint, scale = Vector2.one * unit };
                 arms[i] = new Part { offset = new Vector2(0, 0.2f * cw), col = tint, scale = Vector2.one * unit };
-                ears[i] = new Part { offset = new Vector2(0, -0.06f * cw), col = tint, scale = Vector2.one };
+                ears[i] = new Part { offset = new Vector2(0, spec.earOffset * cw), col = tint, scale = Vector2.one * spec.earScale };
             }
             body = new Part { col = tint, scale = Vector2.one * unit };
             belly = new Part { col = Gd.Lerp(tint, Color.white, 0.72f), scale = Vector2.one };
             head = new Part { col = tint, scale = Vector2.one * unit };
             face = new Part { col = Color.white, scale = Vector2.one };
+            tail = new Part { col = spec.tailTint ? tint : Color.white, scale = Vector2.one * unit,
+                offset = spec.tail == "long" ? new Vector2(0.39f * cw, 0) : Vector2.zero };   // pivot at the tail's base
+            skirt = new Part { col = Color.white, scale = Vector2.one * unit };
+            topper = new Part { col = spec.topperTint ? tint : Color.white, pos = spec.topperPos, rot = spec.topperRot, scale = Vector2.one * spec.topperScale };
         }
 
         float TargetG() => source == null ? 1f : Gd.Clamp(source.Fluff / Tuning.START_FLUFF, 0f, 6f);
@@ -236,8 +242,8 @@ namespace FBD
             for (int i = 0; i < 2; i++)
             {
                 float side = i == 0 ? -1f : 1f;
-                ears[i].pos = new Vector2(side * 36f, -38f + sag * 10f);
-                ears[i].rot = side * (0.12f + sag * 0.75f) + earWob * (1f + 0.4f * i) + Mathf.Sin(phase * 2f) * 0.06f * moving;
+                ears[i].pos = new Vector2(side * spec.earPos.x, spec.earPos.y + sag * 10f);
+                ears[i].rot = side * (0.12f + sag * 0.75f) + (earWob * (1f + 0.4f * i) + Mathf.Sin(phase * 2f) * 0.06f * moving) * spec.earFlop;
             }
 
             // Arms stick out further on a round bear and swing with the waddle.
@@ -316,6 +322,7 @@ namespace FBD
             Vector2 facing = source.Facing;
             faceVisible = stunned || facing.y >= 0f || Mathf.Abs(facing.x) > 0f;
             face.pos = new Vector2(facing.x * 11f, Mathf.Max(facing.y, 0f) * 4f);
+            UpdateAccessories(bodyHw, bodyHh, bodyY, sx, s, moving, stunned);
 
             // Whole rig: lean + stun flop, pivoting at the feet. Hop on bouncy floors.
             rigRot = lean + flop + tauntRot;
@@ -323,6 +330,35 @@ namespace FBD
             shadowW = bodyHw * 1.15f + 4f;
             alpha = 1f;
             if (source.ImmuneT > 0f && !stunned) alpha = (t * 12f) % 1f < 0.5f ? 0.55f : 1f;
+        }
+
+        /// Tail wags behind the body, the tutu jiggles with the belly.
+        void UpdateAccessories(float bodyHw, float bodyHh, float bodyY, float sx, float s, float moving, bool stunned)
+        {
+            Vector2 facing = source.Facing;
+            if (spec.tail != "")
+            {
+                float side = Mathf.Abs(facing.x) > 0f ? -Gd.Sign(facing.x) : 1f;   // trails behind, peeks out when facing you
+                float wag = Mathf.Sin(phase * 0.5f) * 0.25f * moving + Mathf.Sin(t * 3f + seedOffset) * 0.12f + bodyV.x * 0.004f;
+                if (spec.tail == "long")
+                {
+                    tail.pos = new Vector2(side * bodyHw * 0.55f + bodyOff.x * 0.4f, bodyY + bodyHh * 0.55f);
+                    tail.scale = new Vector2(side, 1f) * unit * (0.62f + 0.1f * Mathf.Min(g, 4f));
+                    tail.rot = (wag + (stunned ? 0.5f : 0f)) * side;
+                }
+                else
+                {
+                    tail.pos = new Vector2(side * bodyHw * 0.8f + bodyOff.x * 0.4f, bodyY + bodyHh * 0.5f);
+                    tail.scale = Vector2.one * unit * (0.38f + 0.06f * Mathf.Min(g, 4f));
+                    tail.rot = wag;
+                }
+            }
+            if (spec.skirt)
+            {
+                skirt.pos = new Vector2(bodyOff.x * 0.6f, bodyY + bodyHh * 0.42f + bellyOff.y * 0.35f);
+                skirt.scale = new Vector2(sx * 0.9f + 0.12f, (0.62f + 0.08f * Mathf.Min(g, 4f)) * (1f - s * 0.4f)) * unit;
+                skirt.rot = body.rot + bellyOff.x * 0.01f;
+            }
         }
 
         void OnStep(float moving)
@@ -371,12 +407,14 @@ namespace FBD
 
         public void Draw(Painter p, Xf bearXf, float extraAlpha = 1f)
         {
-            Tex sheet = Assets.Get("bears/bear");
+            Tex sheet = Assets.Get(spec.sheet);
+            int n = spec.cells;
             float a = alpha * extraAlpha;
             Xf rig = RigXf(bearXf);
-            for (int i = 0; i < 2; i++) DrawPart(p, rig, legs[i], sheet.Region(Assets.BEAR_CELLS, 5), a, true);
-            Xf bodyX = DrawPart(p, rig, body, sheet.Region(Assets.BEAR_CELLS, 0), a, true);
-            DrawPart(p, bodyX, belly, sheet.Region(Assets.BEAR_CELLS, 1), a);
+            if (spec.tail != "") DrawPart(p, rig, tail, sheet.Region(n, 10), a, true);   // behind everything
+            for (int i = 0; i < 2; i++) DrawPart(p, rig, legs[i], sheet.Region(n, 5), a, true);
+            Xf bodyX = DrawPart(p, rig, body, sheet.Region(n, 0), a, true);
+            DrawPart(p, bodyX, belly, sheet.Region(n, 1), a);
             if (wrinkles >= 0.05f)
             {
                 p.SetBase(bodyX);
@@ -391,12 +429,43 @@ namespace FBD
                 p.Arc(new Vector2(-22, 10), 10f, -Gd.PI * 0.2f, Gd.PI * 0.4f, 6, c, 3f);
                 p.Arc(new Vector2(22, 10), 10f, Gd.PI * 0.6f, Gd.PI * 1.2f, 6, c, 3f);
             }
-            for (int i = 0; i < 2; i++) DrawPart(p, rig, arms[i], sheet.Region(Assets.BEAR_CELLS, 4), a, true);
+            if (spec.skirt) DrawPart(p, rig, skirt, sheet.Region(n, 10), a, true);
+            for (int i = 0; i < 2; i++) DrawPart(p, rig, arms[i], sheet.Region(n, 4), a, true);
             Xf headX = rig * Xf.TRS(head.pos, head.rot, head.scale);
-            for (int i = 0; i < 2; i++) DrawPart(p, headX, ears[i], sheet.Region(Assets.BEAR_CELLS, 3), a, true); // behind the head
-            DrawPart(p, rig, head, sheet.Region(Assets.BEAR_CELLS, 2), a, true);
-            if (faceVisible) DrawPart(p, headX, face, sheet.Region(Assets.BEAR_CELLS, 6 + faceIdx), a);
+            for (int i = 0; i < 2; i++) DrawPart(p, headX, ears[i], sheet.Region(n, 3), a, true); // behind the head
+            if (spec.topper == "back") DrawPart(p, headX, topper, sheet.Region(n, 11), a, true);
+            DrawPart(p, rig, head, sheet.Region(n, 2), a, true);
+            if (faceVisible) DrawPart(p, headX, face, sheet.Region(n, 6 + faceIdx), a);
+            if (spec.topper == "front") DrawPart(p, headX, topper, sheet.Region(n, 11), a, true);
             p.SetBase(Xf.Identity);
+            p.ResetTransform();
+        }
+
+        /// A head-and-face portrait of a character (HUD cards); radius = head radius in px.
+        /// Uses the same sheet cells and texel positions as the rig, so replacement art shows too.
+        public static void DrawPortrait(Painter p, Vector2 center, float radius, string speciesId, Color tintCol, int faceIndex)
+        {
+            SpeciesSpec sp = Species.Info(speciesId);
+            Tex tex = Assets.Get(sp.sheet);
+            int n = sp.cells;
+            float k = radius / 50f;   // px per base texel (head content radius is ~50 base texels)
+            Vector2 earShift = new Vector2(0, sp.earOffset * BASE_CELL * sp.earScale);
+            Color topCol = sp.topperTint ? tintCol : Color.white;
+            void Put(int cell, Vector2 pos, float rot, float sc, Color col)
+            {
+                float sz = BASE_CELL * k * sc;
+                p.SetTransform(center + pos * k, rot, Vector2.one);
+                p.TextureRect(tex.Region(n, cell), new Rect(-sz * 0.5f, -sz * 0.5f, sz, sz), col);
+            }
+            if (sp.topper == "back") Put(11, sp.topperPos, sp.topperRot, sp.topperScale, topCol);
+            for (int i = 0; i < 2; i++)
+            {
+                float side = i == 0 ? -1f : 1f;
+                Put(3, new Vector2(side * sp.earPos.x, sp.earPos.y) + earShift, side * 0.12f, sp.earScale, tintCol);
+            }
+            Put(2, Vector2.zero, 0f, 1f, tintCol);
+            Put(6 + faceIndex, Vector2.zero, 0f, 1f, Color.white);
+            if (sp.topper == "front") Put(11, sp.topperPos, sp.topperRot, sp.topperScale, topCol);
             p.ResetTransform();
         }
     }

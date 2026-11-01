@@ -67,6 +67,14 @@ namespace FBD
         public const float DIARRHEA_INTERVAL = 0.3f;
 
         // --- Doom Duck Parade ---
+        // Crane chair drop
+        public const bool CRANE_ENABLED = true;
+        public static readonly float[] CRANE_FIRST_DELAY = { 40f, 65f };  // seconds into a match before the first drop
+        public static readonly float[] CRANE_INTERVAL = { 60f, 90f };     // after a chair is gone, wait this long for the next
+        public const float CRANE_SPEED = 260f;                            // px/s the hook travels across
+        public const float CRANE_HOVER = 1.1f;                            // seconds it dangles over the target (drop warning)
+        public const float CHAIR_FLUFF = 60f;                             // stuffing inside a delivered chair
+
         public const bool DUCK_ENABLED = true;
         public static readonly float[] DUCK_FIRST_DELAY = { 20f, 35f };
         public static readonly float[] DUCK_INTERVAL = { 35f, 55f };

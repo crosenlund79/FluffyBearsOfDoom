@@ -14,6 +14,7 @@ namespace FBD
         public static int FloorI(float v) => Mathf.FloorToInt(v);
         public static int CeilI(float v) => Mathf.CeilToInt(v);
         public static float Lerp(float a, float b, float t) => a + (b - a) * t;
+        public static float SmoothStep(float from, float to, float x) { if (from == to) return x < from ? 0f : 1f; float k = Clamp01((x - from) / (to - from)); return k * k * (3f - 2f * k); }
         public static float Clamp(float v, float a, float b) => v < a ? a : (v > b ? b : v);
         public static float Clamp01(float v) => Clamp(v, 0f, 1f);
         public static float MoveToward(float from, float to, float delta)

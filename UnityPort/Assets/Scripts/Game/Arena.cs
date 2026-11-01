@@ -76,7 +76,7 @@ namespace FBD
             }
         }
 
-        bool IsSpawnZone(Vector2Int c)
+        public bool IsSpawnZone(Vector2Int c)
         {
             foreach (var s in SPAWNS) if (Mathf.Abs(c.x - s.x) + Mathf.Abs(c.y - s.y) <= 1) return true;
             return false;

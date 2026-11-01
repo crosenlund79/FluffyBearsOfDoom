@@ -31,6 +31,15 @@ A bomb, X/B/RT steal, Y/LB special, Start pause. In two-player mode pad 1 drives
 arrows/WASD + Enter/Space, or the d-pad + A.
 
 ## Gameplay notes
+- The roster: **Player** is a teddy bear, **Oswald** a teddy bunny, **Harald** a small dino and
+  **Theodor** a teddy bear princess (Player 2 takes the character of whichever AI sits out). Each
+  has its own Normal and Horror sprite sheet, shown in-game, in the menu line-up, HUD portraits and results.
+- **Crane chair delivery:** rarely (first after 40–65 s, then every 60–90 s) a crane hook swings in
+  with an armchair, hovers over a free cell with a drop marker and lets go. The chair holds 60 fluff:
+  stand next to it and hold Steal to loot it. A blast bursts it open into pickups. The AI goes for it too.
+  Tuning: `CRANE_*` / `CHAIR_FLUFF` in `Core/Tuning.cs`.
+- Power-ups glow, bob and sparkle (curses bubble and twitch), and picking one up gives a shockwave,
+  a pop and a floating label. Horror mode has its own badge sheet.
 - Every bear can **kick** bombs by walking into one. A kicked bomb slides along the corridor until something blocks it.
   A ring in the owner's colour on the floor shows whose bomb it is.
 - **Remote Detonator** power-up: your bombs wait, shown with an antenna in your colour, until you press the special key.
@@ -57,14 +66,16 @@ cell size is `image width / cell count`.
 | File | Cells |
 |---|---|
 | `bears/template_bear.png` | 10: body, belly, head, ear, arm, leg, face normal/smug/indignant/stunned |
+| `bears/template_bunny.png`, `template_dino.png`, `template_princess.png` | 12: the same 10 as the bear, then tail (bunny puff / dino tail; the princess's skirt) and head topper (bow / back crest / crown). A missing character sheet falls back to the bear sheet |
+| `objects/template_chair.png` | 1: the crane-delivered armchair (stuffing tufts are drawn on top in code) |
 | `tiles/template_tiles.png` | 9: rug, rug alt, ice, honey, bouncy, conveyor (→), pillar, cushion block, border |
 | `objects/template_bomb.png` | 1 (tinted per bear) |
 | `objects/template_fluff.png` | 1 |
 | `objects/template_duck.png` | 2: wind-up duck (→), wind-up key |
-| `powerups/template_powerups.png` | 10: bomb, blast, speed, shuffle, kick, line, rubber, immortality, reverse, diarrhea (the Remote Detonator reuses the bomb cell with a drawn antenna) |
+| `powerups/template_powerups.png` | 10: bomb, blast, speed, shuffle, kick, line, rubber, immortality, reverse, diarrhea (the Remote Detonator reuses the bomb cell with a drawn antenna). Halo, outline, sparkles and pickup burst are drawn in code |
 | `effects/template_effects.png` | 8: blast centre, arm, end (→), star, dust, sparkle, bird (→), floor splat |
 
-Horror placeholders exist for `bears`, `tiles` and `effects`.
+Horror placeholders exist for `bears` (all four characters), `tiles`, `effects`, `powerups` and `objects/chair`.
 
 **Music** (`StreamingAssets/Audio/music/<menu|gameplay>/<normal|horror>/`): `.mp3`, `.ogg` and `.wav`
 files are found automatically. Loose files in `menu/` or `gameplay/` are shared by both modes. If
@@ -75,14 +86,14 @@ to `music/<menu|gameplay>/<normal|horror>/` next to the executable, or under
 **Sound effects** (`StreamingAssets/Audio/sfx/`, Horror-only overrides in `sfx/horror/`): name a file
 after the sound (`place fuse confetti concussion steal pickup curse squeak bump kick boing pop menu
 tick go shuffle immortal victory taunt mode portal clock_tick quack duckling_quack duck_warning
-duck_confetti`) to replace the built-in procedural placeholder.
+duck_confetti crane chair_thud`) to replace the built-in procedural placeholder.
 
 Settings (volumes, mute, shuffle, mode, players, AI levels, arena, round length) are saved to
 `Application.persistentDataPath/settings.json`.
 
 ## Code map (`Assets/Scripts`)
 - `Core/`: `Tuning` (every gameplay number), `Terrain`, `ArenaMaps`, `Settings`, `ModeTheme` (+ `Taunts`), `Assets` (sprite loader), `Controls` (input), `Gd` (math helpers).
-- `Game/`: `Game` (match logic), `Arena`, `Bear` (physics, theft, curses, taunts), `BearVisual` (procedural plush rig), `AiController`, `HumanController`, `Bomb`, `DuckParade`, `Effects` (blasts, particles, pickups, power-ups, decals).
+- `Game/`: `Game` (match logic), `Arena`, `Bear` (physics, theft, curses, taunts), `BearVisual` (procedural plush rig), `AiController`, `HumanController`, `Bomb`, `DuckParade`, `Chair` (crane event + delivered chair), `Effects` (blasts, particles, pickups, power-ups, pickup FX, decals). `Core/Species` holds the character roster.
 - `Render/`: `Painter` (batched 2D drawing in 1280×720 canvas space), `Xf` (2D transforms).
 - `UI/`: `Menu`, `Hud`, `AudioPanel` (the Settings panel), `NowPlaying`, `Gui` (widgets), `UiStyle` (palettes).
 - `Audio/`: `Sfx` (procedural placeholders + replacements), `Music` (playlists, fades), `AudioHub`.

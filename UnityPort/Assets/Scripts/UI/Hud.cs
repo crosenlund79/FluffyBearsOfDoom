@@ -53,7 +53,7 @@ namespace FBD
             resultsAge = 0f;
             Bear winner = r[0];
             champPuppet = new Puppet { fluff = Mathf.Max(winner.fluff, 20f), smug = true };
-            champ = new BearVisual(champPuppet, winner.color, 0f);
+            champ = new BearVisual(champPuppet, winner.color, 0f, winner.species);
             gui.Focus(0);
         }
 
@@ -120,31 +120,11 @@ namespace FBD
             p.Rect(r, UiStyle.PAPER);
             p.Rect(new Rect(0, 0, 8, size.y), bear.color);
             UiStyle.StitchRect(p, Arena.Grow(r, -5), Gd.WithAlpha(Gd.Darkened(bear.color, 0.2f), 0.7f), 1.4f, 5f);
-            // little bear face
-            Vector2 c = new Vector2(48, 52);
+            // the character's own head and face (from its sprite sheet)
             float g = Gd.Clamp(sh / Tuning.START_FLUFF, 0f, 5f);
-            float rad = 18f + 3f * Mathf.Sqrt(g);
-            p.Circle(c + new Vector2(-rad * 0.75f, -rad * 0.72f), rad * 0.38f, bear.color);
-            p.Circle(c + new Vector2(rad * 0.75f, -rad * 0.72f), rad * 0.38f, bear.color);
-            p.Circle(c, rad, bear.color);
-            p.Circle(c + new Vector2(0, rad * 0.35f), rad * 0.42f, Gd.Hex("f7ead8"));
-            float eyeY = c.y - rad * 0.15f;
-            Color eye = Gd.Hex("2b2220");
-            if (bear.IsStunned)
-            {
-                foreach (float ex in new[] { -1f, 1f })
-                {
-                    Vector2 e = new Vector2(c.x + ex * rad * 0.4f, eyeY);
-                    p.Line(e - new Vector2(3, 3), e + new Vector2(3, 3), eye, 2f);
-                    p.Line(e - new Vector2(3, -3), e + new Vector2(3, -3), eye, 2f);
-                }
-            }
-            else
-            {
-                p.Circle(new Vector2(c.x - rad * 0.4f, eyeY), 2.8f, eye);
-                p.Circle(new Vector2(c.x + rad * 0.4f, eyeY), 2.8f, eye);
-            }
-            p.Circle(c + new Vector2(0, rad * 0.25f), 2.6f, Gd.Hex("4a3127"));
+            float rad = 19f + 2.5f * Mathf.Sqrt(g);
+            int faceI = bear.IsStunned ? 3 : (bear.stealing ? 1 : (bear.robbedT > 0f ? 2 : 0));
+            BearVisual.DrawPortrait(p, new Vector2(46, 58), rad, bear.species, bear.color, faceI);
             // name + controller
             p.String(new Vector2(84, 32), bear.bearName, HAlign.Left, -1, 22, UiStyle.INK);
             p.String(new Vector2(84, 52), bear.ctrlLabel, HAlign.Left, -1, 14, UiStyle.INK_SOFT);

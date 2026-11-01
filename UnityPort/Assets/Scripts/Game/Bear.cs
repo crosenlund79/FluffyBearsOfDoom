@@ -8,8 +8,17 @@ namespace FBD
 {
     public interface IController { void Update(float delta); }
 
-    public class Bear : IBearSource
+    /// Anything a bear can pull stuffing out of with Steal: a stunned bear or a delivered chair.
+    public abstract class Lootable
     {
+        public Vector2 position;
+        public float fluff;
+        public float stunT, robbedT;
+    }
+
+    public class Bear : Lootable, IBearSource
+    {
+        public string species = "bear";
         public int slot;
         public string bearName = "";
         public Color color = Color.white;
@@ -19,8 +28,8 @@ namespace FBD
         public Arena arena;
         public IController controller;
 
-        public float fluff = Tuning.START_FLUFF;
-        public Vector2 position, velocity, facing = new Vector2(0, 1);
+        public Bear() { fluff = Tuning.START_FLUFF; }
+        public Vector2 velocity, facing = new Vector2(0, 1);
 
         // Controller inputs
         public Vector2 inputDir;
@@ -32,9 +41,9 @@ namespace FBD
         public bool hasLine, hasRubber, hasRemote;
 
         // State
-        public float stunT, immuneT, robbedT;
+        public float immuneT;
         public bool stealing;
-        public Bear stealTarget;
+        public Lootable stealTarget;
         public bool onBouncy;
         public int terrainId;
 
@@ -78,7 +87,8 @@ namespace FBD
         {
             game = g; arena = g.arena; slot = s; bearName = n; color = col;
             position = arena.CellCenter(spawn);
-            visual = new BearVisual(this, col, s * 1.7f);
+            species = Species.Info(Species.ForName(n)).id;
+            visual = new BearVisual(this, col, s * 1.7f, species);
         }
 
         // ---- fluff-dependent physical properties ----
@@ -143,7 +153,8 @@ namespace FBD
         {
             if (wantSteal && CanAct && inputDir == Vector2.zero)
             {
-                Bear target = game.FindStealTarget(this);
+                Lootable target = game.FindStealTarget(this);
+                if (target == null) target = game.FindChair(this);   // a delivered chair is looted the same way
                 if (target != null)
                 {
                     if (!stealing) { Sfx.Play("squeak", 1.4f, -4f); game.OnStealStarted(this, target); }
