@@ -9,11 +9,13 @@ const Terrain = preload("res://scripts/terrain.gd")
 const BearVisual = preload("res://scripts/bear_visual.gd")
 const Taunts = preload("res://scripts/taunts.gd")
 const Mode = preload("res://scripts/mode_theme.gd")
+const Species = preload("res://scripts/species.gd")
 
 var slot := 0
 var bear_name := ""
 var color := Color.WHITE
 var is_human := false
+var species := "bear"
 var ctrl_label := ""
 var game
 var arena
@@ -183,6 +185,8 @@ func setup(g, s: int, n: String, col: Color, spawn: Vector2i) -> void:
 	color = col
 	position = arena.cell_center(spawn)
 	visual = BearVisual.new()
+	species = Species.for_name(n)
+	visual.species = species
 	visual.source = self
 	visual.tint = col
 	_rng.randomize()
@@ -287,6 +291,8 @@ func _physics_process(delta: float) -> void:
 func _update_steal(delta: float) -> void:
 	if want_steal and can_act() and input_dir == Vector2.ZERO:
 		var target = game.find_steal_target(self)
+		if target == null:
+			target = game.find_chair(self)   # a delivered chair is looted the same way
 		if target != null:
 			if not stealing:
 				Sfx.play("squeak", 1.4, -4.0)

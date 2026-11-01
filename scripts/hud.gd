@@ -41,24 +41,11 @@ class BearCard extends Control:
 		draw_rect(r, bg)
 		draw_rect(Rect2(0, 0, 8, size.y), bear.color)
 		UiStyle.stitch_rect(self, r.grow(-5), Color(bear.color.darkened(0.2), 0.7), 1.4, 5.0)
-		# little bear face
-		var c := Vector2(48, 52)
+		# the character's own head and face (from its sprite sheet)
 		var g: float = clampf(shown / Tuning.START_FLUFF, 0.0, 5.0)
-		var rad := 18.0 + 3.0 * sqrt(g)
-		draw_circle(c + Vector2(-rad * 0.75, -rad * 0.72), rad * 0.38, bear.color)
-		draw_circle(c + Vector2(rad * 0.75, -rad * 0.72), rad * 0.38, bear.color)
-		draw_circle(c, rad, bear.color)
-		draw_circle(c + Vector2(0, rad * 0.35), rad * 0.42, Color("f7ead8"))
-		var eye_y := c.y - rad * 0.15
-		if bear.is_stunned():
-			for ex in [-1.0, 1.0]:
-				var e := Vector2(c.x + ex * rad * 0.4, eye_y)
-				draw_line(e - Vector2(3, 3), e + Vector2(3, 3), Color("2b2220"), 2.0)
-				draw_line(e - Vector2(3, -3), e + Vector2(3, -3), Color("2b2220"), 2.0)
-		else:
-			draw_circle(Vector2(c.x - rad * 0.4, eye_y), 2.8, Color("2b2220"))
-			draw_circle(Vector2(c.x + rad * 0.4, eye_y), 2.8, Color("2b2220"))
-		draw_circle(c + Vector2(0, rad * 0.25), 2.6, Color("4a3127"))
+		var rad := 19.0 + 2.5 * sqrt(g)
+		var face_i := 3 if bear.is_stunned() else (1 if bear.stealing else (2 if bear.robbed_t > 0.0 else 0))
+		BearVisual.draw_portrait(self, Vector2(46, 58), rad, bear.species, bear.color, face_i)
 		# name + controller
 		draw_string(font, Vector2(84, 32), bear.bear_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, UiStyle.INK)
 		var who: String = bear.ctrl_label
@@ -282,6 +269,7 @@ func show_results(ranking: Array) -> void:
 	puppet.fluff = maxf(winner.fluff, 20.0)
 	puppet.smug = true
 	var vis := BearVisual.new()
+	vis.species = winner.species
 	vis.source = puppet
 	vis.tint = winner.color
 	holder.add_child(vis)

@@ -47,6 +47,9 @@ func _ready() -> void:
 	_streams["duckling_quack"] = _wav(_quack(0.11, 560.0))
 	_streams["duck_warning"] = _tone(0.06, 1760.0, 1760.0, 0.3, 0.0, 0.0)
 	_streams["duck_confetti"] = _concat([_quack(0.16, 300.0), _confetti_samples(0.9)])
+	# Crane chair drop
+	_streams["crane"] = _concat([_samples(0.35, 140.0, 118.0, 0.35, 5.0, 0.3), _samples(0.35, 150.0, 112.0, 0.3, 6.0, 0.35)])
+	_streams["chair_thud"] = _concat([_bonk(), _samples(0.25, 110.0, 55.0, 0.5, 0.0, 0.45)])
 	_streams["taunt"] = _concat([_samples(0.07, 700.0, 1100.0, 0.35, 0.0, 0.0), _samples(0.07, 900.0, 1300.0, 0.35, 0.0, 0.0), _samples(0.12, 800.0, 1500.0, 0.35, 12.0, 0.0)])
 	_streams["mode"] = _concat([_samples(0.08, 784.0, 784.0, 0.35, 0.0, 0.0), _samples(0.08, 988.0, 988.0, 0.35, 0.0, 0.0), _samples(0.2, 1175.0, 1175.0, 0.3, 6.0, 0.0)])
 	_build_horror()

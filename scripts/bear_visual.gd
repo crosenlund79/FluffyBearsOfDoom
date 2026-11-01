@@ -10,6 +10,7 @@
 extends Node2D
 
 const Tuning = preload("res://scripts/tuning.gd")
+const Species = preload("res://scripts/species.gd")
 
 enum Face { NORMAL, SMUG, INDIGNANT, STUNNED }
 
@@ -17,6 +18,12 @@ const PART_SCALE := 0.36   # world px per px of a 128px sheet cell
 const BASE_CELL := 128.0
 
 var source
+var species := "bear"
+var spec: Dictionary
+var cells := 10
+var tail: Sprite2D
+var skirt: Sprite2D
+var topper: Sprite2D
 var tint := Color.WHITE
 var seed_offset := 0.0
 
@@ -125,9 +132,15 @@ class Puppet:
 
 
 func _ready() -> void:
-	sheet = Assets.tex("bears/bear")
-	cw = float(sheet.get_width()) / Assets.BEAR_CELLS
+	spec = Species.info(species)
+	sheet = Assets.tex(spec["sheet"])
+	cells = spec["cells"]
+	cw = float(sheet.get_width()) / cells
 	unit = PART_SCALE * BASE_CELL / cw
+	if spec["tail"] != "":
+		tail = _part(10, tint if spec["tail_tint"] else Color.WHITE)   # behind everything
+		if spec["tail"] == "long":
+			tail.offset = Vector2(0.39 * cw, 0)   # pivot at the tail's base
 	for i in 2:
 		var leg := _part(5, tint)
 		leg.offset = Vector2(0, -0.12 * cw)  # pivot near the hip
@@ -137,6 +150,8 @@ func _ready() -> void:
 	wrinkles = Wrinkles.new()
 	wrinkles.col = tint.darkened(0.6)
 	body.add_child(wrinkles)
+	if spec["skirt"]:
+		skirt = _part(10, Color.WHITE)
 	for i in 2:
 		var arm := _part(4, tint)
 		arm.offset = Vector2(0, 0.2 * cw)   # pivot at the shoulder
@@ -145,9 +160,19 @@ func _ready() -> void:
 	for i in 2:
 		var ear := _part(3, tint, head)
 		ear.show_behind_parent = true
-		ear.offset = Vector2(0, -0.06 * cw)
+		ear.offset = Vector2(0, spec["ear_offset"] * cw)
+		ear.scale = Vector2.ONE * spec["ear_scale"]
 		ears.append(ear)
+	if spec["topper"] == "back":
+		topper = _part(11, tint if spec["topper_tint"] else Color.WHITE, head)
+		topper.show_behind_parent = true
 	face = _part(6, Color.WHITE, head)
+	if spec["topper"] == "front":
+		topper = _part(11, tint if spec["topper_tint"] else Color.WHITE, head)
+	if topper:
+		topper.position = spec["topper_pos"]
+		topper.rotation = spec["topper_rot"]
+		topper.scale = Vector2.ONE * spec["topper_scale"]
 	g = _target_g()
 	horror = Settings.mode == "horror"
 
@@ -156,7 +181,7 @@ func _part(index: int, col: Color, parent: Node = null) -> Sprite2D:
 	var s := Sprite2D.new()
 	s.texture = sheet
 	s.region_enabled = true
-	s.region_rect = Assets.region(sheet, Assets.BEAR_CELLS, index)
+	s.region_rect = Assets.region(sheet, cells, index)
 	s.self_modulate = col
 	if parent == null:
 		add_child(s)
@@ -353,8 +378,10 @@ func _process(delta: float) -> void:
 
 	for i in 2:
 		var side := -1.0 if i == 0 else 1.0
-		ears[i].position = Vector2(side * 36.0, -38.0 + sag * 10.0)
-		ears[i].rotation = side * (0.12 + sag * 0.75) + ear_wob * (1.0 + 0.4 * i) + sin(phase * 2.0) * 0.06 * moving
+		var ep: Vector2 = spec["ear_pos"]
+		var flop: float = spec["ear_flop"]
+		ears[i].position = Vector2(side * ep.x, ep.y + sag * 10.0)
+		ears[i].rotation = side * (0.12 + sag * 0.75) + (ear_wob * (1.0 + 0.4 * i) + sin(phase * 2.0) * 0.06 * moving) * flop
 
 	# Arms stick out further on a round bear and swing with the waddle.
 	var steal_dir := Vector2.ZERO
@@ -432,10 +459,11 @@ func _process(delta: float) -> void:
 		f = Face.INDIGNANT
 	if f != face_idx:
 		face_idx = f
-		face.region_rect = Assets.region(sheet, Assets.BEAR_CELLS, 6 + f)
+		face.region_rect = Assets.region(sheet, cells, 6 + f)
 	var facing: Vector2 = source.facing
 	face.visible = stunned or facing.y >= 0.0 or absf(facing.x) > 0.0
 	face.position = Vector2(facing.x * 11.0, maxf(facing.y, 0.0) * 4.0)
+	_update_accessories(body_hw, body_hh, body_y, sx, s, moving, stunned)
 
 	# Whole rig: lean + stun flop, pivoting at the feet. Hop on bouncy floors.
 	rotation = lean + flop + taunt_rot
@@ -444,6 +472,52 @@ func _process(delta: float) -> void:
 	modulate.a = 1.0
 	if source.immune_t > 0.0 and not stunned:
 		modulate.a = 0.55 if fmod(t * 12.0, 1.0) < 0.5 else 1.0
+
+
+## Tail wags behind the body, the tutu jiggles with the belly.
+func _update_accessories(body_hw: float, body_hh: float, body_y: float, sx: float, s: float, moving: float, stunned: bool) -> void:
+	var facing: Vector2 = source.facing
+	if tail:
+		var side := -signf(facing.x) if absf(facing.x) > 0.0 else 1.0   # trails behind, peeks out when facing you
+		var wag := sin(phase * 0.5) * 0.25 * moving + sin(t * 3.0 + seed_offset) * 0.12 + body_v.x * 0.004
+		if spec["tail"] == "long":
+			tail.position = Vector2(side * body_hw * 0.55 + body_off.x * 0.4, body_y + body_hh * 0.55)
+			tail.scale = Vector2(side, 1.0) * unit * (0.62 + 0.1 * minf(g, 4.0))
+			tail.rotation = (wag + (0.5 if stunned else 0.0)) * side
+		else:
+			tail.position = Vector2(side * body_hw * 0.8 + body_off.x * 0.4, body_y + body_hh * 0.5)
+			tail.scale = Vector2.ONE * unit * (0.38 + 0.06 * minf(g, 4.0))
+			tail.rotation = wag
+	if skirt:
+		skirt.position = Vector2(body_off.x * 0.6, body_y + body_hh * 0.42 + belly_off.y * 0.35)
+		skirt.scale = Vector2(sx * 0.9 + 0.12, (0.62 + 0.08 * minf(g, 4.0)) * (1.0 - s * 0.4)) * unit
+		skirt.rotation = body.rotation + belly_off.x * 0.01
+
+
+## A head-and-face portrait of a character (HUD cards); radius = head radius in px.
+## Uses the same sheet cells and texel positions as the rig, so replacement art shows too.
+static func draw_portrait(ci: CanvasItem, center: Vector2, radius: float, species_id: String, tint_col: Color, face_index: int) -> void:
+	var sp: Dictionary = Species.info(species_id)
+	var tex: Texture2D = Assets.tex(sp["sheet"])
+	var n: int = sp["cells"]
+	var cell := float(tex.get_width()) / n
+	var k := radius / (50.0 * cell / BASE_CELL)   # px per texel (head content radius is ~50 base texels)
+	var ep: Vector2 = sp["ear_pos"]
+	var ear_shift := Vector2(0, float(sp["ear_offset"]) * cell * float(sp["ear_scale"]))
+	var parts := []                                # [cell index, position (texels), rotation, scale, colour]
+	if sp["topper"] == "back":
+		parts.append([11, sp["topper_pos"], sp["topper_rot"], sp["topper_scale"], tint_col if sp["topper_tint"] else Color.WHITE])
+	for side in [-1.0, 1.0]:
+		parts.append([3, Vector2(side * ep.x, ep.y) + ear_shift, side * 0.12, sp["ear_scale"], tint_col])
+	parts.append([2, Vector2.ZERO, 0.0, 1.0, tint_col])
+	parts.append([6 + face_index, Vector2.ZERO, 0.0, 1.0, Color.WHITE])
+	if sp["topper"] == "front":
+		parts.append([11, sp["topper_pos"], sp["topper_rot"], sp["topper_scale"], tint_col if sp["topper_tint"] else Color.WHITE])
+	for part in parts:
+		var sz: float = cell * k * float(part[3])
+		ci.draw_set_transform(center + Vector2(part[1]) * k, part[2], Vector2.ONE)
+		ci.draw_texture_rect_region(tex, Rect2(-sz * 0.5, -sz * 0.5, sz, sz), Assets.region(tex, n, part[0]), part[4])
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _on_step(moving: float) -> void:

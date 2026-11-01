@@ -11,6 +11,7 @@ const BearVisual = preload("res://scripts/bear_visual.gd")
 const Maps = preload("res://scripts/arena_maps.gd")
 const Mode = preload("res://scripts/mode_theme.gd")
 const NowPlaying = preload("res://scripts/now_playing.gd")
+const Species = preload("res://scripts/species.gd")
 
 var puppets: Array = []
 var holders: Array = []
@@ -47,16 +48,17 @@ func _ready() -> void:
 		var p := BearVisual.Puppet.new()
 		p.fluff = fluffs[i]
 		var vis := BearVisual.new()
+		vis.species = Species.for_name(names[i])
 		vis.source = p
 		vis.tint = Mode.bear_color(colors[i])
 		vis.seed_offset = i * 2.0
 		holder.add_child(vis)
 		puppets.append(p)
 		holders.append(holder)
-		var cap := UiStyle.label("%s\n%d fluff" % [names[i], fluffs[i]], 16, UiStyle.INK_SOFT)
+		var cap := UiStyle.label("%s\n%s" % [names[i], Species.info(Species.for_name(names[i]))["label"]], 16, UiStyle.INK_SOFT)
 		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		cap.position = Vector2(50 + i * 150, 470)
-		cap.size = Vector2(120, 50)
+		cap.position = Vector2(30 + i * 150, 470)
+		cap.size = Vector2(160, 50)
 		add_child(cap)
 
 	var blurb := UiStyle.label(Mode.text(Mode.BLURB), 16, UiStyle.INK)
@@ -115,7 +117,9 @@ func _ready() -> void:
 		sw.custom_minimum_size = Vector2(22, 22)
 		sw.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(sw)
-		row.add_child(_fixed(UiStyle.label(Settings.AI_NAMES[i], 20), 120))
+		var who := UiStyle.label(Settings.AI_NAMES[i], 20)
+		who.tooltip_text = Species.info(Species.for_name(Settings.AI_NAMES[i]))["label"]
+		row.add_child(_fixed(who, 120))
 		var ob := OptionButton.new()
 		for lbl in Settings.LEVEL_LABELS:
 			ob.add_item(lbl)

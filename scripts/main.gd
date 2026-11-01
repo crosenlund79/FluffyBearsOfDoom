@@ -50,6 +50,9 @@ func _ready() -> void:
 			current.bears[0].immortal_t = 20.0
 		if "--duck" in OS.get_cmdline_user_args():
 			current.duck_timer = 3.0
+		if "--crane" in OS.get_cmdline_user_args():
+			current.crane_timer = 2.0
+			current.duck_timer = 999.0
 		_autotest.call_deferred()
 		return
 	show_menu()
@@ -58,10 +61,14 @@ func _ready() -> void:
 func _autotest() -> void:
 	var g = current
 	while g.state != g.State.ENDED:
-		await get_tree().create_timer(0.5 if "--duck" in OS.get_cmdline_user_args() else 2.0).timeout
+		await get_tree().create_timer(0.5 if ("--duck" in OS.get_cmdline_user_args() or "--crane" in OS.get_cmdline_user_args()) else 2.0).timeout
 		var line := "t=%5.1f " % g.time_left
 		for b in g.bears:
 			line += "%s:%d%s[%s %s] " % [b.bear_name, roundi(b.fluff), "(z)" if b.is_stunned() else "", b.controller.goal, b.cell()]
+		if g.crane != null:
+			line += "crane=%d " % g.crane.phase
+		if g.chair != null and is_instance_valid(g.chair):
+			line += "chair=%s fluff=%d " % [g.chair.cell, roundi(g.chair.fluff)]
 		print(line)
 		for a in OS.get_cmdline_user_args():
 			if a.begins_with("--shots="):

@@ -14,8 +14,8 @@ namespace FBD
         };
         public static readonly Dictionary<string, string> SUBTITLE = new Dictionary<string, string>
         {
-            { "normal", "Four adorable teddy bears. One finite supply of stuffing." },
-            { "horror", "Four teddy bears. They are hungry. They are always hungry." },
+            { "normal", "Four adorable plushies. One finite supply of stuffing." },
+            { "horror", "Four plushies. They are hungry. They are always hungry." },
         };
         public static readonly Dictionary<string, string> BLURB = new Dictionary<string, string>
         {

@@ -86,3 +86,11 @@ const FOOTPRINT_STRIDE := 13.0           # px between footprints
 const FOOTPRINT_LIFE := 7.0              # seconds a footprint takes to fade
 const FOOTPRINT_MAX := 220               # oldest prints are recycled beyond this
 const BLOOD_PER_PRINT := 0.045           # how quickly a bear's feet run dry
+
+# --- Crane chair drop (rare event) -------------------------------------------------
+const CRANE_ENABLED := true
+const CRANE_FIRST_DELAY := [40.0, 65.0]  # seconds into a match before the first drop (min, max)
+const CRANE_INTERVAL := [60.0, 90.0]     # after a chair is gone, wait this long for the next
+const CRANE_SPEED := 260.0               # px/s the hook travels across
+const CRANE_HOVER := 1.1                 # seconds it dangles over the target (drop warning)
+const CHAIR_FLUFF := 60.0                # stuffing inside a delivered chair

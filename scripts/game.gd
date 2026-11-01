@@ -23,6 +23,10 @@ const DuckParade = preload("res://scripts/duck_parade.gd")
 const Mode = preload("res://scripts/mode_theme.gd")
 const DecalScript = preload("res://scripts/decal.gd")
 const FootprintsScript = preload("res://scripts/footprints.gd")
+const Species = preload("res://scripts/species.gd")
+const ChairScript = preload("res://scripts/chair.gd")
+const CraneScript = preload("res://scripts/crane_event.gd")
+const PickupFx = preload("res://scripts/pickup_fx.gd")
 
 enum State { COUNTDOWN, PLAYING, ENDED }
 
@@ -61,6 +65,10 @@ var _steal_fx_t := 0.0
 var _last_count := 4
 var duck_layer: Node2D
 var parade = null
+var crane = null          # the crane event in progress
+var chair = null          # a delivered chair waiting to be looted
+var crane_timer := 0.0
+var crane_layer: Node2D
 var duck_timer := 0.0
 
 
@@ -87,6 +95,8 @@ func _ready() -> void:
 	bear_layer = _layer(5)
 	bear_layer.y_sort_enabled = true
 	fx_layer = _layer(8)
+	crane_layer = _layer(9)   # the crane swings in above everything
+	crane_timer = rng.randf_range(Tuning.CRANE_FIRST_DELAY[0], Tuning.CRANE_FIRST_DELAY[1])
 
 	var roster: Array = Settings.roster()
 	for i in roster.size():
@@ -98,9 +108,10 @@ func _ready() -> void:
 			b.is_human = true
 			b.controller = HumanController.new(b, r["schemes"])
 			b.ctrl_label = "you" if Settings.human_count == 1 else ("WASD" if r["schemes"][0] == "p1" else "Arrows")
+			b.ctrl_label = Species.info(b.species)["label"] + " · " + b.ctrl_label
 		else:
 			b.controller = AiController.new(b, self, Settings.LEVELS.find(r["controller"]))
-			b.ctrl_label = Settings.LEVEL_LABELS[Settings.LEVELS.find(r["controller"])] + " AI"
+			b.ctrl_label = Species.info(b.species)["label"] + " · " + Settings.LEVEL_LABELS[Settings.LEVELS.find(r["controller"])] + " AI"
 		bears.append(b)
 	Music.play_context("gameplay")
 	_setup_mode_atmosphere()
@@ -189,6 +200,7 @@ func _physics_process(delta: float) -> void:
 		State.PLAYING:
 			time_left -= delta
 			_update_ducks(delta)
+			_update_crane(delta)
 			if time_left <= 0.0:
 				time_left = 0.0
 				_end_match()
@@ -304,6 +316,7 @@ func explode(bomb) -> void:
 		flames[c] = Tuning.FLAME_TIME
 		flame_owner[c] = bomb.owner_bear
 	_destroy_powerups(hit)
+	_blast_chair(hit)
 	_break_blocks(broken)
 	_finish_bomb(bomb, origin, hit, segs, chain)
 
@@ -362,6 +375,8 @@ func _break_blocks(broken: Array) -> void:
 			p.position = arena.cell_center(c)
 			powerup_layer.add_child(p)
 			powerups[c] = p
+			# a little reveal flourish
+			_burst(p.position, fx_tex, Assets.region(fx_tex, Assets.EFFECT_CELLS, 5), 6, 13.0, PowerupScript.glow_color(kind))
 
 
 ## Shared by bombs and the duck: confetti visuals, chained bombs, stuns.
@@ -398,6 +413,96 @@ func _check_flame_hits(origin: Vector2i) -> void:
 
 
 # --- Doom Duck Parade ------------------------------------------------------------
+
+# --- Crane chair drop ---------------------------------------------------------------
+
+func _update_crane(delta: float) -> void:
+	if chair != null and is_instance_valid(chair) and chair.fluff <= 0.5:
+		_remove_chair(false)   # looted bare
+	if not Tuning.CRANE_ENABLED or crane != null or chair != null or parade != null:
+		return
+	crane_timer -= delta
+	if crane_timer <= 0.0 and time_left > 14.0:
+		start_crane()
+
+
+func start_crane() -> void:
+	var cells := []
+	for y in arena.rows:
+		for x in arena.cols:
+			var c := Vector2i(x, y)
+			if not arena.is_walkable(c) or powerups.has(c) or arena._is_spawn_zone(c):
+				continue
+			var open := 0
+			for d in DIRS:
+				if arena.is_walkable(c + d):
+					open += 1
+			if open >= 2:
+				cells.append(c)
+	if cells.is_empty():
+		crane_timer = 5.0
+		return
+	crane = CraneScript.new()
+	crane_layer.add_child(crane)
+	crane.setup(self, cells[rng.randi() % cells.size()])
+	hud.banner("Something is coming down..." if Mode.horror() else "Special delivery!", 1.6)
+
+
+func land_chair(c: Vector2i) -> void:
+	chair = ChairScript.new()
+	bear_layer.add_child(chair)   # y-sorted with the bears
+	chair.setup(self, c)
+	spawn_dust(arena.cell_center(c) + Vector2(0, 14), 6)
+	_burst(arena.cell_center(c) + Vector2(0, -10), fluff_tex, Rect2(Vector2.ZERO, fluff_tex.get_size()), 5, 12.0, Mode.stuffing_color())
+	arena.add_shake(6.0)
+	Sfx.play("chair_thud")
+	for b in bears:
+		b.visual.kick(0.15)   # everyone jiggles at the thud
+
+
+## A landed chair within stealing reach of `thief`, or null.
+func find_chair(thief):
+	if chair == null or not is_instance_valid(chair) or chair.fluff <= 0.5:
+		return null
+	if thief.position.distance_to(chair.position) <= Tuning.STEAL_RANGE * arena.T:
+		return chair
+	return null
+
+
+## A blast bursts the chair open: its remaining stuffing flies out as pickups.
+func _blast_chair(cells: Array) -> void:
+	if chair == null or not is_instance_valid(chair) or not chair.cell in cells:
+		return
+	var left: float = chair.fluff
+	var n := clampi(ceili(left / 12.0), 1, 5)
+	var spots := []
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			var c: Vector2i = chair.cell + Vector2i(dx, dy)
+			if arena.is_walkable(c) and absi(dx) + absi(dy) <= 2:
+				spots.append(c)
+	for i in n:
+		var dest: Vector2i = spots[rng.randi() % spots.size()] if not spots.is_empty() else chair.cell
+		var p = PickupScript.new()
+		p.game = self
+		p.amount = left / n
+		p.from = chair.position
+		p.to = arena.cell_center(dest) + Vector2(rng.randf_range(-6, 6), rng.randf_range(-6, 6))
+		p.cell = dest
+		powerup_layer.add_child(p)
+		pickups.append(p)
+	_remove_chair(true)
+
+
+func _remove_chair(burst: bool) -> void:
+	var pos: Vector2 = chair.position
+	spawn_dust(pos, 8 if burst else 5)
+	_burst(pos + Vector2(0, -10), fluff_tex, Rect2(Vector2.ZERO, fluff_tex.get_size()), 8 if burst else 4, 13.0, Mode.stuffing_color())
+	Sfx.play("pop", 0.55 if burst else 0.8)
+	chair.queue_free()
+	chair = null
+	crane_timer = rng.randf_range(Tuning.CRANE_INTERVAL[0], Tuning.CRANE_INTERVAL[1])
+
 
 func _update_ducks(delta: float) -> void:
 	if not Tuning.DUCK_ENABLED or parade != null:
@@ -463,6 +568,7 @@ func duck_explode(p) -> void:
 			chain.append(arena.bombs[c])
 		segs.append({"pos": arena.cell_center(c), "kind": 0, "rot": rng.randf() * TAU})
 	_destroy_powerups(hit)
+	_blast_chair(hit)
 	_break_blocks(broken)
 	_apply_blast(origin, hit, segs, chain, 30)
 	for c in hit:
@@ -639,6 +745,10 @@ func _apply_powerup(b, p) -> void:
 		PowerupScript.DIARRHEA:
 			b.diarrhea_t = Tuning.DIARRHEA_TIME
 	var bad: bool = p.kind in PowerupScript.BAD
+	var fxn = PickupFx.new()
+	fxn.kind = p.kind
+	fxn.position = p.position
+	fx_layer.add_child(fxn)
 	Sfx.play("curse" if bad else "pickup")
 	b.visual.kick(0.2)
 	_burst(p.position, fx_tex, Assets.region(fx_tex, Assets.EFFECT_CELLS, 5), 6, 12.0, Color(0.8, 0.95, 0.75) if bad else Color(1, 0.95, 0.8))
@@ -799,6 +909,9 @@ func _end_match() -> void:
 	if parade != null and is_instance_valid(parade):
 		parade.queue_free()  # the ducks wind down quietly
 		parade = null
+	if crane != null and is_instance_valid(crane):
+		crane.queue_free()
+		crane = null
 	for b in bears:
 		b.stealing = false
 	var ranking := bears.duplicate()

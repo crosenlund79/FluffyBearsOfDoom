@@ -409,10 +409,13 @@ CONFETTI = ["f2a7b5", "a7c8e8", "f5dc8a", "a8dcc0", "c9b2e3", "f6c1a0"]
 
 
 def badge(c, ring, bad=False):
-    c.ellipse(32, 33, 27, 27, fill=rgba("bfae98", 160))
+    # strong silhouette: soft drop shadow, dark outer rim, coloured ring, glossy highlight
+    c.ellipse(32, 34, 29, 29, fill=rgba("5b4636", 110))
+    c.ellipse(32, 31, 29.5, 29.5, fill=rgba("4a3a30"))
     c.ellipse(32, 31, 27, 27, fill=rgba("e9e0ef") if bad else rgba("fbf3e3"))
-    c.ellipse(32, 31, 27, 27, outline=rgba(ring), width=3)
-    c.dashed_ellipse(32, 31, 22, 22, rgba(ring), 1.1, 22)
+    c.ellipse(32, 31, 27, 27, outline=rgba(ring), width=4)
+    c.dashed_ellipse(32, 31, 21.5, 21.5, rgba(ring), 1.2, 22)
+    c.arc(32, 31, 23, 23, 200, 290, (255, 255, 255, 190), 2.4)
     if bad:  # stitched "x" corners mark a curse
         for dx, dy in ((-19, -19), (19, -19)):
             c.line([(32 + dx - 3, 31 + dy - 3), (32 + dx + 3, 31 + dy + 3)], rgba("6f5a7c"), 1.6)
@@ -918,6 +921,531 @@ def make_horror_effects():
     return sheet
 
 
+# ---------------------------------------------------------------- roster
+# Teddy bunny, small dino and teddy bear princess share the bear sheet layout
+# (cells 0-9) plus two accessory cells: 10 = tail / skirt, 11 = head topper.
+PINK = "f3b6c8"
+GOLD = "e8c35e"
+
+
+def species_sheet(cells):
+    sheet = Image.new("RGBA", (BEAR_CELL * len(cells), BEAR_CELL), (0, 0, 0, 0))
+    for i, im in enumerate(cells):
+        paste(sheet, im, i * BEAR_CELL, 0)
+    return sheet
+
+
+def bear_cells():
+    b = make_bear()
+    return [b.crop((i * BEAR_CELL, 0, (i + 1) * BEAR_CELL, BEAR_CELL)) for i in range(10)]
+
+
+def eyes_for(c, kind):
+    if kind == "normal":
+        button_eye(c, 42, 58)
+        button_eye(c, 86, 58)
+    elif kind == "smug":
+        for x in (42, 86):
+            c.d.pieslice(c._b((x - 8.5, 51.5, x + 8.5, 68.5)), 0, 180, fill=EYE)
+            c.line([(x - 10, 59), (x + 10, 59)], MOUTH, 2.0)
+    elif kind == "indignant":
+        button_eye(c, 42, 60)
+        button_eye(c, 86, 60)
+        c.line([(30, 44), (54, 51)], MOUTH, 2.6)
+        c.line([(98, 44), (74, 51)], MOUTH, 2.6)
+    else:
+        for x in (42, 86):
+            c.line([(x - 7, 51), (x + 7, 65)], EYE, 3.2)
+            c.line([(x + 7, 51), (x - 7, 65)], EYE, 3.2)
+
+
+# ---- teddy bunny ----
+def bunny_belly():
+    c = Canvas(128, 128)
+    plush_blob(c, 64, 64, 40, 44, rgba("fffaf2"), fuzz=False)
+    c.dashed_ellipse(64, 64, 36, 40, rgba("b9aa98"), 1.6, 30)
+    c.polygon([(57, 70), (71, 70), (64, 92)], fill=rgba("efa35f"))      # carrot patch
+    c.dashed_line(59, 76, 69, 76, rgba("c47a3c"), 1.0, 2, 2)
+    for dx in (-4, 0, 4):
+        c.line([(64, 70), (64 + dx * 1.5, 62)], rgba("8fbf7a"), 2.4)
+    return c.result()
+
+
+def bunny_head():
+    c = Canvas(128, 128)
+    plush_blob(c, 64, 68, 47, 45, FUR)
+    return c.result()
+
+
+def bunny_ear():
+    """Tall floppy ear, base near y=100 (the rig hangs it from its base)."""
+    c = Canvas(128, 128)
+    c.rect(46, 6, 82, 104, fill=FUR_DARK, radius=17)
+    c.rect(47, 6, 81, 102, fill=FUR, radius=17)
+    c.rect(55, 16, 73, 94, fill=rgba("fbe0e4"), radius=9)
+    c.dashed_line(64, 20, 64, 90, STITCH, 1.0, 3, 3)
+    c.ellipse(56, 18, 6, 4, fill=(255, 255, 255, 60))
+    return c.result()
+
+
+def bunny_face(kind):
+    c = Canvas(128, 128)
+    c.ellipse(55, 85, 12, 10, fill=MUZZLE)
+    c.ellipse(73, 85, 12, 10, fill=MUZZLE)
+    c.dashed_ellipse(64, 85, 22, 12, rgba("c8b49c"), 1.0, 24)
+    c.polygon([(58, 74), (70, 74), (64, 81)], fill=rgba("e08a9a"))      # pink nose
+    if kind != "stunned":
+        c.rect(59, 88, 64, 97, fill=rgba("fffdf8"), radius=1)            # buck teeth
+        c.rect(64, 88, 69, 97, fill=rgba("fffdf8"), radius=1)
+        c.rect(59, 88, 69, 97, outline=MOUTH, width=0.9, radius=1)
+    for sgn in (-1, 1):                                                  # whisker stitches
+        for k in (-1, 0, 1):
+            c.dashed_line(64 + sgn * 22, 84 + k * 4, 64 + sgn * 38, 82 + k * 6, MOUTH, 1.0, 3, 2)
+    c.ellipse(30, 78, 8, 5, fill=BLUSH)
+    c.ellipse(98, 78, 8, 5, fill=BLUSH)
+    eyes_for(c, kind)
+    if kind == "smug":
+        c.arc(72, 80, 9, 6, 20, 120, MOUTH, 1.8)
+    elif kind == "indignant":
+        c.ellipse(64, 101, 4, 4, fill=MOUTH)
+    elif kind == "stunned":
+        c.line([(52 + i * 2, 92 + math.sin(i * 1.4) * 2.2) for i in range(13)], MOUTH, 1.8)
+    return c.result()
+
+
+def bunny_tail():
+    c = Canvas(128, 128)
+    for (x, y, r) in ((64, 64, 16), (54, 58, 10), (74, 58, 10), (56, 72, 10), (72, 72, 10)):
+        c.ellipse(x, y + 1.5, r, r, fill=rgba("d9d2ca"))
+    for (x, y, r) in ((64, 63, 14), (55, 57, 8), (73, 57, 8), (57, 71, 8), (71, 71, 8)):
+        c.ellipse(x, y, r, r, fill=rgba("fffdf8"))
+    return c.result()
+
+
+def bunny_bow():
+    c = Canvas(128, 128)
+    c.polygon([(64, 64), (36, 46), (36, 82)], fill=rgba("c76e86"))
+    c.polygon([(64, 64), (92, 46), (92, 82)], fill=rgba("c76e86"))
+    c.polygon([(64, 64), (39, 50), (39, 78)], fill=rgba(PINK))
+    c.polygon([(64, 64), (89, 50), (89, 78)], fill=rgba(PINK))
+    c.ellipse(64, 64, 8, 8, fill=rgba("c76e86"))
+    c.ellipse(64, 64, 6, 6, fill=rgba("f6c9d6"))
+    for x in (46, 82):
+        c.ellipse(x, 64, 2, 2, fill=(255, 255, 255, 200))
+    return c.result()
+
+
+def make_bunny():
+    b = bear_cells()
+    return species_sheet([b[0], bunny_belly(), bunny_head(), bunny_ear(), b[4], b[5]]
+                         + [bunny_face(k) for k in ("normal", "smug", "indignant", "stunned")]
+                         + [bunny_tail(), bunny_bow()])
+
+
+# ---- small dino ----
+def dino_body():
+    c = Canvas(128, 128)
+    plush_blob(c, 64, 66, 46, 50, FUR)
+    rnd = random.Random(21)
+    for _ in range(9):
+        x, y = rnd.uniform(26, 102), rnd.uniform(28, 106)
+        if (x - 64) ** 2 / 46 ** 2 + (y - 66) ** 2 / 50 ** 2 < 0.75:
+            r = rnd.uniform(4, 8)
+            c.ellipse(x, y, r, r * 0.8, fill=rgba("c9bfb4", 170))
+    c.dashed_line(64, 22, 64, 110, STITCH, 1.4, 4, 3)
+    return c.result()
+
+
+def dino_belly():
+    c = Canvas(128, 128)
+    plush_blob(c, 64, 64, 38, 44, rgba("fffaf2"), fuzz=False)
+    for k in range(5):
+        y = 34 + k * 13
+        c.dashed_line(36, y, 92, y, rgba("b9aa98"), 1.4, 3, 2)
+    c.dashed_ellipse(64, 64, 34, 40, rgba("b9aa98"), 1.6, 30)
+    return c.result()
+
+
+def dino_head():
+    c = Canvas(128, 128)
+    plush_blob(c, 64, 70, 53, 44, FUR)
+    for (x, y) in ((44, 44), (80, 40), (90, 60)):
+        c.ellipse(x, y, 5, 4, fill=rgba("c9bfb4", 160))
+    return c.result()
+
+
+def dino_ear():
+    """A soft horn nub where a bear has ears."""
+    c = Canvas(128, 128)
+    c.polygon([(48, 82), (64, 34), (80, 82)], fill=FUR_DARK)
+    c.polygon([(51, 80), (64, 40), (77, 80)], fill=FUR)
+    c.ellipse(64, 42, 6, 6, fill=FUR)
+    c.dashed_line(56, 76, 64, 46, STITCH, 1.0, 3, 2)
+    return c.result()
+
+
+def dino_face(kind):
+    c = Canvas(128, 128)
+    c.ellipse(64, 88, 32, 17, fill=MUZZLE)
+    c.dashed_ellipse(64, 88, 32, 17, rgba("c8b49c"), 1.0, 30)
+    for x in (54, 74):
+        c.ellipse(x, 80, 2.6, 2, fill=NOSE)
+    eyes_for(c, kind)
+    if kind == "normal":
+        c.arc(64, 88, 20, 8, 15, 165, MOUTH, 1.8)
+    elif kind == "smug":
+        c.arc(64, 88, 22, 9, 10, 170, MOUTH, 1.8)
+        for x in (50, 78):
+            c.polygon([(x - 3, 94), (x + 3, 94), (x, 99)], fill=rgba("fffdf8"))
+    elif kind == "indignant":
+        c.ellipse(64, 96, 8, 5, fill=MOUTH)
+    else:
+        c.line([(46 + i * 3, 94 + math.sin(i * 1.4) * 2.2) for i in range(13)], MOUTH, 1.8)
+    c.ellipse(30, 80, 7, 4, fill=BLUSH)
+    c.ellipse(98, 80, 7, 4, fill=BLUSH)
+    return c.result()
+
+
+def dino_tail():
+    """Tapered tail pointing right; its base sits at x=14 (the rig pivots there)."""
+    c = Canvas(128, 128)
+    pts_top = [(14, 50), (50, 52), (86, 58), (112, 66), (122, 70)]
+    pts_bot = [(122, 72), (110, 78), (84, 80), (50, 84), (14, 86)]
+    c.polygon(pts_top + pts_bot, fill=FUR_DARK)
+    c.polygon([(x, y + 2) for x, y in pts_top] + [(x, y - 2) for x, y in pts_bot], fill=FUR)
+    for k, x in enumerate((30, 52, 74, 96)):                              # soft back spikes
+        h = 12 - k * 2
+        c.polygon([(x - 7, 52 + k * 3), (x, 52 + k * 3 - h), (x + 7, 54 + k * 3)], fill=FUR_DARK)
+    c.dashed_line(20, 70, 110, 73, STITCH, 1.0, 3, 3)
+    return c.result()
+
+
+def dino_crest():
+    c = Canvas(128, 128)
+    for x, h in ((44, 22), (64, 30), (84, 22)):
+        c.polygon([(x - 11, 80), (x, 80 - h - 20), (x + 11, 80)], fill=FUR_DARK)
+        c.polygon([(x - 8, 80), (x, 80 - h - 15), (x + 8, 80)], fill=FUR)
+    return c.result()
+
+
+def make_dino():
+    b = bear_cells()
+    return species_sheet([dino_body(), dino_belly(), dino_head(), dino_ear(), b[4], b[5]]
+                         + [dino_face(k) for k in ("normal", "smug", "indignant", "stunned")]
+                         + [dino_tail(), dino_crest()])
+
+
+# ---- teddy bear princess ----
+def princess_face(kind):
+    c = Canvas(128, 128)
+    face_base(c)
+    c.ellipse(32, 82, 10, 6, fill=rgba("f0a9ad", 190))
+    c.ellipse(96, 82, 10, 6, fill=rgba("f0a9ad", 190))
+    eyes_for(c, kind)
+    if kind != "stunned":
+        for x, sgn in ((42, -1), (86, 1)):                                # eyelashes
+            for k in range(3):
+                c.line([(x + sgn * 6, 51 + k * 2), (x + sgn * 12, 46 + k * 3)], EYE, 1.5)
+    if kind == "normal":
+        c.ellipse(64, 89, 4.5, 3, fill=rgba("d86a82"))                    # little pink smile
+        c.arc(64, 87, 7, 4, 20, 160, MOUTH, 1.4)
+    elif kind == "smug":
+        c.arc(68, 86, 10, 6, 15, 120, MOUTH, 1.8)
+        c.ellipse(71, 89, 3, 2, fill=rgba("d86a82"))
+    elif kind == "indignant":
+        c.ellipse(64, 91, 5, 5, fill=MOUTH)
+    else:
+        c.line([(52 + i * 2, 89 + math.sin(i * 1.4) * 2.2) for i in range(13)], MOUTH, 1.8)
+    return c.result()
+
+
+def princess_skirt():
+    """A frilly tutu worn round the waist, drawn in front of the body."""
+    c = Canvas(128, 128)
+    c.ellipse(64, 66, 58, 22, fill=rgba("d98aa2"))
+    for k in range(13):                                                   # scalloped hem
+        a = math.pi * k / 12
+        x = 64 + math.cos(a) * 52
+        c.ellipse(x, 74 + math.sin(a) * 10, 9, 7, fill=rgba(PINK))
+    c.ellipse(64, 62, 54, 17, fill=rgba(PINK))
+    c.ellipse(64, 56, 46, 9, fill=rgba("f9d3de"))
+    rnd = random.Random(4)
+    for _ in range(10):
+        c.ellipse(rnd.uniform(20, 108), rnd.uniform(58, 76), 1.6, 1.6, fill=(255, 255, 255, 230))
+    c.dashed_ellipse(64, 58, 47, 10, rgba("c76e86"), 1.1, 30)
+    return c.result()
+
+
+def princess_crown():
+    c = Canvas(128, 128)
+    outline = rgba("9c7a2c")
+    pts = [(36, 84), (36, 50), (50, 66), (64, 40), (78, 66), (92, 50), (92, 84)]
+    c.polygon([(x, y + 2) for x, y in pts], fill=outline)
+    c.polygon(pts, fill=rgba(GOLD))
+    c.rect(36, 76, 92, 86, fill=rgba("d9ab3f"))
+    for x, col in ((50, "e86f8e"), (64, "7fb3d9"), (78, "e86f8e")):
+        c.ellipse(x, 80, 3.6, 3.6, fill=rgba(col))
+    for x, y in ((36, 50), (64, 40), (92, 50)):
+        c.ellipse(x, y, 3.6, 3.6, fill=rgba("fff2c4"))
+    c.line([(42, 74), (86, 74)], (255, 255, 255, 120), 1.4)
+    return c.result()
+
+
+def make_princess():
+    b = bear_cells()
+    return species_sheet(b[0:6] + [princess_face(k) for k in ("normal", "smug", "indignant", "stunned")]
+                         + [princess_skirt(), princess_crown()])
+
+
+# ---- horror versions of the roster ----
+def horror_scars(img, index, seed):
+    img = grim(img, 0.86, 0.5)
+    c = Canvas(128, 128)
+    rnd = random.Random(seed)
+    if index in (0, 2):
+        x0, y0 = rnd.uniform(34, 50), rnd.uniform(30, 44)
+        scar(c, [(x0, y0), (x0 + 14, y0 + 10), (x0 + 8, y0 + 24), (x0 + 20, y0 + 34)])
+        c.ellipse(rnd.uniform(60, 84), rnd.uniform(70, 96), 7, 4, fill=rgba(BLOOD, 160))
+    elif index == 1:
+        c.ellipse(70, 74, 14, 10, fill=rgba(BLOOD, 120))
+    img.alpha_composite(c.result())
+    return img
+
+
+def horror_species_face(species, kind):
+    face = horror_face(kind)
+    c = Canvas(128, 128)
+    if species == "bunny":
+        c.rect(58, 96, 63, 104, fill=rgba("d9cfc4"))                     # one buck tooth left
+        c.line([(64, 96), (69, 103)], rgba("1a0b0c"), 1.2)
+        for sgn in (-1, 1):
+            c.line([(64 + sgn * 22, 84), (64 + sgn * 38, 80)], rgba("1a0b0c"), 1.0)
+    elif species == "dino":
+        for x in (54, 74):
+            c.ellipse(x, 79, 2.6, 2, fill=rgba("1a0b0c"))
+        for x in (44, 52, 76, 84):
+            c.polygon([(x - 3, 92), (x + 3, 92), (x, 99)], fill=rgba("d9cfc4"))
+    elif species == "princess":
+        for x in (42, 86):                                               # running mascara
+            c.line([(x - 4, 66), (x - 5, 84)], rgba("1a0b0c", 200), 1.6)
+            c.line([(x + 3, 66), (x + 4, 78)], rgba("1a0b0c", 160), 1.2)
+    face.alpha_composite(c.result())
+    return face
+
+
+def horror_accessory(img, kind):
+    img = grim(img, 0.8, 0.5)
+    c = Canvas(128, 128)
+    if kind == "crown":
+        c.line([(56, 44), (60, 60), (55, 74)], rgba("3a2a12"), 1.6)        # crack
+        c.line([(78, 66), (80, 84), (79, 96)], rgba(BLOOD), 2.2)           # drip
+        c.ellipse(79, 97, 2, 2.6, fill=rgba(BLOOD))
+    elif kind == "skirt":
+        for (x, y, r) in ((40, 66, 9), (82, 72, 7), (64, 60, 5)):
+            c.ellipse(x, y, r, r * 0.7, fill=rgba(BLOOD, 170))
+    elif kind == "bow":
+        c.ellipse(52, 70, 6, 4, fill=rgba(BLOOD, 170))
+    elif kind == "tail":
+        c.ellipse(70, 68, 6, 4, fill=rgba(BLOOD, 160))
+        scar(c, [(30, 64), (48, 70), (66, 66)])
+    else:
+        c.ellipse(64, 70, 6, 4, fill=rgba(BLOOD, 150))
+    img.alpha_composite(c.result())
+    return img
+
+
+def tear_ear(img):
+    """Bite a notch out of a bunny ear."""
+    big = img.resize((512, 512), Image.LANCZOS)
+    d = ImageDraw.Draw(big)
+    d.polygon([(200, 70), (260, 110), (196, 150)], fill=(0, 0, 0, 0))
+    return big.resize((128, 128), Image.LANCZOS)
+
+
+def make_horror_species(species):
+    sheet = {"bunny": make_bunny, "dino": make_dino, "princess": make_princess}[species]()
+    cells = [sheet.crop((i * BEAR_CELL, 0, (i + 1) * BEAR_CELL, BEAR_CELL)) for i in range(12)]
+    out = [horror_scars(cells[i], i, i * 7 + len(species)) for i in range(6)]
+    if species == "bunny":
+        out[3] = tear_ear(out[3])
+    out += [horror_species_face(species, k) for k in ("normal", "smug", "indignant", "stunned")]
+    acc = {"bunny": ("tail_puff", "bow"), "dino": ("tail", "crest"), "princess": ("skirt", "crown")}[species]
+    out += [horror_accessory(cells[10], acc[0]), horror_accessory(cells[11], acc[1])]
+    return species_sheet(out)
+
+
+# ---------------------------------------------------------------- crane chair
+def make_chair():
+    """An overstuffed armchair, bursting with fluff (96x96)."""
+    c = Canvas(96, 96)
+    wood, fab, fab_d, st = rgba("8c6a50"), rgba("d99aa6"), rgba("b9787f"), rgba("8e5a60")
+    for x in (20, 76):
+        c.rect(x - 4, 74, x + 4, 92, fill=wood, radius=2)
+    c.rect(18, 8, 78, 60, fill=fab_d, radius=16)                         # back
+    c.rect(20, 10, 76, 58, fill=fab, radius=15)
+    for x in (34, 48, 62):                                                # tufted buttons
+        c.ellipse(x, 30, 2.4, 2.4, fill=st)
+    c.dashed_line(26, 44, 70, 44, st, 1.1, 3, 3)
+    c.rect(10, 40, 30, 80, fill=fab_d, radius=10)                        # arms
+    c.rect(66, 40, 86, 80, fill=fab_d, radius=10)
+    c.rect(11, 38, 29, 76, fill=fab, radius=9)
+    c.rect(67, 38, 85, 76, fill=fab, radius=9)
+    c.rect(24, 56, 72, 80, fill=fab_d, radius=10)                        # seat cushion
+    c.rect(25, 54, 71, 76, fill=rgba("e7b3bc"), radius=9)
+    c.dashed_line(28, 66, 68, 66, st, 1.1, 3, 3)
+    # stuffing bursting out of the seams
+    for (x, y, r) in ((28, 12, 7), (36, 8, 6), (70, 52, 7), (78, 46, 5), (20, 58, 6), (52, 54, 5)):
+        c.ellipse(x, y + 1, r, r, fill=rgba("d9d2ca"))
+        c.ellipse(x, y, r * 0.86, r * 0.86, fill=rgba("fffdf8"))
+    c.rect(40, 16, 54, 26, fill=rgba("e9d7a6"), radius=2)                 # patch
+    c.rect(40, 16, 54, 26, outline=st, width=1.0, radius=2)
+    return c.result()
+
+
+def make_horror_chair():
+    img = grim(make_chair(), 0.7, 0.45)
+    c = Canvas(96, 96)
+    scar(c, [(24, 20), (36, 30), (30, 44)])
+    for (x, y, r) in ((60, 64, 8), (30, 70, 5), (70, 30, 4)):
+        c.ellipse(x, y, r, r * 0.7, fill=rgba(BLOOD, 190))
+    for (x, y, r) in ((70, 52, 6), (28, 12, 5)):                        # stained stuffing
+        c.ellipse(x, y, r, r, fill=rgba("c48a8a"))
+    c.line([(62, 72), (63, 86)], rgba(BLOOD), 2.0)
+    img.alpha_composite(c.result())
+    return img
+
+
+# ---------------------------------------------------------------- horror power-ups
+HB = "2a1f21"
+
+
+def hbadge(c, bad=False):
+    c.ellipse(32, 34, 29, 29, fill=(0, 0, 0, 140))
+    c.ellipse(32, 31, 29.5, 29.5, fill=rgba("120b0c"))
+    c.ellipse(32, 31, 27, 27, fill=rgba("3b2a2d") if bad else rgba(HB))
+    c.ellipse(32, 31, 27, 27, outline=rgba("5c4a3a" if bad else "8a0f18"), width=4)
+    c.dashed_ellipse(32, 31, 21.5, 21.5, rgba("d9cfc4", 200), 1.3, 18)   # bone-white stitches
+    c.ellipse(46, 54, 3, 4, fill=rgba(BLOOD))                           # a drip off the rim
+    c.line([(46, 50), (46, 56)], rgba(BLOOD), 2.0)
+    if bad:
+        for dx, dy in ((-19, -19), (19, -19)):
+            c.line([(32 + dx - 3, 31 + dy - 3), (32 + dx + 3, 31 + dy + 3)], rgba("9fae78"), 1.8)
+            c.line([(32 + dx + 3, 31 + dy - 3), (32 + dx - 3, 31 + dy + 3)], rgba("9fae78"), 1.8)
+
+
+def hmini_bomb(c, x, y, r, eye=True):
+    c.ellipse(x, y, r + 1.2, r + 1.2, fill=rgba("0d0909"))
+    c.ellipse(x, y, r, r, fill=rgba("5a4a48"))
+    c.dashed_ellipse(x, y, r * 0.45, r * 0.95, rgba("2a1c1c"), 0.9, 10)
+    if eye:
+        c.ellipse(x, y, r * 0.38, r * 0.38, fill=rgba("e6dccb"))
+        c.ellipse(x, y, r * 0.18, r * 0.18, fill=rgba("c41e2a"))
+    c.line([(x + r * 0.4, y - r * 0.9), (x + r * 0.7, y - r * 1.4)], rgba("6e5f57"), 1.8)
+
+
+def hpu_bomb():
+    c = Canvas(64, 64); hbadge(c); hmini_bomb(c, 29, 35, 12)
+    c.line([(46, 18), (46, 30)], rgba("d9cfc4"), 3); c.line([(40, 24), (52, 24)], rgba("d9cfc4"), 3)
+    return c.result()
+
+
+def hpu_fire():
+    c = Canvas(64, 64); hbadge(c)
+    blood_blobs(c, [(32, 31, 7)] + [(32 + math.cos(a) * 13, 31 + math.sin(a) * 13, 4) for a in [i * math.pi / 4 for i in range(8)]], 6, 31)
+    return c.result()
+
+
+def hpu_speed():
+    c = Canvas(64, 64); hbadge(c)
+    for i in range(5):                                                   # a coiled spine
+        y = 44 - i * 6
+        c.ellipse(32 + (2 if i % 2 else -2), y, 8, 3.2, fill=rgba("e6dccb"))
+        c.ellipse(32 + (2 if i % 2 else -2), y, 3, 1.4, fill=rgba("6e5f57"))
+    c.ellipse(32, 15, 5, 3, fill=rgba(BLOOD))
+    return c.result()
+
+
+def hpu_shuffle():
+    c = Canvas(64, 64); hbadge(c)
+    for (x0, y0, col) in ((18, 17, "5d6f78"), (32, 17, BLOOD), (18, 31, "6e5f57"), (32, 31, "3e3033")):
+        c.rect(x0, y0, x0 + 14, y0 + 14, fill=rgba(col), radius=3)
+    c.ellipse(32, 31, 7, 5, fill=rgba("e6dccb"))                         # an eye where they meet
+    c.ellipse(32, 31, 3, 3, fill=rgba("c41e2a"))
+    return c.result()
+
+
+def hpu_kick():
+    c = Canvas(64, 64); hbadge(c)
+    c.rect(12, 30, 32, 44, fill=rgba("7a6a5a"), radius=7)               # severed plush foot
+    c.ellipse(28, 40, 8, 5, fill=rgba("b9a796"))
+    c.line([(12, 30), (12, 44)], rgba(BLOOD), 3)
+    scar(c, [(14, 32), (20, 37), (14, 42)])
+    hmini_bomb(c, 45, 30, 8, eye=False)
+    return c.result()
+
+
+def hpu_line():
+    c = Canvas(64, 64); hbadge(c)
+    for i in range(3):
+        hmini_bomb(c, 18 + i * 14, 32, 6, eye=(i == 1))
+        c.line([(18 + i * 14, 38), (18 + i * 14, 44 + i % 2 * 3)], rgba(BLOOD), 1.6)
+    return c.result()
+
+
+def hpu_rubber():
+    c = Canvas(64, 64); hbadge(c)
+    c.ellipse(33, 33, 12, 12, fill=rgba("0d0909"))
+    c.ellipse(33, 33, 11, 11, fill=rgba("efe6d6"))                      # a bouncing eyeball
+    for a in (0.3, 1.4, 2.6, 3.9, 5.1):
+        c.line([(33 + math.cos(a) * 11, 33 + math.sin(a) * 11), (33 + math.cos(a + 0.2) * 6, 33 + math.sin(a + 0.2) * 6)], rgba("c41e2a", 200), 1.0)
+    c.ellipse(37, 31, 5, 5, fill=rgba("6c8f5e")); c.ellipse(37, 31, 2.3, 2.3, fill=rgba("0d0909"))
+    c.arc(17, 30, 9, 12, 100, 260, rgba("8a0f18"), 1.6)
+    return c.result()
+
+
+def hpu_immortal():
+    c = Canvas(64, 64); hbadge(c)
+    c.ellipse(32, 17, 13, 4, outline=rgba("6e5f57"), width=2.5)          # a tarnished, broken halo
+    c.line([(40, 14), (44, 20)], rgba(HB), 3)
+    c.ellipse(27, 32, 7, 7, fill=rgba("6e0f18")); c.ellipse(37, 32, 7, 7, fill=rgba("6e0f18"))
+    c.polygon([(20.5, 34), (43.5, 34), (32, 47)], fill=rgba("6e0f18"))
+    for (x0, y0, x1, y1) in ((24, 28, 40, 40), (40, 28, 24, 40)):         # stitched shut
+        c.line([(x0, y0), (x1, y1)], rgba("d9cfc4"), 1.4)
+    return c.result()
+
+
+def hpu_reverse():
+    c = Canvas(64, 64); hbadge(c, bad=True)
+    c.arc(32, 31, 15, 15, 200, 340, rgba("9fae78"), 3.0)
+    c.polygon([(45, 22), (51, 30), (42, 30)], fill=rgba("9fae78"))
+    c.arc(32, 31, 15, 15, 20, 160, rgba("c41e2a"), 3.0)
+    c.polygon([(19, 40), (13, 32), (22, 32)], fill=rgba("c41e2a"))
+    c.ellipse(32, 29, 8, 7, fill=rgba("e6dccb"))                          # tiny skull
+    c.rect(28, 33, 36, 38, fill=rgba("e6dccb"))
+    c.ellipse(29, 29, 2, 2.4, fill=rgba("0d0909")); c.ellipse(35, 29, 2, 2.4, fill=rgba("0d0909"))
+    return c.result()
+
+
+def hpu_diarrhea():
+    c = Canvas(64, 64); hbadge(c, bad=True)
+    for (x, y) in ((25, 38), (39, 38), (32, 26)):
+        hmini_bomb(c, x, y, 7, eye=False)
+        c.ellipse(x - 2, y + 7, 3, 2, fill=rgba("5a6b2a"))
+    for (x, y) in ((18, 18), (46, 16), (48, 26)):                         # flies
+        c.ellipse(x, y, 1.6, 1.2, fill=rgba("0d0909"))
+        c.ellipse(x - 1.5, y - 1.5, 1.4, 0.8, fill=rgba("d9cfc4", 160))
+    return c.result()
+
+
+def make_horror_powerups():
+    cells = [hpu_bomb(), hpu_fire(), hpu_speed(), hpu_shuffle(), hpu_kick(), hpu_line(), hpu_rubber(),
+             hpu_immortal(), hpu_reverse(), hpu_diarrhea()]
+    sheet = Image.new("RGBA", (64 * len(cells), 64), (0, 0, 0, 0))
+    for i, im in enumerate(cells):
+        paste(sheet, im, i * 64, 0)
+    return sheet
+
+
 def make_icon():
     # a tinted bear head for the project icon
     bear = make_bear()
@@ -959,4 +1487,12 @@ if __name__ == "__main__":
     save(make_horror_bear(), "bears", "horror", "template_bear.png")
     save(make_horror_tiles(), "tiles", "horror", "template_tiles.png")
     save(make_horror_effects(), "effects", "horror", "template_effects.png")
+    save(make_bunny(), "bears", "template_bunny.png")
+    save(make_dino(), "bears", "template_dino.png")
+    save(make_princess(), "bears", "template_princess.png")
+    for sp in ("bunny", "dino", "princess"):
+        save(make_horror_species(sp), "bears", "horror", "template_%s.png" % sp)
+    save(make_chair(), "objects", "template_chair.png")
+    save(make_horror_chair(), "objects", "horror", "template_chair.png")
+    save(make_horror_powerups(), "powerups", "horror", "template_powerups.png")
     make_icon().save(os.path.join(ROOT, "..", "..", "icon.png"))

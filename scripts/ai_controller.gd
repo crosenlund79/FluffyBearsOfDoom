@@ -105,6 +105,8 @@ func _think() -> void:
 
 	# 2. Rob a stunned bear right next to us.
 	var victim = game.find_steal_target(bear)
+	if victim == null:
+		victim = game.find_chair(bear)   # or loot a delivered chair
 	if victim != null and _should_steal(victim, danger):
 		bear.want_steal = true
 		path.clear()
@@ -323,6 +325,19 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 			best_score = score
 			best_cell = c
 			best_goal = "rob"
+
+	# A crane-delivered chair stuffed with fluff.
+	if game.chair != null and is_instance_valid(game.chair) and game.chair.fluff > 1.0:
+		var cc: Vector2i = game.chair.cell
+		if dist.has(cc):
+			var cv: float = 40.0 + 0.5 * game.chair.fluff
+			if level == EASY:
+				cv = 30.0 if rng.randf() < 0.6 else -FAR
+			var score: float = cv - dist[cc] * 3.0
+			if score > best_score:
+				best_score = score
+				best_cell = cc
+				best_goal = "loot"
 
 	# Power-ups.
 	if level != EASY or rng.randf() < 0.4:

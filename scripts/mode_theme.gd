@@ -9,8 +9,8 @@ const CONFETTI := {
 	"horror": [Color("7a0f16"), Color("a3141e"), Color("5c0a10"), Color("c9b8a0"), Color("2a1c1e"), Color("8c2a2a")],
 }
 const SUBTITLE := {
-	"normal": "Four adorable teddy bears. One finite supply of stuffing.",
-	"horror": "Four teddy bears. They are hungry. They are always hungry.",
+	"normal": "Four adorable plushies. One finite supply of stuffing.",
+	"horror": "Four plushies. They are hungry. They are always hungry.",
 }
 const BLURB := {
 	"normal": "Confetti bombs don't hurt - they stun. Hold Steal beside a stunned bear to pull out its fluff.\nThe more you steal, the rounder, wobblier and harder to stop you become.",

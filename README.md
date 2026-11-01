@@ -1,6 +1,7 @@
 # 🧸💣 Fluffy Bears of Doom
 
-A Godot 4.3 arcade game. Four teddy bears play classic fixed-grid bomb tactics with pastel
+A Godot 4.3 arcade game. Four plush toys (a teddy bear, a teddy bunny, a small dino and a
+teddy bear princess) play classic fixed-grid bomb tactics with pastel
 fabric toy bombs. The bombs burst into **confetti** that **stuns** instead of kills. Hold
 **Steal** next to a stunned bear to pull out its stuffing (**fluff**). Fluff counts as your
 score and also shapes your body: the more you have, the rounder and wobblier you get, the
@@ -29,6 +30,13 @@ Line Bomb (special key when you have no remote bombs out: lays all free bombs in
 Immortality (20 s, can't be stunned or robbed) · Biome Shuffle (reshuffles floor terrain after a warning) ·
 **curses:** Reverse Controls (12 s, contagious on contact) · Bomb Diarrhea (10 s, bombs drop by themselves).
 Power-ups lying in a blast are destroyed; ones uncovered by that same blast survive.
+
+## Crane chair delivery
+Rarely (first after 40–65 s, then every 60–90 s) a crane hook swings in from the top of the
+screen carrying an armchair. It hovers over a free cell with a pulsing drop marker, then lets
+go. The chair is stuffed with 60 fluff: stand next to it and hold **Steal** to loot it, just
+like a stunned bear. A blast bursts it open and scatters what is left as pickups. The AI goes
+for it too. Timing and amount are the `CRANE_*` / `CHAIR_FLUFF` values in `scripts/tuning.gd`.
 
 ## Doom Duck Parade
 Every now and then a portal opens in a wooden pillar. A wind-up mother duck marches out with
@@ -85,7 +93,8 @@ the game uses the first file that exists:
 3. `<folder>/<mode>/template_<name>.png`: the built-in mode placeholder
 4. `<folder>/template_<name>.png`: the built-in placeholder
 
-Horror placeholders exist for `bears`, `tiles` and `effects`. Everything else is shared and
+Horror placeholders exist for `bears` (all four characters), `tiles`, `effects`,
+`powerups` and `objects/chair`. Everything else is shared and
 tinted darker in code. The
 generator (`tools/generate_placeholders.py`) only ever writes `template_` files. Sheets are a
 single row, and the cell size is `image width / cell count`, so you can use any resolution.
@@ -94,11 +103,13 @@ Draw each part centred in its cell.
 | File | Template size | Layout |
 |---|---|---|
 | `bears/template_bear.png` | 1280×128 | 10 cells: body, belly, head, ear, arm, leg, face normal, face smug, face indignant, face stunned. Draw the body parts light grey/white because they are tinted per bear. Faces are drawn untinted on a transparent background. |
+| `bears/template_bunny.png`, `template_dino.png`, `template_princess.png` | 1536×128 | 12 cells: the same 10 as the bear sheet (bunny ears / dino horn nubs go in the ear cell), then cell 10 = tail (bunny puff, dino tail; the princess uses it for her skirt) and cell 11 = topper (bunny bow, dino back crest, princess crown). Missing character sheets fall back to the bear sheet. |
 | `tiles/template_tiles.png` | 576×64 | 9 cells: rug, rug alt, ice, honey, bouncy, conveyor (pointing right), pillar, cushion block, border |
 | `objects/template_bomb.png` | 64×64 | Draw the fabric bomb pale, because it is tinted pastel per bear. Rubber bombs get stripes drawn on top. The fuse tip sits near the top right. |
 | `objects/template_fluff.png` | 32×32 | a tuft of stuffing |
+| `objects/template_chair.png` | 96×96 | the crane-delivered armchair, untinted; tufts of stuffing are drawn on top in code |
 | `objects/template_duck.png` | 128×64 | 2 cells: wind-up pull-along duck facing right (shared by mother and ducklings at different scales), wind-up key |
-| `powerups/template_powerups.png` | 640×64 | 10 cells: bomb, blast, speed, shuffle, kick, line, rubber, immortality, reverse, diarrhea |
+| `powerups/template_powerups.png` | 640×64 | 10 cells: bomb, blast, speed, shuffle, kick, line, rubber, immortality, reverse, diarrhea. The glow halo, outline, sparkles and pickup burst are drawn in code, so a replacement only needs the badge. Horror has its own sheet: dark badges with a blood-red rim (eyeball bomb, blood drops, a spine, a staring eye, a crossed-out heart; the curses in sickly green). |
 | `effects/template_effects.png` | 512×64 | 8 cells: blast centre, blast arm (horizontal), blast end (pointing right), star, dust, sparkle, cartoon bird (facing right), floor splat decal. In Horror: blood bursts, a skull, a crow and a blood splatter. |
 
 ## Tuning
