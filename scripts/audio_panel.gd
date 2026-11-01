@@ -1,4 +1,4 @@
-## Audio settings: volumes, mute, shuffle, next track. Saved automatically.
+## Settings: volumes, mute, shuffle, next track, bear outlines. Saved automatically.
 extends "res://scripts/stitch_panel.gd"
 
 signal closed
@@ -8,11 +8,11 @@ var now_playing: Label
 
 
 func _ready() -> void:
-	size = Vector2(440, 400)
+	size = Vector2(440, 440)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	add_child(v)
-	v.add_child(UiStyle.label("Audio", 30, UiStyle.ROSE_DARK))
+	v.add_child(UiStyle.label("Settings", 30, UiStyle.ROSE_DARK))
 	for row in [["Master", "master_volume"], ["Music", "music_volume"], ["Sound effects", "sfx_volume"]]:
 		var h := HBoxContainer.new()
 		var l := UiStyle.label(row[0], 18)
@@ -49,6 +49,13 @@ func _ready() -> void:
 		Music.reshuffle()
 		Settings.save())
 	v.add_child(shuf)
+	var outl := CheckBox.new()
+	outl.text = "Bear outlines (easier to spot)"
+	outl.button_pressed = Settings.bear_outlines
+	outl.toggled.connect(func(on):
+		Settings.bear_outlines = on
+		Settings.save())
+	v.add_child(outl)
 	var h2 := HBoxContainer.new()
 	h2.add_theme_constant_override("separation", 12)
 	var nxt := Button.new()

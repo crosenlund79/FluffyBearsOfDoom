@@ -20,6 +20,7 @@ var music_volume := 0.6
 var sfx_volume := 0.85
 var muted := false
 var shuffle_music := true
+var bear_outlines := true  # dark outline around bears for visibility
 var mode := "normal"  # "normal" or "horror": same gameplay, different look/sound
 
 const ACTIONS := ["up", "down", "left", "right", "bomb", "steal", "special"]
@@ -139,7 +140,7 @@ func _set_bus(bus: String, v: float) -> void:
 func save() -> void:
 	var cf := ConfigFile.new()
 	for k in ["master_volume", "music_volume", "sfx_volume", "muted", "shuffle_music", "human_count",
-			"ai_levels", "sitting_out", "arena_index", "round_time_index", "mode"]:
+			"ai_levels", "sitting_out", "arena_index", "round_time_index", "mode", "bear_outlines"]:
 		cf.set_value("settings", k, get(k))
 	cf.save(SAVE_PATH)
 

@@ -72,3 +72,17 @@ const DUCK_SPEED := 62.0                 # px/s waddling speed
 const DUCK_BLAST_RANGE := 4              # flood-fill reach in grid steps (turns corners)
 const DUCK_WARNING := 3.0                # last seconds: danger zone shown, frantic wobble
 const DUCKLING_SPACING := 22.0           # px between ducks in the procession
+
+# --- Corridor assistance ----------------------------------------------------------
+const CENTER_ASSIST_SPEED := 90.0        # px/s a bear is nudged toward an open corridor it is steering into
+const TURN_LOOKAHEAD := 1.15             # tiles ahead along the motion to look for the corridor you pressed toward
+
+# --- Remote Detonator -------------------------------------------------------------
+const REMOTE_BACKUP_FUSE := 10.0         # a remote bomb still goes off on its own after this long
+const REMOTE_THREAT_TIME := 1.5          # how soon other AIs assume someone else's remote bomb may blow
+
+# --- Horror footprints ------------------------------------------------------------
+const FOOTPRINT_STRIDE := 13.0           # px between footprints
+const FOOTPRINT_LIFE := 7.0              # seconds a footprint takes to fade
+const FOOTPRINT_MAX := 220               # oldest prints are recycled beyond this
+const BLOOD_PER_PRINT := 0.045           # how quickly a bear's feet run dry

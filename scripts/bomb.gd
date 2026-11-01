@@ -1,8 +1,10 @@
-## A stitched fabric toy bomb on a grid cell. Can be kicked; rubber bombs
-## bounce off obstacles instead of stopping.
+## A stitched fabric toy bomb on a grid cell. Every bomb can be kicked; rubber
+## bombs bounce off obstacles instead of stopping; remote bombs wait for their
+## owner's detonator. A ring in the owner's colour shows whose bomb it is.
 extends Node2D
 
 const Tuning = preload("res://scripts/tuning.gd")
+const Powerup = preload("res://scripts/powerup.gd")
 
 var game
 var arena
@@ -12,6 +14,7 @@ var blast_range := 2
 var fuse: float = Tuning.BOMB_FUSE
 var exploded := false
 var rubber := false
+var remote := false     # waits for its owner's detonator (with a long backup fuse)
 var pass_through: Array = []  # bears overlapping it may walk off it
 var move_dir := Vector2i.ZERO
 var bounces := 0
@@ -31,6 +34,9 @@ func setup(g, bear, c: Vector2i, r: int) -> void:
 	cell = c
 	blast_range = r
 	rubber = bear.has_rubber
+	remote = bear.has_remote
+	if remote:
+		fuse = Tuning.REMOTE_BACKUP_FUSE
 	position = arena.cell_center(c)
 	tex = Assets.tex("objects/bomb")
 	fx = Assets.tex("effects/effects")
@@ -132,7 +138,11 @@ func _draw() -> void:
 		sx *= 1.12 if horiz else 0.9
 		sy *= 0.9 if horiz else 1.12
 	draw_set_transform(Vector2(0, T * 0.32), 0.0, Vector2(1.0, 0.35))
-	draw_circle(Vector2.ZERO, s * 0.36, Color(0.3, 0.2, 0.15, 0.22))
+	draw_circle(Vector2.ZERO, s * 0.4, Color(0.15, 0.1, 0.08, 0.38))
+	# owner ring on the floor
+	var own: Color = owner_bear.color
+	draw_arc(Vector2.ZERO, s * 0.5, 0.0, TAU, 28, Color(own.r, own.g, own.b, 0.95), 4.0)
+	draw_arc(Vector2.ZERO, s * 0.5, 0.0, TAU, 28, Color(own.darkened(0.5), 0.6), 1.5)
 	var twitch := sin(t * 47.0) * 0.08 * final
 	draw_set_transform(Vector2(0, T * 0.3 - hop), twitch + (sin(t * 12.0) * 0.1 if is_moving() else 0.0), Vector2(sx, sy))
 	var col := tint
@@ -147,6 +157,12 @@ func _draw() -> void:
 			var y: float = c.y + k * s
 			var hw: float = sqrt(maxf(0.0, 0.09 - k * k)) * s
 			draw_line(Vector2(c.x - hw, y), Vector2(c.x + hw, y), Color(1, 1, 1, 0.75), s * 0.05)
+	if remote:
+		# radio antenna in the owner's colour instead of a burning fuse
+		Powerup.draw_remote_antenna(self, Vector2(s * 0.24, -s * 0.98), s / 40.0, t, owner_bear.color.lightened(0.2))
+		if fuse > Tuning.BOMB_FUSE:
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			return
 	# brightening stitched fuse spark
 	var spark := Vector2(s * 0.26, -s * 1.02)
 	var ss := 8.0 + urgency * 8.0 + sin(t * 40.0) * 3.0

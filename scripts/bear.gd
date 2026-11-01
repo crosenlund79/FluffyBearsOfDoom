@@ -34,7 +34,8 @@ var bombs_max := Tuning.START_BOMBS
 var bomb_range := Tuning.START_RANGE
 var speed_level := 0
 var active_bombs := 0
-var can_kick := false
+var can_kick := true    # every bear can kick bombs
+var has_remote := false  # Remote Detonator power-up
 var has_line := false
 var has_rubber := false
 
@@ -45,6 +46,11 @@ var diarrhea_t := 0.0
 var infect_cd := 0.0          # can't pass reverse on yet
 var reinfect_immune := 0.0    # just cured
 var _diarrhea_cd := 0.0
+
+# Horror footprints (cosmetic)
+var blood_feet := 0.0
+var _stride := 0.0
+var _foot_side := 1.0
 
 # Taunts (purely cosmetic)
 var last_hit_by = null
@@ -266,8 +272,10 @@ func _physics_process(delta: float) -> void:
 		want_bomb = true  # out it comes, whether you like it or not
 	if want_special:
 		want_special = false
-		if has_line and game.controls_enabled() and not is_stunned():
-			game.place_line(self)
+		if game.controls_enabled() and not is_stunned():
+			# special: detonate your remote bombs first, otherwise lay a Line Bomb
+			if not game.detonate_remote(self) and has_line:
+				game.place_line(self)
 	if want_bomb:
 		want_bomb = false
 		game.try_place_bomb(self)
@@ -284,6 +292,7 @@ func _update_steal(delta: float) -> void:
 				Sfx.play("squeak", 1.4, -4.0)
 				game.on_steal_started(self, target)
 			stealing = true
+			blood_feet = 1.0  # (Horror) grubby paws from rummaging in the stuffing
 			steal_target = target
 			var amount := minf(Tuning.STEAL_RATE * delta, target.fluff)
 			target.fluff -= amount
@@ -307,17 +316,18 @@ func _move(delta: float) -> void:
 	on_bouncy = terrain_id == Terrain.BOUNCY
 	var ms: float = max_speed() * tp["speed"]
 	var ac: float = accel() * tp["accel"]
-	var br: float = brake() * tp["brake"]
+	var br: float = maxf(brake() * tp["brake"], tp["brake_min"])
 	var dir := input_dir if (can_act() and not stealing) else Vector2.ZERO
 	if reverse_t > 0.0:
 		dir = -dir  # the curse: left is right, up is down
 
+	var lane := 0.0
 	if dir == Vector2.ZERO:
 		velocity.x = move_toward(velocity.x, 0.0, br * delta)
 		velocity.y = move_toward(velocity.y, 0.0, br * delta)
 	else:
 		facing = dir
-		var lane := _lane_offset(dir)
+		lane = _lane_offset(dir)
 		var lane_v := clampf(lane * Tuning.LANE_PULL, -ms, ms)
 		if dir.x != 0.0:
 			velocity.x = _drive(velocity.x, dir.x * ms, ac, br, delta)
@@ -326,6 +336,12 @@ func _move(delta: float) -> void:
 			velocity.y = _drive(velocity.y, dir.y * ms, ac, br, delta)
 			velocity.x = _align(velocity.x, lane_v, ac * Tuning.ALIGN_ACCEL, br * Tuning.ALIGN_ACCEL, delta)
 
+	# Gentle corridor-centering: slide into the lane you're steering for, whatever
+	# your mass. Momentum is untouched; this only nudges position sideways.
+	if dir != Vector2.ZERO and lane != 0.0 and absf(lane) < arena.T * 0.45:
+		_sweep(1 if dir.x != 0.0 else 0, signf(lane) * minf(absf(lane), Tuning.CENTER_ASSIST_SPEED * delta), false)
+
+	var before := position
 	var push: Vector2 = tp["push"]
 	var motion := (velocity + push) * delta
 	var restitution: float = tp["bounce"] + 0.06 * minf(fluff_ratio(), 4.0)
@@ -333,7 +349,26 @@ func _move(delta: float) -> void:
 		_on_wall(0, restitution)
 	if _sweep(1, motion.y):
 		_on_wall(1, restitution)
+	_footprints(position - before)
 
+
+## Horror mode: bloody feet leave a fading trail of footprints.
+func _footprints(moved: Vector2) -> void:
+	if not Mode.horror():
+		return
+	if game.flames.has(cell()) or game.is_bloody(cell()):
+		blood_feet = 1.0  # stepped in it
+	if blood_feet <= 0.02 or is_stunned():
+		return
+	_stride += moved.length()
+	if _stride < Tuning.FOOTPRINT_STRIDE:
+		return
+	_stride = 0.0
+	_foot_side = -_foot_side
+	var d := moved.normalized() if moved.length() > 0.01 else facing
+	var side := Vector2(-d.y, d.x) * _foot_side * (3.0 + 1.2 * minf(fluff_ratio(), 3.0))
+	game.add_footprint(position + Vector2(0, 12) + side, d, blood_feet)
+	blood_feet = maxf(0.0, blood_feet - Tuning.BLOOD_PER_PRINT)
 
 ## Accelerate along the pressed axis; reversing uses brake + accel.
 func _drive(v: float, target: float, ac: float, br: float, dt: float) -> float:
@@ -355,28 +390,40 @@ func _align(v: float, target: float, ac: float, br: float, dt: float) -> float:
 ## Offset (along the perpendicular axis) to the lane centre that leads in `dir`.
 func _lane_offset(dir: Vector2) -> float:
 	var c := cell()
-	var ctr: Vector2 = arena.cell_center(c)
-	if dir.x != 0.0:
-		var off := position.y - ctr.y
-		var cand := [c.y]
-		if absf(off) > 2.0:
-			cand.append(c.y + (1 if off > 0.0 else -1))
-		for r in cand:
-			if not arena.blocks_bear(Vector2i(c.x, r), self) and not arena.blocks_bear(Vector2i(c.x + int(dir.x), r), self):
-				return arena.cell_center(Vector2i(c.x, r)).y - position.y
-		return ctr.y - position.y
-	var offx := position.x - ctr.x
-	var candx := [c.x]
-	if absf(offx) > 2.0:
-		candx.append(c.x + (1 if offx > 0.0 else -1))
-	for q in candx:
-		if not arena.blocks_bear(Vector2i(q, c.y), self) and not arena.blocks_bear(Vector2i(q, c.y + int(dir.y)), self):
-			return arena.cell_center(Vector2i(q, c.y)).x - position.x
-	return ctr.x - position.x
+	var m := 0 if dir.x != 0.0 else 1   # axis we want to move along
+	var p := 1 - m                       # lanes are spaced along the other axis
+	var step := int(dir[m])
+	var pos_p: float = position[p]
+	var center_p: float = arena.cell_center(c)[p]
+	var off := pos_p - center_p
+	var cand := [c[p]]
+	if absf(off) > 2.0:
+		cand.append(c[p] + (1 if off > 0.0 else -1))
+	# Turn look-ahead: pressed a little early? Keep sliding to the next opening.
+	if absf(velocity[p]) > 30.0:
+		var ahead: int = c[p] + (1 if velocity[p] > 0.0 else -1)
+		if not ahead in cand:
+			cand.append(ahead)
+	var best := INF
+	var best_off := center_p - pos_p
+	for lane in cand:
+		var here := c
+		here[p] = lane
+		var next := here
+		next[m] += step
+		if arena.blocks_bear(here, self) or arena.blocks_bear(next, self):
+			continue
+		var lane_off: float = arena.cell_center(here)[p] - pos_p
+		if lane != c[p] and absf(lane_off) > Tuning.TURN_LOOKAHEAD * arena.T:
+			continue
+		if absf(lane_off) < best:
+			best = absf(lane_off)
+			best_off = lane_off
+	return best_off
 
 
 ## Moves along one axis; clamps against solid cells. Returns true on contact.
-func _sweep(axis: int, amount: float) -> bool:
+func _sweep(axis: int, amount: float, allow_kick := true) -> bool:
 	if amount == 0.0:
 		return false
 	var h := Tuning.HITBOX_HALF
@@ -393,7 +440,7 @@ func _sweep(axis: int, amount: float) -> bool:
 			if not arena.blocks_bear(c, self):
 				continue
 			hit = true
-			if can_kick and arena.bombs.has(c):
+			if can_kick and allow_kick and arena.bombs.has(c):
 				kicked = arena.bombs[c]
 			if axis == 0:
 				if amount > 0.0:
@@ -441,6 +488,7 @@ func stun(from_pos: Vector2) -> void:
 	if is_stunned() or immune_t > 0.0 or immortal_t > 0.0:
 		return
 	stun_t = Tuning.STUN_TIME
+	blood_feet = 1.0  # (Horror) bleeds into its own trail when it gets up
 	times_stunned += 1
 	fluff_at_stun = fluff
 	stealing = false

@@ -22,6 +22,7 @@ const UiStyle = preload("res://scripts/ui_style.gd")
 const DuckParade = preload("res://scripts/duck_parade.gd")
 const Mode = preload("res://scripts/mode_theme.gd")
 const DecalScript = preload("res://scripts/decal.gd")
+const FootprintsScript = preload("res://scripts/footprints.gd")
 
 enum State { COUNTDOWN, PLAYING, ENDED }
 
@@ -46,6 +47,9 @@ var bombs: Array = []
 var flames := {}      # Vector2i -> seconds left
 var flame_owner := {} # Vector2i -> bear whose bomb made it (for taunts)
 var decal_layer: Node2D
+var footprints
+var bloody := {}       # Vector2i -> game clock until which a blood splat lies there
+var clock := 0.0
 var world_tint: CanvasModulate
 var _flicker := 0.0
 var powerups := {}    # Vector2i -> power-up node
@@ -73,6 +77,8 @@ func _ready() -> void:
 	arena.setup(Maps.MAPS[Settings.arena_index], rng, PowerupScript.WEIGHTS)
 
 	decal_layer = _layer(1)
+	footprints = FootprintsScript.new()
+	_layer(1).add_child(footprints)
 	powerup_layer = _layer(1)
 	bomb_layer = _layer(2)
 	duck_layer = _layer(4)
@@ -167,6 +173,7 @@ func _draw() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	clock += delta
 	match state:
 		State.COUNTDOWN:
 			countdown -= delta
@@ -296,6 +303,7 @@ func explode(bomb) -> void:
 	for c in hit:
 		flames[c] = Tuning.FLAME_TIME
 		flame_owner[c] = bomb.owner_bear
+	_destroy_powerups(hit)
 	_break_blocks(broken)
 	_finish_bomb(bomb, origin, hit, segs, chain)
 
@@ -305,6 +313,41 @@ func _finish_bomb(bomb, origin: Vector2i, hit: Array, segs: Array, chain: Array)
 	_apply_blast(origin, hit, segs, chain, 14)
 	arena.add_shake(4.0)
 	Sfx.play("confetti", randf_range(0.85, 1.15))
+
+
+## Power-ups lying in a blast are destroyed (ones revealed by this blast survive).
+func _destroy_powerups(cells: Array) -> void:
+	var destroyed := false
+	for c in cells:
+		if powerups.has(c):
+			var p = powerups[c]
+			powerups.erase(c)
+			spawn_dust(p.position, 4)
+			_burst(p.position, fx_tex, Assets.region(fx_tex, Assets.EFFECT_CELLS, 5), 5, 11.0, Color(1, 0.9, 0.75))
+			p.queue_free()
+			destroyed = true
+	if destroyed:
+		Sfx.play("pop", 0.7, -4.0)
+
+
+## Detonate all of `bear`'s remote bombs. Returns true if there were any.
+func detonate_remote(bear) -> bool:
+	var any := false
+	for b in bombs:
+		if b.remote and b.owner_bear == bear and not b.exploded:
+			b.fuse = 0.0
+			any = true
+	if any:
+		Sfx.play("tick", 1.6, -2.0)
+	return any
+
+
+func add_footprint(pos: Vector2, dir: Vector2, strength: float) -> void:
+	footprints.add(pos, dir, strength)
+
+
+func is_bloody(c: Vector2i) -> bool:
+	return bloody.get(c, -1.0) > clock
 
 
 func _break_blocks(broken: Array) -> void:
@@ -419,6 +462,7 @@ func duck_explode(p) -> void:
 		if arena.bombs.has(c):
 			chain.append(arena.bombs[c])
 		segs.append({"pos": arena.cell_center(c), "kind": 0, "rot": rng.randf() * TAU})
+	_destroy_powerups(hit)
 	_break_blocks(broken)
 	_apply_blast(origin, hit, segs, chain, 30)
 	for c in hit:
@@ -431,7 +475,7 @@ func duck_explode(p) -> void:
 
 ## Danger map for the AI: cell -> seconds until it is ablaze (0 = burning now).
 ## level: 0 easy, 1 normal, 2 hard.
-func compute_danger(level: int) -> Dictionary:
+func compute_danger(level: int, asker = null) -> Dictionary:
 	var chain := level == 2
 	var d := {}
 	for c in flames:
@@ -439,6 +483,8 @@ func compute_danger(level: int) -> Dictionary:
 	var times := {}
 	for b in bombs:
 		times[b] = b.fuse
+		if b.remote and b.owner_bear != asker:
+			times[b] = minf(b.fuse, Tuning.REMOTE_THREAT_TIME)  # could be set off any moment
 	if chain:
 		for _i in 4:
 			for b in bombs:
@@ -512,6 +558,8 @@ func _splat(pos: Vector2, size: float) -> void:
 	d.size = size
 	d.color = Mode.splat_color()
 	decal_layer.add_child(d)
+	if Mode.horror():
+		bloody[arena.world_to_cell(pos)] = clock + d.life
 	if decal_layer.get_child_count() > 30:
 		decal_layer.get_child(0).queue_free()
 
@@ -581,7 +629,8 @@ func _apply_powerup(b, p) -> void:
 			b.has_line = true
 		PowerupScript.RUBBER:
 			b.has_rubber = true
-			b.can_kick = true  # rubber bombs need a kick to start bouncing
+		PowerupScript.REMOTE:
+			b.has_remote = true
 		PowerupScript.IMMORTAL:
 			b.immortal_t = Tuning.IMMORTAL_TIME
 			Sfx.play("immortal")

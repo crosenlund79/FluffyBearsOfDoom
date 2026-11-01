@@ -10,6 +10,7 @@ const AudioPanel = preload("res://scripts/audio_panel.gd")
 const BearVisual = preload("res://scripts/bear_visual.gd")
 const Maps = preload("res://scripts/arena_maps.gd")
 const Mode = preload("res://scripts/mode_theme.gd")
+const NowPlaying = preload("res://scripts/now_playing.gd")
 
 var puppets: Array = []
 var holders: Array = []
@@ -180,13 +181,18 @@ func _ready() -> void:
 	var brow := HBoxContainer.new()
 	brow.add_theme_constant_override("separation", 10)
 	brow.alignment = BoxContainer.ALIGNMENT_CENTER
-	for b in [["Audio", _show_audio], ["Controls", _show_controls], ["Quit", func(): get_tree().quit()]]:
+	for b in [["Settings", _show_audio], ["Controls", _show_controls], ["Quit", func(): get_tree().quit()]]:
 		var btn := Button.new()
 		btn.text = b[0]
 		btn.custom_minimum_size = Vector2(136, 40)
 		btn.pressed.connect(b[1])
 		brow.add_child(btn)
 	v.add_child(brow)
+
+	var np := NowPlaying.new()
+	np.position = Vector2(54, 664)
+	np.size = Vector2(640, 26)
+	add_child(np)
 
 	for c in _all_buttons(panel):
 		c.focus_entered.connect(func(): Sfx.play("menu", 1.0, -8.0))
@@ -262,7 +268,7 @@ func _show_controls() -> void:
 		for cell in row:
 			grid.add_child(UiStyle.label(cell, 18, UiStyle.ROSE_DARK if row[0] == "" else UiStyle.INK))
 	v.add_child(grid)
-	var notes := UiStyle.label("Playing alone? Both keyboard layouts work for you.\nBomb Kick: walk into a bomb.  Rubber Bombs: kicked bombs bounce off walls.\nPause: Esc / P    Next music track: N\n\nCurses: Reverse Controls flips your steering and spreads to bears you touch.\nBomb Diarrhea drops bombs on its own. Immortality: no stuns, no theft for 20 s.", 16, UiStyle.INK_SOFT)
+	var notes := UiStyle.label("Playing alone? Both keyboard layouts work for you.\nKick: every bear kicks bombs by walking into them.  Rubber Bombs bounce off walls.\nRemote Detonator: the special key (E / R-Shift) sets off your remote bombs.\nPause: Esc / P    Next music track: N\n\nCurses: Reverse Controls flips your steering and spreads to bears you touch.\nBomb Diarrhea drops bombs on its own. Immortality: no stuns, no theft for 20 s.", 16, UiStyle.INK_SOFT)
 	v.add_child(notes)
 	var close := Button.new()
 	close.text = "Done"

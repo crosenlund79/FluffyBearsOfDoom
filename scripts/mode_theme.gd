@@ -42,12 +42,27 @@ static func bear_color(c: Color) -> Color:
 
 
 ## Bomb fabric: pastel in Normal, dirty and dim in Horror.
+## Darker than the floor and cushions so bombs stand out (still fabric-coloured).
 static func bomb_tint(c: Color, rubber: bool) -> Color:
 	if horror():
-		return Color.from_hsv(c.h, 0.3 if rubber else 0.18, 0.62 if rubber else 0.5)
+		return Color.from_hsv(c.h, 0.35 if rubber else 0.25, 0.48 if rubber else 0.36)
 	if rubber:
-		return Color.from_hsv(fmod(c.h + 0.08, 1.0), 0.55, 1.0)
-	return Color.from_hsv(c.h, 0.32, 1.0)
+		return Color.from_hsv(fmod(c.h + 0.08, 1.0), 0.62, 0.78)
+	return Color.from_hsv(c.h, 0.48, 0.66)
+
+
+## Tint for permanent walls/pillars and the border (darker than cushions and floor).
+static func wall_tint() -> Color:
+	return Color(0.7, 0.62, 0.62) if horror() else Color(0.62, 0.52, 0.46)
+
+
+static func border_tint() -> Color:
+	return Color(0.75, 0.68, 0.68) if horror() else Color(0.74, 0.64, 0.58)
+
+
+## Bear outline colour (Settings > Bear outlines).
+static func outline_color() -> Color:
+	return Color(0.05, 0.02, 0.02, 0.95) if horror() else Color(0.24, 0.15, 0.11, 0.9)
 
 
 ## Colour of stolen stuffing tufts.

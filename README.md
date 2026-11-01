@@ -14,16 +14,21 @@ Open the folder in Godot 4.3 and press **Play**.
 | Move | WASD | Arrow keys |
 | Place bomb | Space | Enter |
 | Steal fluff (hold) | Left Shift | Right Ctrl |
-| Special (Line Bomb) | E | Right Shift |
+| Special (remote detonate / Line Bomb) | E | Right Shift |
 
 A lone player can use either layout. Gamepads: stick/d-pad, A bomb, X/B/RT steal, Y/LB special.
 Esc/P pauses, N skips to the next music track.
 
 ## Power-ups
-Extra Bomb · Bigger Blast · Springy Stitching (speed) · Bomb Kick (walk into bombs) ·
-Line Bomb (special key: lays all free bombs in a line) · Rubber Bombs (kicked bombs bounce; includes kick) ·
+Every bear can **kick** bombs (walk into one): it slides along the corridor until something blocks it.
+A ring in the owner's colour on the floor shows whose bomb it is.
+
+Extra Bomb · Bigger Blast · Springy Stitching (speed) ·
+**Remote Detonator** (your bombs wait, with an antenna in your colour, until you press the special key; a backup fuse sets them off after 10 s) ·
+Line Bomb (special key when you have no remote bombs out: lays all free bombs in a line) · Rubber Bombs (kicked bombs bounce) ·
 Immortality (20 s, can't be stunned or robbed) · Biome Shuffle (reshuffles floor terrain after a warning) ·
 **curses:** Reverse Controls (12 s, contagious on contact) · Bomb Diarrhea (10 s, bombs drop by themselves).
+Power-ups lying in a blast are destroyed; ones uncovered by that same blast survive.
 
 ## Doom Duck Parade
 Every now and then a portal opens in a wooden pillar. A wind-up mother duck marches out with
@@ -67,8 +72,9 @@ lines and per-bear quips in `scripts/taunts.gd`. Mode palettes and tints are in
   slower). The names are `place fuse confetti concussion steal pickup curse squeak bump kick boing
   pop menu tick go shuffle immortal victory taunt mode`, plus the duck parade sounds `portal
   clock_tick quack duckling_quack duck_warning duck_confetti`.
-- Volumes, mute and shuffle are set from Menu → Audio (also in the pause menu) and saved to
-  `user://settings.cfg`. N skips to the next track.
+- Volumes, mute, shuffle and **Bear outlines** (a dark outline for visibility) are set from
+  Menu → Settings (also in the pause menu) and saved to `user://settings.cfg`. N skips to the
+  next track. A small "Now playing" note appears briefly whenever a track starts.
 
 ## Replacing the art
 Every placeholder is named `template_<name>.png`. To replace one, put `<name>.png` in the **same

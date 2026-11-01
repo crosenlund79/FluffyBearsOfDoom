@@ -68,6 +68,28 @@ var _twitch_t := 3.0
 var _twitch := 0.0
 var horror := false
 
+# Optional outline (Settings > Bear outlines): a silhouette edge around the
+# outer parts, done in a shader so any replacement sprite works.
+const OUTLINE_SHADER := """
+shader_type canvas_item;
+uniform vec4 outline_color : source_color = vec4(0.24, 0.15, 0.11, 0.9);
+uniform float width = 8.0;
+void fragment() {
+	vec4 tex = texture(TEXTURE, UV);
+	vec2 px = TEXTURE_PIXEL_SIZE * width;
+	float a = 0.0;
+	for (int i = 0; i < 8; i++) {
+		float ang = float(i) * 0.7853982;
+		a = max(a, texture(TEXTURE, UV + vec2(cos(ang), sin(ang)) * px).a);
+	}
+	vec4 base = tex * COLOR;
+	vec4 edge = vec4(outline_color.rgb, outline_color.a * a * COLOR.a);
+	COLOR = mix(edge, base, tex.a);
+}
+"""
+static var _outline_mat: ShaderMaterial
+var _outlined := false
+
 
 class Wrinkles extends Node2D:
 	var amount := 0.0
@@ -144,6 +166,23 @@ func _part(index: int, col: Color, parent: Node = null) -> Sprite2D:
 	return s
 
 
+func _outline_parts() -> Array:
+	return legs + [body] + arms + [head] + ears
+
+
+func _apply_outline(on: bool) -> void:
+	_outlined = on
+	if on and _outline_mat == null:
+		var sh := Shader.new()
+		sh.code = OUTLINE_SHADER
+		_outline_mat = ShaderMaterial.new()
+		_outline_mat.shader = sh
+	if on:
+		_outline_mat.set_shader_parameter("outline_color", preload("res://scripts/mode_theme.gd").outline_color())
+	for part in _outline_parts():
+		part.material = _outline_mat if on else null
+
+
 func _target_g() -> float:
 	if source == null:
 		return 1.0
@@ -201,6 +240,8 @@ func _spring(x: float, v: float, target: float, k: float, zeta: float, dt: float
 func _process(delta: float) -> void:
 	if source == null:
 		return
+	if Settings.bear_outlines != _outlined:
+		_apply_outline(Settings.bear_outlines)
 	delta = minf(delta, 0.05)
 	t += delta
 	var vel: Vector2 = source.velocity
@@ -213,27 +254,31 @@ func _process(delta: float) -> void:
 	var stunned: bool = source.is_stunned()
 
 	# Body lags behind acceleration (delayed mass), with less damping when stuffed.
+	var wob := 1.45 + 0.3 * minf(g, 4.0)   # overall wobble gain, grows with stuffing
 	var kb := 160.0 / soft
-	var zb := clampf(0.55 / (0.6 + 0.35 * g), 0.12, 0.8)
+	var zb := clampf(0.55 / (0.6 + 0.5 * g), 0.09, 0.8)
 	var cb := 2.0 * sqrt(kb) * zb
-	body_v += (-kb * body_off - cb * body_v - acc * 0.010 * soft) * delta
+	body_v += (-kb * body_off - cb * body_v - acc * 0.010 * soft * wob) * delta
 	body_off += body_v * delta
-	body_off = body_off.limit_length(8.0 + 4.0 * g)
+	body_off = body_off.limit_length(10.0 + 7.0 * g)
 
 	# Belly: a softer secondary spring riding on the body.
 	var kl := 110.0 / soft
-	var zl := clampf(0.32 / (0.6 + 0.4 * g), 0.07, 0.6)
+	var zl := clampf(0.32 / (0.6 + 0.55 * g), 0.05, 0.6)
 	var cl := 2.0 * sqrt(kl) * zl
-	belly_v += (-kl * belly_off - cl * belly_v - acc * 0.008 * soft - body_v * 0.5) * delta
+	belly_v += (-kl * belly_off - cl * belly_v - acc * 0.008 * soft * wob * 1.2 - body_v * 0.6) * delta
 	belly_off += belly_v * delta
-	belly_off = belly_off.limit_length(6.0 + 5.0 * g)
+	belly_off = belly_off.limit_length(8.0 + 8.0 * g)
+
+	# Sudden speed or direction changes (starting, turning, braking) squash the plush.
+	squash_v += clampf(acc.length() / 4000.0, 0.0, 1.0) * (0.8 + 0.6 * minf(g, 4.0)) * delta * 9.0
 
 	var sq := _spring(squash, squash_v, 0.0, 260.0 / soft, clampf(0.3 / (0.6 + 0.4 * g), 0.07, 0.5), delta)
-	squash = clampf(sq.x, -0.4, 0.4)
+	squash = clampf(sq.x, -0.5, 0.5)
 	squash_v = sq.y
 
 	# Delayed leaning into motion and away from braking.
-	var lean_target := clampf(vel.x / 300.0, -1.0, 1.0) * (0.1 + 0.04 * g) - clampf(acc.x / 3000.0, -1.0, 1.0) * 0.14 * soft
+	var lean_target := clampf(vel.x / 300.0, -1.0, 1.0) * (0.12 + 0.06 * g) - clampf(acc.x / 3000.0, -1.0, 1.0) * 0.2 * soft
 	if stunned:
 		lean_target = 0.0
 	var ln := _spring(lean, lean_v, lean_target, 70.0 / soft, clampf(0.45 / (0.6 + 0.4 * g), 0.1, 0.7), delta)
@@ -258,11 +303,11 @@ func _process(delta: float) -> void:
 	phase += speed * delta / stride * (0.0 if stunned else 1.0)
 	if floori(phase / PI) != floori(prev_phase / PI) and moving > 0.3:
 		_on_step(moving)
-	var bob := -absf(sin(phase)) * (1.2 + 1.3 * g) * moving
-	var sway := sin(phase) * (0.035 + 0.045 * g) * moving
+	var bob := -absf(sin(phase)) * (1.4 + 1.6 * g) * moving
+	var sway := sin(phase) * (0.045 + 0.06 * g) * moving
 	var idle := 1.0 - moving
 	var breathe := sin(t * 2.4 + seed_offset) * 0.025 * (0.5 + 0.5 * g) * idle
-	sway += sin(t * 1.7 + seed_offset) * 0.012 * maxf(g - 0.8, 0.0) * idle
+	sway += sin(t * 1.7 + seed_offset) * 0.02 * maxf(g - 0.8, 0.0) * idle
 
 	# Bouncy floors make bears boing.
 	if source.on_bouncy and not stunned:

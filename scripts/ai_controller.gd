@@ -80,10 +80,14 @@ func update(delta: float) -> void:
 
 func _think() -> void:
 	var me: Vector2i = bear.cell()
-	var danger: Dictionary = game.compute_danger(level)
+	var danger: Dictionary = game.compute_danger(level, bear)
 	var fearless: bool = level > EASY and bear.immortal_t > 2.5
 	if fearless:
 		danger = {}  # can't be stunned: ignore blasts entirely
+
+	# 0a. Set off our remote bombs when a rival is in a blast and we're clear of all of them.
+	if bear.has_remote and _try_detonate(me):
+		return
 
 	# 0. Kick a nearby bomb at a rival.
 	if bear.can_kick and level > EASY and _try_kick(me):
@@ -130,6 +134,28 @@ func _think() -> void:
 	if goal == "flee" and not path.is_empty():
 		return
 	_choose_goal(me, danger)
+
+
+func _try_detonate(me: Vector2i) -> bool:
+	var mine := []
+	for b in game.bombs:
+		if b.remote and b.owner_bear == bear and not b.exploded:
+			mine.append(b)
+	if mine.is_empty():
+		return false
+	var zone := {}
+	for b in mine:
+		for c in game.blast_cells(b.cell, b.blast_range):
+			zone[c] = true
+	if zone.has(me) and level > EASY:
+		return false  # Easy sometimes blows itself up
+	for o in game.bears:
+		if _targetable(o) and zone.has(o.cell()):
+			if level == EASY and rng.randf() < 0.5:
+				return false
+			bear.want_special = true
+			return true
+	return false
 
 
 func _targetable(b) -> bool:
@@ -315,6 +341,8 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 					value = 32.0 if not (bear.can_kick if kind == PowerupScript.KICK else bear.has_line) else 8.0
 				PowerupScript.RUBBER:
 					value = 22.0 if not bear.has_rubber else 6.0
+				PowerupScript.REMOTE:
+					value = (36.0 if level == HARD else 30.0) if not bear.has_remote else 5.0
 			if level == HARD:
 				if kind == PowerupScript.SHUFFLE:
 					value = 30.0 if bear.fluff_ratio() < 1.3 else 12.0

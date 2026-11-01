@@ -7,6 +7,8 @@ const BearVisual = preload("res://scripts/bear_visual.gd")
 const Tuning = preload("res://scripts/tuning.gd")
 const Maps = preload("res://scripts/arena_maps.gd")
 const AudioPanel = preload("res://scripts/audio_panel.gd")
+const NowPlaying = preload("res://scripts/now_playing.gd")
+const Powerup = preload("res://scripts/powerup.gd")
 
 var game
 var root: Control
@@ -76,9 +78,12 @@ class BearCard extends Control:
 			draw_texture_rect_region(icons, Rect2(x, 77, 20, 20), Assets.region(icons, Assets.POWERUP_CELLS, i))
 			draw_string(font, Vector2(x + 22, 93), vals[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, UiStyle.INK)
 			x += 58.0 if i == 0 else 44.0
-		for ab in [[bear.can_kick, 4], [bear.has_line, 5], [bear.has_rubber, 6]]:
+		# (every bear can kick now, so kick isn't listed)
+		for ab in [[bear.has_remote, Powerup.REMOTE], [bear.has_line, Powerup.LINE], [bear.has_rubber, Powerup.RUBBER]]:
 			if ab[0]:
-				draw_texture_rect_region(icons, Rect2(x, 77, 20, 20), Assets.region(icons, Assets.POWERUP_CELLS, ab[1]))
+				draw_texture_rect_region(icons, Rect2(x, 77, 20, 20), Assets.region(icons, Assets.POWERUP_CELLS, Powerup.CELL[ab[1]]))
+				if ab[1] == Powerup.REMOTE:
+					Powerup.draw_remote_antenna(self, Vector2(x + 13, 82), 0.55, Time.get_ticks_msec() / 1000.0)
 				x += 23.0
 		var status := ""
 		var scol := UiStyle.INK_SOFT
@@ -154,6 +159,11 @@ func setup(g) -> void:
 	banner_label.modulate.a = 0.0
 	root.add_child(banner_label)
 
+	var np := NowPlaying.new()
+	np.position = Vector2(40, 10)   # above the arena frame, clear of the play area
+	np.size = Vector2(720, 26)
+	root.add_child(np)
+
 	toast_box = VBoxContainer.new()
 	toast_box.position = Vector2(40, 600)
 	toast_box.size = Vector2(720, 80)
@@ -164,8 +174,8 @@ func setup(g) -> void:
 
 func _controls_text() -> String:
 	if Settings.human_count == 1:
-		return "Move WASD/Arrows · Bomb Space/Enter · Steal (hold) L-Shift/R-Ctrl\nLine Bomb E/R-Shift · Pause Esc · Next song N"
-	return "P1: WASD · Space bomb · L-Shift steal · E line bomb\nP2: Arrows · Enter bomb · R-Ctrl steal · R-Shift line bomb · Esc pause"
+		return "Move WASD/Arrows · Bomb Space/Enter · Steal (hold) L-Shift/R-Ctrl\nSpecial (remote / line bomb) E/R-Shift · Pause Esc · Next song N"
+	return "P1: WASD · Space bomb · L-Shift steal · E special\nP2: Arrows · Enter bomb · R-Ctrl steal · R-Shift special · Esc pause"
 
 
 func _process(_delta: float) -> void:
@@ -227,7 +237,7 @@ func show_pause(paused: bool) -> void:
 		get_tree().paused = false
 		show_pause(false))
 	v.add_child(resume)
-	v.add_child(_button("Audio settings", func():
+	v.add_child(_button("Settings", func():
 		var ap = AudioPanel.new()
 		ap.position = Vector2(180, 160)
 		root.add_child(ap)))

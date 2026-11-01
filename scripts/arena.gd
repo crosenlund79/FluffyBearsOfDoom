@@ -3,6 +3,7 @@ extends Node2D
 
 const Tuning = preload("res://scripts/tuning.gd")
 const Terrain = preload("res://scripts/terrain.gd")
+const Mode = preload("res://scripts/mode_theme.gd")
 
 enum { EMPTY, WALL, BORDER, BLOCK }
 
@@ -202,7 +203,9 @@ func _draw() -> void:
 	for y in rows:
 		for x in cols:
 			var ct := cells[y * cols + x]
-			if ct == WALL or ct == BLOCK:
+			if ct == WALL:
+				draw_rect(Rect2(x * T + 5, y * T + 8, T - 2, T - 4), Color(0.2, 0.12, 0.08, 0.3))
+			elif ct == BLOCK:
 				draw_rect(Rect2(x * T + 5, y * T + 8, T - 2, T - 4), Color(0.3, 0.2, 0.15, 0.16))
 	# shuffle warnings: pulsing stitched squares showing the coming terrain
 	if warn.size() > 0:
@@ -212,15 +215,18 @@ func _draw() -> void:
 			var col: Color = Terrain.props(warn[c])["color"]
 			draw_rect(r.grow(-3), Color(col.r, col.g, col.b, 0.35 + 0.4 * pulse))
 			_stitch(r.grow(-5), Color(0.55, 0.3, 0.35, 0.5 + 0.5 * pulse))
-	# walls, pillars and cushion blocks with a little pseudo height
+	# walls, pillars and cushion blocks with a little pseudo height.
+	# Permanent walls are tinted darker so they read clearly against floor and cushions.
+	var wall_col := Mode.wall_tint()
+	var border_col := Mode.border_tint()
 	for y in rows:
 		for x in cols:
 			var ct := cells[y * cols + x]
 			var r := Rect2(x * T, y * T, T, T)
 			if ct == BORDER:
-				draw_texture_rect_region(tiles_tex, r, _tile(8))
+				draw_texture_rect_region(tiles_tex, r, _tile(8), border_col)
 			elif ct == WALL:
-				draw_texture_rect_region(tiles_tex, Rect2(r.position - Vector2(0, 6), Vector2(T, T + 6)), _tile(6))
+				draw_texture_rect_region(tiles_tex, Rect2(r.position - Vector2(0, 6), Vector2(T, T + 6)), _tile(6), wall_col)
 			elif ct == BLOCK:
 				var squish := 1.0 + 0.02 * sin(anim_t * 2.0 + x * 1.3 + y * 0.7)
 				var h := (T + 4) * squish
