@@ -8,7 +8,7 @@ var now_playing: Label
 
 
 func _ready() -> void:
-	size = Vector2(440, 440)
+	size = Vector2(440, 490)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	add_child(v)
@@ -56,6 +56,21 @@ func _ready() -> void:
 		Settings.bear_outlines = on
 		Settings.save())
 	v.add_child(outl)
+	var iw := HBoxContainer.new()
+	iw.add_theme_constant_override("separation", 12)
+	var iwl := UiStyle.label("Instant win at", 18)
+	iwl.custom_minimum_size = Vector2(140, 0)
+	iw.add_child(iwl)
+	var iwo := OptionButton.new()
+	var choices: Array = preload("res://scripts/tuning.gd").INSTANT_WIN_CHOICES
+	for c in choices:
+		iwo.add_item("Off (time only)" if c <= 0.0 else "%d fluff" % int(c))
+	iwo.selected = maxi(choices.find(Settings.instant_win), 0)
+	iwo.item_selected.connect(func(idx):
+		Settings.instant_win = choices[idx]
+		Settings.save())
+	iw.add_child(iwo)
+	v.add_child(iw)
 	var h2 := HBoxContainer.new()
 	h2.add_theme_constant_override("separation", 12)
 	var nxt := Button.new()

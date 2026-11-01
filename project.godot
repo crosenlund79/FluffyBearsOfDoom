@@ -29,4 +29,5 @@ window/stretch/aspect="keep"
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+textures/canvas_textures/default_texture_filter=3
 environment/defaults/default_clear_color=Color(0.957, 0.925, 0.863, 1)

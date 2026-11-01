@@ -10,6 +10,22 @@ const WEIGHTS := [22.0, 20.0, 9.0, 6.0, 0.0, 7.0, 5.0, 4.0, 9.0, 7.0, 7.0]
 ## antenna, so existing 10-cell replacement sheets keep working.
 const CELL := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
 const BAD := [REVERSE, DIARRHEA]
+## What each power-up does (menu overview).
+const DESC := [
+	"Carry one more bomb at a time (up to 8).",
+	"Your confetti reaches one tile further (up to 8).",
+	"Run faster and get going quicker.",
+	"Reshuffles patches of floor (ice, honey, bouncy...) after a short warning.",
+	"Every bear already kicks bombs by walking into them, so this one no longer drops.",
+	"Special key with no remote bombs out: lay all your free bombs in a line ahead.",
+	"Kicked bombs bounce off walls instead of stopping.",
+	"20 s of no stuns and no stuffing theft.",
+	"Curse! 12 s of flipped steering, and it spreads to bears you touch.",
+	"Curse! For 10 s your bombs drop all by themselves.",
+	"Your bombs wait until you press the special key (backup fuse 10 s).",
+]
+## Order for the menu overview (droppable ones first, the retired Kick last).
+const OVERVIEW := [BOMB, FIRE, SPEED, REMOTE, LINE, RUBBER, IMMORTAL, SHUFFLE, REVERSE, DIARRHEA, KICK]
 ## Short pickup labels for the floating text.
 const SHORT := ["+1 Bomb", "+Blast", "Speed!", "Shuffle!", "Kick", "Line Bomb", "Rubber!",
 	"Immortal!", "Reversed!", "Diarrhea!", "Remote!"]

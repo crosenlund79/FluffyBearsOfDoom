@@ -53,6 +53,16 @@ func _portal_pos() -> Vector2:
 	return arena.cell_center(wall) + Vector2(0, arena.T * 0.3)
 
 
+## Put the mother duck down on `c` (the Time of Doom closed her cell).
+func relocate(c: Vector2i) -> void:
+	mother_pos = arena.cell_center(c)
+	cur_cell = c
+	next_cell = c
+	trail.clear()
+	trail.append(mother_pos)
+	_choose_next()
+
+
 ## True once the ducks are out and the countdown is running.
 func armed() -> bool:
 	return marching

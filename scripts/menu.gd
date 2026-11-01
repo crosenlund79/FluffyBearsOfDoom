@@ -12,6 +12,7 @@ const Maps = preload("res://scripts/arena_maps.gd")
 const Mode = preload("res://scripts/mode_theme.gd")
 const NowPlaying = preload("res://scripts/now_playing.gd")
 const Species = preload("res://scripts/species.gd")
+const Powerup = preload("res://scripts/powerup.gd")
 
 var puppets: Array = []
 var holders: Array = []
@@ -188,10 +189,10 @@ func _ready() -> void:
 	var brow := HBoxContainer.new()
 	brow.add_theme_constant_override("separation", 10)
 	brow.alignment = BoxContainer.ALIGNMENT_CENTER
-	for b in [["Settings", _show_audio], ["Controls", _show_controls], ["Quit", func(): get_tree().quit()]]:
+	for b in [["Settings", _show_audio], ["Controls", _show_controls], ["Power-ups", _show_powerups], ["Quit", func(): get_tree().quit()]]:
 		var btn := Button.new()
 		btn.text = b[0]
-		btn.custom_minimum_size = Vector2(136, 40)
+		btn.custom_minimum_size = Vector2(104, 40)
 		btn.pressed.connect(b[1])
 		brow.add_child(btn)
 	v.add_child(brow)
@@ -270,12 +271,12 @@ func _show_controls() -> void:
 	grid.add_theme_constant_override("h_separation", 40)
 	grid.add_theme_constant_override("v_separation", 6)
 	for row in [["", "Player 1", "Player 2"], ["Move", "W A S D", "Arrow keys"], ["Place bomb", "Space", "Enter"],
-			["Steal fluff (hold)", "Left Shift", "Right Ctrl"], ["Line Bomb", "E", "Right Shift"],
+			["Steal fluff (hold)", "Left Shift", "Right Ctrl"], ["Special (remote / Line Bomb)", "E", "R"],
 			["Gamepad", "stick/d-pad, A, X/B/RT, Y/LB", "second pad"]]:
 		for cell in row:
 			grid.add_child(UiStyle.label(cell, 18, UiStyle.ROSE_DARK if row[0] == "" else UiStyle.INK))
 	v.add_child(grid)
-	var notes := UiStyle.label("Playing alone? Both keyboard layouts work for you.\nKick: every bear kicks bombs by walking into them.  Rubber Bombs bounce off walls.\nRemote Detonator: the special key (E / R-Shift) sets off your remote bombs.\nPause: Esc / P    Next music track: N\n\nCurses: Reverse Controls flips your steering and spreads to bears you touch.\nBomb Diarrhea drops bombs on its own. Immortality: no stuns, no theft for 20 s.", 16, UiStyle.INK_SOFT)
+	var notes := UiStyle.label("Playing alone? Both keyboard layouts work for you.\nKick: every bear kicks bombs by walking into them.  Rubber Bombs bounce off walls.\nRemote Detonator: the special key (E / R) sets off your remote bombs.\nPause: Esc / P    Next music track: N    Show/hide in-game controls: H\n\nCurses: Reverse Controls flips your steering and spreads to bears you touch.\nBomb Diarrhea drops bombs on its own. Immortality: no stuns, no theft for 20 s.", 16, UiStyle.INK_SOFT)
 	v.add_child(notes)
 	var close := Button.new()
 	close.text = "Done"
@@ -283,6 +284,71 @@ func _show_controls() -> void:
 	v.add_child(close)
 	close.grab_focus()
 	overlay = p
+
+
+## Every power-up with its badge (current mode's art), name and effect.
+func _show_powerups() -> void:
+	_close_overlay()
+	Sfx.play("menu")
+	var p := StitchPanel.new()
+	p.position = Vector2(140, 100)
+	p.size = Vector2(1000, 500)
+	add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 8)
+	p.add_child(v)
+	v.add_child(UiStyle.label("Power-ups", 30, UiStyle.ROSE_DARK))
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 26)
+	grid.add_theme_constant_override("v_separation", 6)
+	for k in Powerup.OVERVIEW:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var icon := PowerupIcon.new()
+		icon.kind = k
+		row.add_child(icon)
+		var txt := VBoxContainer.new()
+		txt.add_theme_constant_override("separation", 0)
+		var bad: bool = k in Powerup.BAD
+		txt.add_child(UiStyle.label(Powerup.NAMES[k] + ("  (built in)" if k == Powerup.KICK else ""), 18,
+			UiStyle.CURSE if bad else UiStyle.INK))
+		var d := UiStyle.label(Powerup.DESC[k], 14, UiStyle.INK_SOFT)
+		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		d.custom_minimum_size = Vector2(390, 0)
+		txt.add_child(d)
+		row.add_child(txt)
+		grid.add_child(row)
+	v.add_child(grid)
+	var close := Button.new()
+	close.text = "Done"
+	close.pressed.connect(_close_overlay)
+	v.add_child(close)
+	close.grab_focus()
+	overlay = p
+
+
+## A power-up badge for the overview (same art and antenna as in the arena).
+class PowerupIcon extends Control:
+	var kind := 0
+	var t := 0.0
+
+	func _ready() -> void:
+		custom_minimum_size = Vector2(46, 46)
+
+	func _process(delta: float) -> void:
+		t += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		var tex := Assets.tex("powerups/powerups")
+		var c := size * 0.5
+		var col: Color = Powerup.glow_color(kind)
+		draw_circle(c, 22.0, Color(col.r, col.g, col.b, 0.18))
+		draw_texture_rect_region(tex, Rect2(c - Vector2(20, 20), Vector2(40, 40)),
+			Assets.region(tex, Assets.POWERUP_CELLS, Powerup.CELL[kind]))
+		if kind == Powerup.REMOTE:
+			Powerup.draw_remote_antenna(self, c + Vector2(7, -8), 1.05, t)
 
 
 func _process(delta: float) -> void:

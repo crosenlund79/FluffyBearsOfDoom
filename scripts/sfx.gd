@@ -50,6 +50,15 @@ func _ready() -> void:
 	# Crane chair drop
 	_streams["crane"] = _concat([_samples(0.35, 140.0, 118.0, 0.35, 5.0, 0.3), _samples(0.35, 150.0, 112.0, 0.3, 6.0, 0.35)])
 	_streams["chair_thud"] = _concat([_bonk(), _samples(0.25, 110.0, 55.0, 0.5, 0.0, 0.45)])
+	# Time of Doom (closing rings) and ranking changes
+	_streams["doom_warn"] = _concat([_samples(0.45, 220.0, 440.0, 0.35, 6.0, 0.1), _samples(0.45, 220.0, 440.0, 0.35, 6.0, 0.1)])
+	_streams["doom_slam"] = _concat([_bonk(), _samples(0.5, 90.0, 40.0, 0.6, 2.0, 0.5)])
+	_streams["overtake"] = _concat([_samples(0.07, 880.0, 880.0, 0.3, 0.0, 0.0), _samples(0.14, 1320.0, 1400.0, 0.3, 6.0, 0.0)])
+	# Horror jack-in-the-box (only used in Horror)
+	_streams["clown_rattle"] = _tone(0.05, 380.0, 300.0, 0.4, 0.0, 0.7)
+	_streams["clown_burst"] = _concat([_samples(0.05, 1200.0, 300.0, 0.5, 0.0, 0.6), _samples(0.35, 180.0, 720.0, 0.45, 22.0, 0.0)])
+	_streams["clown_laugh"] = _wav(_cackle())
+	_streams["clown_hammer"] = _concat([_bonk(), _samples(0.04, 0.0, 0.0, 0.0, 0.0, 0.0), _samples(0.3, 140.0, 60.0, 0.6, 0.0, 0.55)])
 	_streams["taunt"] = _concat([_samples(0.07, 700.0, 1100.0, 0.35, 0.0, 0.0), _samples(0.07, 900.0, 1300.0, 0.35, 0.0, 0.0), _samples(0.12, 800.0, 1500.0, 0.35, 12.0, 0.0)])
 	_streams["mode"] = _concat([_samples(0.08, 784.0, 784.0, 0.35, 0.0, 0.0), _samples(0.08, 988.0, 988.0, 0.35, 0.0, 0.0), _samples(0.2, 1175.0, 1175.0, 0.3, 6.0, 0.0)])
 	_build_horror()
@@ -74,6 +83,17 @@ func _build_horror() -> void:
 	_horror["victory"] = _concat([_samples(0.25, 440.0, 440.0, 0.4, 0.0, 0.0), _samples(0.25, 415.0, 415.0, 0.4, 0.0, 0.0), _samples(0.25, 392.0, 392.0, 0.4, 0.0, 0.0), _samples(0.6, 370.0, 370.0, 0.4, 5.0, 0.0)])
 	_horror["mode"] = _concat([_samples(0.5, 110.0, 70.0, 0.5, 3.0, 0.2), _samples(0.4, 233.0, 220.0, 0.25, 8.0, 0.3)])
 	_horror["steal"] = _wav(_splat(0.08))
+
+
+## A frantic, wobbling "HA-HA-HA-HA-HEE": rising, out-of-tune, breathy.
+func _cackle() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for k in 7:
+		var f := 330.0 + k * 38.0 + (60.0 if k % 2 == 0 else -20.0)
+		out.append_array(_samples(0.085, f * 1.15, f * 0.8, 0.42, 30.0, 0.35))
+		out.append_array(_samples(0.035, 0.0, 0.0, 0.0, 0.0, 0.0))
+	out.append_array(_samples(0.4, 760.0, 1300.0, 0.38, 40.0, 0.3))
+	return out
 
 
 ## A low, breathy "heh heh heh".

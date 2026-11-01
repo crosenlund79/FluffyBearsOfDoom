@@ -60,6 +60,15 @@ static func border_tint() -> Color:
 	return Color(0.75, 0.68, 0.68) if horror() else Color(0.74, 0.64, 0.58)
 
 
+## Cells shut by the Time of Doom: darker than the border, laced with heavy thread.
+static func closed_tint() -> Color:
+	return Color(0.42, 0.3, 0.3) if horror() else Color(0.58, 0.46, 0.42)
+
+
+static func closed_thread() -> Color:
+	return Color(0.55, 0.04, 0.08, 0.95) if horror() else Color(0.85, 0.5, 0.55, 0.95)
+
+
 ## Bear outline colour (Settings > Bear outlines).
 static func outline_color() -> Color:
 	return Color(0.05, 0.02, 0.02, 0.95) if horror() else Color(0.24, 0.15, 0.11, 0.9)

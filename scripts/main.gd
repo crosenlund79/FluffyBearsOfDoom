@@ -11,8 +11,14 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--mode="):
 			Settings.set_mode(a.get_slice("=", 1))  # dev/test override, not saved
+		if a == "--hide-controls":
+			Settings.show_controls = false   # dev/test override, not saved
+		if a.begins_with("--win="):
+			Settings.instant_win = float(a.get_slice("=", 1))  # dev/test override, not saved
 		if a.begins_with("--menu-shot="):
 			show_menu()
+			if "--powerups" in OS.get_cmdline_user_args():
+				current._show_powerups()   # screenshot the power-up overview
 			await get_tree().create_timer(1.5).timeout
 			get_viewport().get_texture().get_image().save_png(a.get_slice("=", 1))
 			get_tree().quit()
@@ -50,6 +56,8 @@ func _ready() -> void:
 			current.bears[0].immortal_t = 20.0
 		if "--duck" in OS.get_cmdline_user_args():
 			current.duck_timer = 3.0
+		if "--clown" in OS.get_cmdline_user_args():
+			current.clown_timer = 1.0
 		if "--crane" in OS.get_cmdline_user_args():
 			current.crane_timer = 2.0
 			current.duck_timer = 999.0
@@ -61,10 +69,18 @@ func _ready() -> void:
 func _autotest() -> void:
 	var g = current
 	while g.state != g.State.ENDED:
-		await get_tree().create_timer(0.5 if ("--duck" in OS.get_cmdline_user_args() or "--crane" in OS.get_cmdline_user_args()) else 2.0).timeout
+		await get_tree().create_timer(0.5 if ("--duck" in OS.get_cmdline_user_args() or "--crane" in OS.get_cmdline_user_args() or "--clown" in OS.get_cmdline_user_args()) else 2.0).timeout
 		var line := "t=%5.1f " % g.time_left
 		for b in g.bears:
 			line += "%s:%d%s[%s %s] " % [b.bear_name, roundi(b.fluff), "(z)" if b.is_stunned() else "", b.controller.goal, b.cell()]
+		if g.clown != null:
+			line += "clown=%d tgt=%s " % [g.clown.phase, g.clown.target.bear_name if g.clown.target != null else "-"]
+		if g.doom != null:
+			var closed := 0
+			for st in g.doom.stages:
+				if st["state"] == 2:
+					closed += 1
+			line += "rings=%d%s " % [closed, "!" if g.doom.warning_active() else ""]
 		if g.crane != null:
 			line += "crane=%d " % g.crane.phase
 		if g.chair != null and is_instance_valid(g.chair):
@@ -80,6 +96,16 @@ func _autotest() -> void:
 	print("music context=%s playing=%s tracks=%s" % [Music.context, Music.title, ", ".join(counts)])
 	for b in g.bears:
 		print("%s taunts=%d" % [b.bear_name, b.taunt_count])
+	var bad := 0
+	for b in g.bears:
+		if g.arena.is_solid(b.cell()):
+			bad += 1
+	print("bears inside solid cells: %d" % bad)
+	var hk := []
+	for ev in InputMap.action_get_events("toggle_controls"):
+		if ev is InputEventKey:
+			hk.append(OS.get_keycode_string(ev.physical_keycode))
+	print("toggle_controls keys: ", hk)
 	for b in g.bears:
 		print("%s fluff=%d stole=%d stunned=%d bombs=%d range=%d speed=%d" % [b.bear_name, roundi(b.fluff), roundi(b.stolen_total), b.times_stunned, b.bombs_max, b.bomb_range, b.speed_level])
 	get_tree().quit()

@@ -15,10 +15,39 @@ Open the folder in Godot 4.3 and press **Play**.
 | Move | WASD | Arrow keys |
 | Place bomb | Space | Enter |
 | Steal fluff (hold) | Left Shift | Right Ctrl |
-| Special (remote detonate / Line Bomb) | E | Right Shift |
+| Special (remote detonate / Line Bomb) | E | R (Right Shift also works) |
 
 A lone player can use either layout. Gamepads: stick/d-pad, A bomb, X/B/RT steal, Y/LB special.
-Esc/P pauses, N skips to the next music track.
+Esc/P pauses, N skips to the next music track, H hides or shows the controls strip under the arena.
+
+## The match screen
+The arena sits in the middle, uncovered. Each character has a card in the side column nearest its
+starting corner: rank (#1 wears a crown), name, a big portrait, the **score beneath the portrait**
+(it blinks while someone is pulling that character's stuffing out), and a fluff bar that runs up
+to the instant-win line. **Time of Doom** counts down above the arena. Overtakes are announced
+("Harald overtakes Oswald (#2)", "Theodor takes the lead!"). The controls strip under the arena can
+be hidden with H; the player cards always stay. Which power-ups a bear has picked up is not shown:
+**Power-ups** in the main menu lists every badge with its name and effect.
+
+## Winning
+The round ends when the timer runs out (most fluff wins), or **instantly** when a bear's fluff
+reaches the instant-win threshold (default 300; Settings → *Instant win at*, or `INSTANT_WIN_FLUFF`
+in `scripts/tuning.gd`; *Off* plays to the timer).
+
+## Time of Doom: the closing arena
+From 60% of the round the arena closes in from the edge: four tile rings, evenly staged up to 95%.
+Each ring first flashes (faster and faster, with ticking and inward arrows), then slams shut and
+becomes permanently solid. Bombs there vanish (their owners get them back), power-ups and cushion
+blocks are cleared, loose stuffing hops inward, and a bear caught on a closing tile is shoved to the
+nearest open cell and stunned, never eliminated. The middle of the arena always stays open. The AI
+treats flashing rings as danger. Timing is `DOOM_*` in `scripts/tuning.gd`.
+
+## Horror: the jack-in-the-box
+Horror only. Every so often a wooden pillar rattles and flashes red, faster and faster. Then a clown
+bursts out of a box on top of it, cackling, locks on to the **nearest bear wherever it is** (crosshair
+and a dashed line), lunges across the arena on its spring neck and hammers it (stunned). It never
+changes the grid, so it can't trap anyone. Replace its art with `objects/horror/clown.png`
+(3 cells: head, mallet, box). Timing is `CLOWN_*` in `scripts/tuning.gd`.
 
 ## Power-ups
 Every bear can **kick** bombs (walk into one): it slides along the corridor until something blocks it.
@@ -107,7 +136,12 @@ generator (`tools/generate_placeholders.py`) only ever writes `template_` files.
 single row, and the cell size is `image width / cell count`, so you can use any resolution.
 Draw each part centred in its cell.
 
-| File | Template size | Layout |
+**Resolution:** the built-in templates are drawn at **4×** the layout sizes below (a bear cell is
+512 px, a tile 256 px) and scaled down in game to the same on-screen size as before, using
+mipmapped filtering so they stay crisp. Replacements can be any multiple (1×, 2×, 4×, ...): sizes
+and positions on screen don't change, only the detail.
+
+| File | Layout size (templates are 4× this) | Layout |
 |---|---|---|
 | `bears/template_bear.png` | 1280×128 | 10 cells: body, belly, head, ear, arm, leg, face normal, face smug, face indignant, face stunned. Draw the body parts light grey/white because they are tinted per bear. Faces are drawn untinted on a transparent background. |
 | `bears/template_bunny.png`, `template_dino.png`, `template_princess.png` | 1536×128 | 12 cells: the same 10 as the bear sheet (bunny ears / dino horn nubs go in the ear cell), then cell 10 = tail (bunny puff, dino tail; the princess uses it for her skirt) and cell 11 = topper (bunny bow, dino back crest, princess crown). Missing character sheets fall back to the bear sheet. |
@@ -117,6 +151,7 @@ Draw each part centred in its cell.
 | `objects/template_chair.png` | 96×96 | the crane-delivered armchair, untinted; tufts of stuffing are drawn on top in code |
 | `objects/template_duck.png` | 128×64 | 2 cells: wind-up pull-along duck facing right (shared by mother and ducklings at different scales), wind-up key |
 | `powerups/template_powerups.png` | 640×64 | 10 cells: bomb, blast, speed, shuffle, kick, line, rubber, immortality, reverse, diarrhea. The glow halo, outline, sparkles and pickup burst are drawn in code, so a replacement only needs the badge. Horror has its own sheet: dark badges with a blood-red rim (eyeball bomb, blood drops, a spine, a staring eye, a crossed-out heart; the curses in sickly green). |
+| `objects/horror/template_clown.png` | 192×64 | Horror only, 3 cells: jack-in-the-box clown head (facing you), mallet (head up), the striped box (front; the lid is drawn in code) |
 | `effects/template_effects.png` | 512×64 | 8 cells: blast centre, blast arm (horizontal), blast end (pointing right), star, dust, sparkle, cartoon bird (facing right), floor splat decal. In Horror: blood bursts, a skull, a crow and a blood splatter. |
 
 ## Tuning

@@ -5,7 +5,7 @@ const Tuning = preload("res://scripts/tuning.gd")
 const Terrain = preload("res://scripts/terrain.gd")
 const Mode = preload("res://scripts/mode_theme.gd")
 
-enum { EMPTY, WALL, BORDER, BLOCK }
+enum { EMPTY, WALL, BORDER, BLOCK, CLOSED }   # CLOSED: shut by the Time of Doom (permanent)
 
 const SPAWNS := [Vector2i(1, 1), Vector2i(13, 11), Vector2i(13, 1), Vector2i(1, 11)]
 
@@ -25,6 +25,8 @@ var anim_t := 0.0
 var has_conveyors := false
 var shake := 0.0
 var _origin := Vector2.ZERO
+var closing := {}   # Vector2i -> seconds since the cell slammed shut (drop-in animation)
+const SLAM_TIME := 0.32
 
 
 func setup(map: Dictionary, rng: RandomNumberGenerator, powerup_weights: Array) -> void:
@@ -102,6 +104,23 @@ func cell_type(c: Vector2i) -> int:
 	return cells[c.y * cols + c.x]
 
 
+## Walls, the border and closed cells: nothing breaks them and blasts stop there.
+func is_hard(c: Vector2i) -> bool:
+	var t := cell_type(c)
+	return t == WALL or t == BORDER or t == CLOSED
+
+
+## Shut a cell for good (Time of Doom). Its block and hidden power-up are gone.
+func close_cell(c: Vector2i) -> void:
+	if not in_bounds(c) or cell_type(c) == BORDER:
+		return
+	cells[c.y * cols + c.x] = CLOSED
+	hidden_powerups.erase(c)
+	warn.erase(c)
+	closing[c] = 0.0
+	queue_redraw()
+
+
 func is_solid(c: Vector2i) -> bool:
 	return cell_type(c) != EMPTY
 
@@ -163,7 +182,12 @@ func _process(delta: float) -> void:
 		position = _origin + Vector2(randf_range(-1, 1), randf_range(-1, 1)) * shake
 	elif position != _origin:
 		position = _origin
-	if has_conveyors or warn.size() > 0:
+	if not closing.is_empty():
+		for c in closing.keys():
+			closing[c] += delta
+			if closing[c] >= SLAM_TIME:
+				closing.erase(c)
+	if has_conveyors or warn.size() > 0 or not closing.is_empty():
 		queue_redraw()
 
 
@@ -179,7 +203,7 @@ func _draw() -> void:
 		for x in cols:
 			var i := y * cols + x
 			var r := Rect2(x * T, y * T, T, T)
-			if cells[i] == BORDER:
+			if cells[i] == BORDER or (cells[i] == CLOSED and not closing.has(Vector2i(x, y))):
 				continue
 			var t := terrain[i]
 			var p := Terrain.props(t)
@@ -225,12 +249,30 @@ func _draw() -> void:
 			var r := Rect2(x * T, y * T, T, T)
 			if ct == BORDER:
 				draw_texture_rect_region(tiles_tex, r, _tile(8), border_col)
+			elif ct == CLOSED:
+				_draw_closed(Vector2i(x, y), r, border_col)
 			elif ct == WALL:
 				draw_texture_rect_region(tiles_tex, Rect2(r.position - Vector2(0, 6), Vector2(T, T + 6)), _tile(6), wall_col)
 			elif ct == BLOCK:
 				var squish := 1.0 + 0.02 * sin(anim_t * 2.0 + x * 1.3 + y * 0.7)
 				var h := (T + 4) * squish
 				draw_texture_rect_region(tiles_tex, Rect2(Vector2(r.position.x, r.end.y - h), Vector2(T, h)), _tile(7))
+
+
+## A closed cell: a border tile dropped in, laced shut with heavy stitches.
+func _draw_closed(c: Vector2i, r: Rect2, border_col: Color) -> void:
+	var k := 1.0
+	if closing.has(c):
+		k = clampf(closing[c] / SLAM_TIME, 0.0, 1.0)
+	var drop := (1.0 - k * k) * T * 2.2
+	var rr := Rect2(r.position - Vector2(0, drop), r.size)
+	var a := clampf(k * 2.0, 0.0, 1.0)
+	draw_texture_rect_region(tiles_tex, rr, _tile(8), Color(Mode.closed_tint(), a))
+	var thread := Mode.closed_thread()
+	thread.a *= a
+	draw_line(rr.position + Vector2(8, 8), rr.end - Vector2(8, 8), thread, 3.0)
+	draw_line(Vector2(rr.end.x - 8, rr.position.y + 8), Vector2(rr.position.x + 8, rr.end.y - 8), thread, 3.0)
+	_stitch(rr.grow(-4), Color(thread, thread.a * 0.7))
 
 
 func _stitch(r: Rect2, col: Color) -> void:

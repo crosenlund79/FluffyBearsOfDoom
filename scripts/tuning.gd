@@ -94,3 +94,22 @@ const CRANE_INTERVAL := [60.0, 90.0]     # after a chair is gone, wait this long
 const CRANE_SPEED := 260.0               # px/s the hook travels across
 const CRANE_HOVER := 1.1                 # seconds it dangles over the target (drop warning)
 const CHAIR_FLUFF := 60.0                # stuffing inside a delivered chair
+
+# Instant win: a bear whose fluff reaches this ends the round on the spot.
+const INSTANT_WIN_FLUFF := 300.0           # default threshold (0 = off); players pick in Settings
+const INSTANT_WIN_CHOICES := [0.0, 200.0, 250.0, 300.0, 350.0]
+
+# Time of Doom: the arena closes in ring by ring near the end of the round.
+const DOOM_ENABLED := true
+const DOOM_START := 0.60                   # fraction of the round when the first ring starts warning
+const DOOM_LAST := 0.95                    # fraction when the fourth ring starts warning
+const DOOM_RINGS := 4                      # rings closed, outermost playable ring first
+const DOOM_WARN := 4.0                     # seconds of flashing before a ring closes (capped at 4% of the round)
+const DOOM_STUN := 1.6                     # stun for a bear shoved inward by a closing ring
+
+# Horror jack-in-the-box: a pillar rattles, a clown bursts out and hammers the nearest bear.
+const CLOWN_ENABLED := true
+const CLOWN_FIRST_DELAY := [25.0, 40.0]
+const CLOWN_INTERVAL := [28.0, 45.0]
+const CLOWN_WARN := 3.0                    # seconds of accelerating flashing before it bursts out
+const CLOWN_STUN := 2.2

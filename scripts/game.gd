@@ -27,10 +27,12 @@ const Species = preload("res://scripts/species.gd")
 const ChairScript = preload("res://scripts/chair.gd")
 const CraneScript = preload("res://scripts/crane_event.gd")
 const PickupFx = preload("res://scripts/pickup_fx.gd")
+const DoomRings = preload("res://scripts/doom_rings.gd")
+const JackInTheBox = preload("res://scripts/jack_in_the_box.gd")
 
 enum State { COUNTDOWN, PLAYING, ENDED }
 
-const ARENA_ORIGIN := Vector2(40, 52)
+const ARENA_ORIGIN := Vector2(280, 52)   # centred: the HUD lives in the side columns
 const DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
 var state := State.COUNTDOWN
@@ -70,6 +72,11 @@ var chair = null          # a delivered chair waiting to be looted
 var crane_timer := 0.0
 var crane_layer: Node2D
 var duck_timer := 0.0
+var doom = null           # Time of Doom ring closer
+var clown = null          # (Horror) the jack-in-the-box in progress
+var clown_timer := 0.0
+var clown_layer: Node2D
+var round_duration := 150.0
 
 
 func _ready() -> void:
@@ -78,6 +85,7 @@ func _ready() -> void:
 	fx_tex = Assets.tex("effects/effects")
 	fluff_tex = Assets.tex("objects/fluff")
 	time_left = Tuning.ROUND_TIMES[Settings.round_time_index]
+	round_duration = time_left
 
 	arena = ArenaScript.new()
 	arena.position = ARENA_ORIGIN
@@ -96,6 +104,12 @@ func _ready() -> void:
 	bear_layer.y_sort_enabled = true
 	fx_layer = _layer(8)
 	crane_layer = _layer(9)   # the crane swings in above everything
+	clown_layer = _layer(7)   # over the bears, under the particles
+	clown_timer = rng.randf_range(Tuning.CLOWN_FIRST_DELAY[0], Tuning.CLOWN_FIRST_DELAY[1])
+	if Tuning.DOOM_ENABLED:
+		doom = DoomRings.new()
+		_layer(1).add_child(doom)   # warnings sit on the floor, over blocks, under bears
+		doom.setup(self, round_duration)
 	crane_timer = rng.randf_range(Tuning.CRANE_FIRST_DELAY[0], Tuning.CRANE_FIRST_DELAY[1])
 
 	var roster: Array = Settings.roster()
@@ -146,8 +160,8 @@ func _setup_mode_atmosphere() -> void:
 	gt.height = 256
 	var tr := TextureRect.new()
 	tr.texture = gt
-	tr.position = Vector2(-40, -60)
-	tr.size = Vector2(840, 840)  # centred on the arena; the HUD side stays readable
+	tr.position = Vector2(220, -56)
+	tr.size = Vector2(840, 840)  # centred on the arena; the HUD columns stay readable
 	tr.stretch_mode = TextureRect.STRETCH_SCALE
 	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(tr)
@@ -201,7 +215,11 @@ func _physics_process(delta: float) -> void:
 			time_left -= delta
 			_update_ducks(delta)
 			_update_crane(delta)
-			if time_left <= 0.0:
+			if doom != null:
+				doom.update(delta, round_duration - time_left)
+			_update_clown(delta)
+			_check_instant_win()
+			if state == State.PLAYING and time_left <= 0.0:
 				time_left = 0.0
 				_end_match()
 	_update_flames(delta)
@@ -273,7 +291,7 @@ func blast_cells(origin: Vector2i, length: int) -> Array:
 		for i in range(1, length + 1):
 			var c: Vector2i = origin + d * i
 			var t: int = arena.cell_type(c)
-			if t == ArenaScript.WALL or t == ArenaScript.BORDER:
+			if arena.is_hard(c):
 				break
 			out.append(c)
 			if t == ArenaScript.BLOCK or arena.bombs.has(c):
@@ -299,7 +317,7 @@ func explode(bomb) -> void:
 		for i in range(1, bomb.blast_range + 1):
 			var c: Vector2i = origin + d * i
 			var t: int = arena.cell_type(c)
-			if t == ArenaScript.WALL or t == ArenaScript.BORDER:
+			if arena.is_hard(c):
 				if i > 1:
 					segs[segs.size() - 1]["kind"] = 2
 				break
@@ -433,6 +451,8 @@ func start_crane() -> void:
 			var c := Vector2i(x, y)
 			if not arena.is_walkable(c) or powerups.has(c) or arena._is_spawn_zone(c):
 				continue
+			if doom != null and doom.time_until_close(c) < 25.0:
+				continue   # don't deliver into a ring that's about to shut
 			var open := 0
 			for d in DIRS:
 				if arena.is_walkable(c + d):
@@ -467,6 +487,163 @@ func find_chair(thief):
 	if thief.position.distance_to(chair.position) <= Tuning.STEAL_RANGE * arena.T:
 		return chair
 	return null
+
+
+# --- Horror jack-in-the-box ---------------------------------------------------------
+
+func _update_clown(delta: float) -> void:
+	if not Tuning.CLOWN_ENABLED or not Mode.horror() or clown != null:
+		return
+	clown_timer -= delta
+	if clown_timer <= 0.0 and time_left > Tuning.CLOWN_WARN + 3.0:
+		start_clown()
+
+
+func start_clown() -> void:
+	var pillars := []
+	for y in arena.rows:
+		for x in arena.cols:
+			var c := Vector2i(x, y)
+			if arena.cell_type(c) != ArenaScript.WALL:
+				continue
+			if doom != null and doom.time_until_close(c) < Tuning.CLOWN_WARN + 4.0:
+				continue   # its ring shuts before it would get going
+			if parade != null and is_instance_valid(parade) and parade.wall == c:
+				continue   # the duck portal is busy
+			pillars.append(c)
+	clown_timer = rng.randf_range(Tuning.CLOWN_INTERVAL[0], Tuning.CLOWN_INTERVAL[1])
+	if pillars.is_empty():
+		return
+	clown = JackInTheBox.new()
+	clown_layer.add_child(clown)
+	clown.setup(self, pillars[rng.randi() % pillars.size()])
+	hud.toast("Something is rattling...", Color(0.7, 0.1, 0.12))
+
+
+## The clown's mallet lands on `bear`.
+func clown_hit(bear, at: Vector2) -> void:
+	arena.add_shake(10.0)
+	Sfx.play("clown_hammer")
+	_burst(at, fx_tex, Assets.region(fx_tex, Assets.EFFECT_CELLS, 3), 6, 16.0, Color.WHITE, 220.0)
+	_splat(bear.position + Vector2(0, 10), 40.0)
+	var was_stunned: bool = bear.is_stunned()
+	bear.last_hit_by = null
+	bear.stun(at + Vector2(0, -20))
+	if bear.is_stunned() and not was_stunned:
+		bear.stun_t = Tuning.CLOWN_STUN
+	bear.visual.kick(0.6)
+
+
+# --- Time of Doom ---------------------------------------------------------------------
+
+## Shut `cells` for good. Bombs, power-ups, blocks and flames there are cleared
+## safely (no explosions), loose stuffing and the chair are moved/burst inward,
+## and bears caught there are shoved to the nearest open cell and stunned.
+func doom_close(cells: Array) -> void:
+	var shut := {}
+	for c in cells:
+		if arena.cell_type(c) != ArenaScript.BORDER:
+			shut[c] = true
+	if shut.is_empty():
+		return
+	# bombs vanish with a puff; their owners get the bomb back
+	for b in bombs.duplicate():
+		if shut.has(b.cell) and not b.exploded:
+			b.exploded = true
+			bombs.erase(b)
+			arena.bombs.erase(b.cell)
+			b.owner_bear.active_bombs = maxi(0, b.owner_bear.active_bombs - 1)
+			spawn_dust(b.position, 4)
+			b.queue_free()
+	for c in shut:
+		flames.erase(c)
+		flame_owner.erase(c)
+		if powerups.has(c):
+			spawn_dust(powerups[c].position, 3)
+			powerups[c].queue_free()
+			powerups.erase(c)
+	for c in shut:
+		arena.close_cell(c)
+	# a chair in the way bursts open; its stuffing lands further in
+	if chair != null and is_instance_valid(chair) and shut.has(chair.cell):
+		_blast_chair([chair.cell])
+	# loose tufts hop inward instead of being lost
+	for p in pickups:
+		if shut.has(p.cell):
+			var dest := nearest_open_cell(p.cell)
+			p.from = p.position
+			p.to = arena.cell_center(dest)
+			p.cell = dest
+			p.t = 0.0
+			p.landed = false
+	# bears: shoved inward and stunned (never eliminated)
+	for b in bears:
+		var caught: bool = shut.has(b.cell())
+		if not caught:
+			for c in shut:
+				if b.overlaps_cell(c):
+					b.position = arena.cell_center(b.cell())   # just brushing it: square up in its own cell
+					b.velocity = Vector2.ZERO
+					break
+			continue
+		var from: Vector2 = b.position
+		var dest := nearest_open_cell(b.cell())
+		b.position = arena.cell_center(dest)
+		b.velocity = Vector2.ZERO
+		spawn_dust(from, 5)
+		spawn_dust(b.position + Vector2(0, 12), 4)
+		var was_stunned: bool = b.is_stunned()
+		b.stun(from)
+		if b.is_stunned() and not was_stunned:
+			b.stun_t = Tuning.DOOM_STUN
+		b.visual.kick(0.4)
+	# the duck and the crane keep to open ground too
+	if parade != null and is_instance_valid(parade) and shut.has(parade.mother_cell()):
+		parade.relocate(nearest_open_cell(parade.mother_cell()))
+	if crane != null and is_instance_valid(crane) and shut.has(crane.target):
+		crane.target = nearest_open_cell(crane.target)
+	if clown != null and is_instance_valid(clown):
+		clown.on_cells_closed(shut)
+	arena.add_shake(7.0)
+	Sfx.play("doom_slam")
+	for c in shut:
+		if rng.randf() < 0.35:
+			spawn_dust(arena.cell_center(c), 2)
+
+
+## The nearest cell to `from` a bear can stand on: open, no bomb, not about to
+## close. Searched outward ring by ring, so it always works (a block may be
+## cleared as a last resort).
+func nearest_open_cell(from: Vector2i) -> Vector2i:
+	var best := Vector2i(-1, -1)
+	var fallback := Vector2i(-1, -1)
+	var best_d := INF
+	for y in arena.rows:
+		for x in arena.cols:
+			var c := Vector2i(x, y)
+			var d := float(absi(c.x - from.x) + absi(c.y - from.y))
+			if doom != null:
+				d -= 0.01 * doom.ring_of(c)   # on ties, prefer the cell further in
+			if arena.is_walkable(c):
+				var soon: bool = doom != null and doom.time_until_close(c) < 3.0
+				if not soon and d < best_d:
+					best_d = d
+					best = c
+				elif fallback.x < 0:
+					fallback = c
+	if best.x >= 0:
+		return best
+	if fallback.x >= 0:
+		return fallback
+	# nothing open at all (practically impossible): carve out the nearest block
+	for r in range(1, 20):
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				var c := from + Vector2i(dx, dy)
+				if arena.cell_type(c) == ArenaScript.BLOCK:
+					arena.destroy_block(c)
+					return c
+	return from
 
 
 ## A blast bursts the chair open: its remaining stuffing flies out as pickups.
@@ -544,7 +721,7 @@ func duck_blast_cells(origin: Vector2i, reach: int) -> Array:
 			if dist.has(n):
 				continue
 			var t: int = arena.cell_type(n)
-			if t == ArenaScript.WALL or t == ArenaScript.BORDER:
+			if arena.is_hard(n):
 				continue
 			dist[n] = dist[c] + 1
 			out.append(n)
@@ -601,6 +778,11 @@ func compute_danger(level: int, asker = null) -> Dictionary:
 	for b in bombs:
 		for c in blast_cells(b.cell, b.blast_range):
 			d[c] = minf(d.get(c, 999.0), times[b])
+	# Time of Doom: a flashing ring is about to become solid.
+	if doom != null:
+		var w: Dictionary = doom.warning_cells()
+		for c in w:
+			d[c] = minf(d.get(c, 999.0), w[c])
 	# The duck: Easy only notices at the very end, Hard plans for its walk.
 	if parade != null and is_instance_valid(parade) and parade.armed():
 		var rem: float = parade.countdown
@@ -904,7 +1086,18 @@ func _update_shuffles(delta: float) -> void:
 
 # --- end of round ---------------------------------------------------------------------
 
-func _end_match() -> void:
+## A bear stuffed past the threshold wins on the spot.
+func _check_instant_win() -> void:
+	if Settings.instant_win <= 0.0:
+		return
+	for b in bears:
+		if b.fluff >= Settings.instant_win:
+			hud.banner("%s is stuffed to bursting!" % b.bear_name, 2.0)
+			_end_match(b)
+			return
+
+
+func _end_match(instant_winner = null) -> void:
 	state = State.ENDED
 	if parade != null and is_instance_valid(parade):
 		parade.queue_free()  # the ducks wind down quietly
@@ -912,12 +1105,18 @@ func _end_match() -> void:
 	if crane != null and is_instance_valid(crane):
 		crane.queue_free()
 		crane = null
+	if clown != null and is_instance_valid(clown):
+		clown.queue_free()
+		clown = null
 	for b in bears:
 		b.stealing = false
 	var ranking := bears.duplicate()
 	ranking.sort_custom(func(a, b): return a.fluff > b.fluff)
+	if instant_winner != null:   # the bear that hit the threshold is the winner, full stop
+		ranking.erase(instant_winner)
+		ranking.push_front(instant_winner)
 	Sfx.play("victory")
-	hud.show_results(ranking)
+	hud.show_results(ranking, instant_winner)
 
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -57,16 +57,24 @@ func resolve(rel: String) -> String:
 
 
 func _load(path: String) -> Texture2D:
+	var img: Image = null
 	if ResourceLoader.exists(path):
 		var r = load(path)
 		if r is Texture2D:
-			return r
-	if FileAccess.file_exists(path):
+			img = r.get_image()
+	if img == null and FileAccess.file_exists(path):
 		# Not yet imported (e.g. a freshly dropped-in replacement): read raw.
-		var img := Image.load_from_file(ProjectSettings.globalize_path(path))
-		if img and not img.is_empty():
-			return ImageTexture.create_from_image(img)
-	return null
+		img = Image.load_from_file(ProjectSettings.globalize_path(path))
+	if img == null or img.is_empty():
+		return null
+	# Sheets are drawn at 1/4 of their pixel size (or smaller): mipmaps plus the
+	# project's linear-mipmap canvas filter keep the downscaled art crisp
+	# instead of shimmering or turning mushy. Works for any replacement size.
+	if img.is_compressed():
+		img.decompress()
+	if not img.has_mipmaps():
+		img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 
 ## Rect of cell `index` in a single-row sheet with `cells` cells.

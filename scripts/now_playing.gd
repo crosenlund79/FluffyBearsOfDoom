@@ -40,6 +40,11 @@ func _draw() -> void:
 	var text := "Now playing: " + title
 	var fs := 15
 	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 44.0
+	# squeeze long titles into the space we were given
+	while w > size.x and size.x > 60.0 and text.length() > 16:
+		text = text.substr(0, text.length() - 2) + "…"
+		text = text.replace("……", "…")
+		w = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 44.0
 	var x := -18.0 * (1.0 - appear)
 	var r := Rect2(x, 0, w, 26)
 	draw_rect(r, Color(UiStyle.PAPER, 0.9 * a))

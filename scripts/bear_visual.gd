@@ -30,6 +30,10 @@ var seed_offset := 0.0
 var sheet: Texture2D
 var cw := 128.0
 var unit := PART_SCALE
+## Sheet texels per base texel (sheets may be any resolution; the templates are
+## 4x = 512 px cells). Positions of parts nested in the body/head are written in
+## 128-px base texels and multiplied by this.
+var tx := 1.0
 
 var body: Sprite2D
 var belly: Sprite2D
@@ -80,7 +84,7 @@ var horror := false
 const OUTLINE_SHADER := """
 shader_type canvas_item;
 uniform vec4 outline_color : source_color = vec4(0.24, 0.15, 0.11, 0.9);
-uniform float width = 8.0;
+uniform float width = 8.0;   // in sheet texels (set per sheet resolution)
 void fragment() {
 	vec4 tex = texture(TEXTURE, UV);
 	vec2 px = TEXTURE_PIXEL_SIZE * width;
@@ -94,7 +98,7 @@ void fragment() {
 	COLOR = mix(edge, base, tex.a);
 }
 """
-static var _outline_mat: ShaderMaterial
+static var _outline_mats := {}   # sheet scale -> material (outline width is 8 base texels)
 var _outlined := false
 
 
@@ -137,6 +141,7 @@ func _ready() -> void:
 	cells = spec["cells"]
 	cw = float(sheet.get_width()) / cells
 	unit = PART_SCALE * BASE_CELL / cw
+	tx = cw / BASE_CELL
 	if spec["tail"] != "":
 		tail = _part(10, tint if spec["tail_tint"] else Color.WHITE)   # behind everything
 		if spec["tail"] == "long":
@@ -150,6 +155,7 @@ func _ready() -> void:
 	wrinkles = Wrinkles.new()
 	wrinkles.col = tint.darkened(0.6)
 	body.add_child(wrinkles)
+	wrinkles.scale = Vector2.ONE * tx   # drawn in base texels
 	if spec["skirt"]:
 		skirt = _part(10, Color.WHITE)
 	for i in 2:
@@ -170,7 +176,7 @@ func _ready() -> void:
 	if spec["topper"] == "front":
 		topper = _part(11, tint if spec["topper_tint"] else Color.WHITE, head)
 	if topper:
-		topper.position = spec["topper_pos"]
+		topper.position = spec["topper_pos"] * tx
 		topper.rotation = spec["topper_rot"]
 		topper.scale = Vector2.ONE * spec["topper_scale"]
 	g = _target_g()
@@ -197,15 +203,18 @@ func _outline_parts() -> Array:
 
 func _apply_outline(on: bool) -> void:
 	_outlined = on
-	if on and _outline_mat == null:
+	var mat: ShaderMaterial = _outline_mats.get(tx)
+	if on and mat == null:
 		var sh := Shader.new()
 		sh.code = OUTLINE_SHADER
-		_outline_mat = ShaderMaterial.new()
-		_outline_mat.shader = sh
+		mat = ShaderMaterial.new()
+		mat.shader = sh
+		mat.set_shader_parameter("width", 8.0 * tx)
+		_outline_mats[tx] = mat
 	if on:
-		_outline_mat.set_shader_parameter("outline_color", preload("res://scripts/mode_theme.gd").outline_color())
+		mat.set_shader_parameter("outline_color", preload("res://scripts/mode_theme.gd").outline_color())
 	for part in _outline_parts():
-		part.material = _outline_mat if on else null
+		part.material = mat if on else null
 
 
 func _target_g() -> float:
@@ -364,7 +373,7 @@ func _process(delta: float) -> void:
 	var brel := clampf(0.55 + 0.17 * g, 0.42, 0.98)
 	var jig := clampf(belly_off.y * 0.012, -0.2, 0.2)
 	belly.scale = Vector2(brel * (1.0 + jig) * (1.0 - 0.15 * sag), brel * (1.0 - jig))
-	belly.position = Vector2(belly_off.x * 1.6, 10.0 + 4.0 * minf(g, 4.0) + belly_off.y * 1.4) / maxf(bsx, 0.3)
+	belly.position = Vector2(belly_off.x * 1.6, 10.0 + 4.0 * minf(g, 4.0) + belly_off.y * 1.4) / maxf(bsx, 0.3) * tx
 	wrinkles.amount = sag
 	wrinkles.queue_redraw()
 
@@ -380,7 +389,7 @@ func _process(delta: float) -> void:
 		var side := -1.0 if i == 0 else 1.0
 		var ep: Vector2 = spec["ear_pos"]
 		var flop: float = spec["ear_flop"]
-		ears[i].position = Vector2(side * ep.x, ep.y + sag * 10.0)
+		ears[i].position = Vector2(side * ep.x, ep.y + sag * 10.0) * tx
 		ears[i].rotation = side * (0.12 + sag * 0.75) + (ear_wob * (1.0 + 0.4 * i) + sin(phase * 2.0) * 0.06 * moving) * flop
 
 	# Arms stick out further on a round bear and swing with the waddle.
@@ -462,7 +471,7 @@ func _process(delta: float) -> void:
 		face.region_rect = Assets.region(sheet, cells, 6 + f)
 	var facing: Vector2 = source.facing
 	face.visible = stunned or facing.y >= 0.0 or absf(facing.x) > 0.0
-	face.position = Vector2(facing.x * 11.0, maxf(facing.y, 0.0) * 4.0)
+	face.position = Vector2(facing.x * 11.0, maxf(facing.y, 0.0) * 4.0) * tx
 	_update_accessories(body_hw, body_hh, body_y, sx, s, moving, stunned)
 
 	# Whole rig: lean + stun flop, pivoting at the feet. Hop on bouncy floors.
@@ -501,23 +510,74 @@ static func draw_portrait(ci: CanvasItem, center: Vector2, radius: float, specie
 	var tex: Texture2D = Assets.tex(sp["sheet"])
 	var n: int = sp["cells"]
 	var cell := float(tex.get_width()) / n
-	var k := radius / (50.0 * cell / BASE_CELL)   # px per texel (head content radius is ~50 base texels)
-	var ep: Vector2 = sp["ear_pos"]
+	var k := radius / (50.0 * cell / BASE_CELL)   # px per sheet texel (head content radius is ~50 base texels)
+	for part in _portrait_parts(sp, cell, tint_col, face_index):
+		var sz: float = cell * k * float(part[3])
+		ci.draw_set_transform(center + Vector2(part[1]) * k, part[2], Vector2.ONE)
+		ci.draw_texture_rect_region(tex, Rect2(-sz * 0.5, -sz * 0.5, sz, sz), Assets.region(tex, n, part[0]), part[4])
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## [cell index, position (sheet texels), rotation, scale, colour], back to front.
+static func _portrait_parts(sp: Dictionary, cell: float, tint_col: Color, face_index: int) -> Array:
+	var tx_p := cell / BASE_CELL                    # sheet texels per base texel
+	var ep: Vector2 = sp["ear_pos"] * tx_p
+	var top_p: Vector2 = sp.get("topper_pos", Vector2.ZERO) * tx_p
 	var ear_shift := Vector2(0, float(sp["ear_offset"]) * cell * float(sp["ear_scale"]))
-	var parts := []                                # [cell index, position (texels), rotation, scale, colour]
+	var top_col: Color = tint_col if sp.get("topper_tint", false) else Color.WHITE
+	var parts := []
 	if sp["topper"] == "back":
-		parts.append([11, sp["topper_pos"], sp["topper_rot"], sp["topper_scale"], tint_col if sp["topper_tint"] else Color.WHITE])
+		parts.append([11, top_p, sp["topper_rot"], sp["topper_scale"], top_col])
 	for side in [-1.0, 1.0]:
 		parts.append([3, Vector2(side * ep.x, ep.y) + ear_shift, side * 0.12, sp["ear_scale"], tint_col])
 	parts.append([2, Vector2.ZERO, 0.0, 1.0, tint_col])
 	parts.append([6 + face_index, Vector2.ZERO, 0.0, 1.0, Color.WHITE])
 	if sp["topper"] == "front":
-		parts.append([11, sp["topper_pos"], sp["topper_rot"], sp["topper_scale"], tint_col if sp["topper_tint"] else Color.WHITE])
-	for part in parts:
-		var sz: float = cell * k * float(part[3])
-		ci.draw_set_transform(center + Vector2(part[1]) * k, part[2], Vector2.ONE)
-		ci.draw_texture_rect_region(tex, Rect2(-sz * 0.5, -sz * 0.5, sz, sz), Assets.region(tex, n, part[0]), part[4])
-	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		parts.append([11, top_p, sp["topper_rot"], sp["topper_scale"], top_col])
+	return parts
+
+
+static var _bounds_cache := {}
+
+## The portrait's visible extent in head radii, relative to the head centre
+## (measured from the sprites' alpha, so tall bunny ears or a crown fit too).
+static func portrait_bounds(species_id: String) -> Rect2:
+	var sp: Dictionary = Species.info(species_id)
+	var tex: Texture2D = Assets.tex(sp["sheet"])
+	var key := "%s:%d" % [species_id, tex.get_instance_id()]
+	if _bounds_cache.has(key):
+		return _bounds_cache[key]
+	var n: int = sp["cells"]
+	var cell := float(tex.get_width()) / n
+	var img := tex.get_image()
+	if img.is_compressed():
+		img.decompress()
+	var used := {}
+	var box := Rect2()
+	var first := true
+	for part in _portrait_parts(sp, cell, Color.WHITE, 0):
+		var idx: int = part[0]
+		if not used.has(idx):
+			var reg := Rect2i(Assets.region(tex, n, idx))
+			var r := img.get_region(reg).get_used_rect()
+			used[idx] = Rect2(Vector2(r.position) - Vector2(reg.size) * 0.5, Vector2(r.size))
+		var pr: Rect2 = used[idx]
+		pr = Rect2(pr.position * float(part[3]) + Vector2(part[1]), pr.size * float(part[3]))
+		box = pr if first else box.merge(pr)
+		first = false
+	var unit := 50.0 * cell / BASE_CELL
+	var out := Rect2(box.position / unit, box.size / unit)
+	_bounds_cache[key] = out
+	return out
+
+
+## Largest head radius (capped at `max_radius`) whose whole portrait fits in
+## `area`, and where to put the head centre: [radius, centre].
+static func fit_portrait(species_id: String, area: Rect2, max_radius: float) -> Array:
+	var b := portrait_bounds(species_id)
+	var r := minf(max_radius, minf(area.size.x / maxf(b.size.x, 0.1), area.size.y / maxf(b.size.y, 0.1)))
+	var c := area.get_center() - (b.position + b.size * 0.5) * r
+	return [r, c]
 
 
 func _on_step(moving: float) -> void:

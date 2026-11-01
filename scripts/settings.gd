@@ -21,6 +21,8 @@ var sfx_volume := 0.85
 var muted := false
 var shuffle_music := true
 var bear_outlines := true  # dark outline around bears for visibility
+var instant_win: float = preload("res://scripts/tuning.gd").INSTANT_WIN_FLUFF   # fluff that ends a round at once (0 = off)
+var show_controls := true  # the in-match controls strip (H toggles it; player stats always stay)
 const MODES := ["normal", "horror", "custom"]
 var mode := "normal"  # "normal", "horror" or "custom": same gameplay, different look (and sound)
 
@@ -28,7 +30,7 @@ const ACTIONS := ["up", "down", "left", "right", "bomb", "steal", "special"]
 # Keys per scheme. Negative values = left-hand key location, positive modifiers = right-hand.
 const KEYS := [
 	{"up": [KEY_W], "down": [KEY_S], "left": [KEY_A], "right": [KEY_D], "bomb": [KEY_SPACE], "steal": [-KEY_SHIFT], "special": [KEY_E]},
-	{"up": [KEY_UP], "down": [KEY_DOWN], "left": [KEY_LEFT], "right": [KEY_RIGHT], "bomb": [KEY_ENTER, KEY_KP_ENTER], "steal": [KEY_CTRL], "special": [KEY_SHIFT]},
+	{"up": [KEY_UP], "down": [KEY_DOWN], "left": [KEY_LEFT], "right": [KEY_RIGHT], "bomb": [KEY_ENTER, KEY_KP_ENTER], "steal": [KEY_CTRL], "special": [KEY_R, KEY_SHIFT]},
 ]
 const MODIFIERS := [KEY_SHIFT, KEY_CTRL, KEY_ALT]
 
@@ -39,7 +41,7 @@ func _ready() -> void:
 	set_mode(mode)
 	_ensure_buses()
 	apply_audio()
-	for a in [["pause", [KEY_ESCAPE, KEY_P], JOY_BUTTON_START], ["next_track", [KEY_N], JOY_BUTTON_BACK]]:
+	for a in [["pause", [KEY_ESCAPE, KEY_P], JOY_BUTTON_START], ["next_track", [KEY_N], JOY_BUTTON_BACK], ["toggle_controls", [KEY_H], JOY_BUTTON_RIGHT_STICK]]:
 		if InputMap.has_action(a[0]):
 			continue
 		InputMap.add_action(a[0])
@@ -147,7 +149,7 @@ func _set_bus(bus: String, v: float) -> void:
 func save() -> void:
 	var cf := ConfigFile.new()
 	for k in ["master_volume", "music_volume", "sfx_volume", "muted", "shuffle_music", "human_count",
-			"ai_levels", "sitting_out", "arena_index", "round_time_index", "mode", "bear_outlines"]:
+			"ai_levels", "sitting_out", "arena_index", "round_time_index", "mode", "bear_outlines", "show_controls", "instant_win"]:
 		cf.set_value("settings", k, get(k))
 	cf.save(SAVE_PATH)
 
