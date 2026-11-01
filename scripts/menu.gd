@@ -75,18 +75,21 @@ func _ready() -> void:
 	v.add_theme_constant_override("separation", 8)
 	panel.add_child(v)
 
-	# Normal / Horror: same game, different nursery. Switches immediately.
+	# Normal / Horror / Custom: same game, different nursery. Switches immediately.
+	# Custom = your own sprites from assets/sprites/<folder>/custom/, Normal for the rest.
 	var mrow := HBoxContainer.new()
-	mrow.add_theme_constant_override("separation", 12)
-	mrow.add_child(_fixed(UiStyle.label("Mode", 24, UiStyle.ROSE_DARK), 140))
+	mrow.add_theme_constant_override("separation", 8)
+	mrow.add_child(_fixed(UiStyle.label("Mode", 24, UiStyle.ROSE_DARK), 110))
 	var group := ButtonGroup.new()
-	for m in [["Normal", "normal"], ["Horror", "horror"]]:
+	for m in [["Normal", "normal"], ["Horror", "horror"], ["Custom", "custom"]]:
 		var mb := Button.new()
 		mb.text = m[0]
 		mb.toggle_mode = true
 		mb.button_group = group
 		mb.button_pressed = Settings.mode == m[1]
-		mb.custom_minimum_size = Vector2(106, 38)
+		mb.custom_minimum_size = Vector2(96, 38)
+		if m[1] == "custom":
+			mb.tooltip_text = "Your own sprites from assets/sprites/<folder>/custom/ (Normal art where none exists)"
 		var mode_id: String = m[1]
 		mb.pressed.connect(func(): _set_mode(mode_id))
 		mrow.add_child(mb)

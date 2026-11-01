@@ -34,8 +34,8 @@ namespace FBD
             Music.PlayContext("menu");
         }
 
-        // focus order: mode x2, players, 3 AI levels, (sitting out), arena, round length, Start
-        int IndexOfStart() => 2 + 1 + 3 + (Settings.human_count == 2 ? 1 : 0) + 1 + 1;
+        // focus order: mode x3, players, 3 AI levels, (sitting out), arena, round length, Start
+        int IndexOfStart() => 3 + 1 + 3 + (Settings.human_count == 2 ? 1 : 0) + 1 + 1;
 
         public void Update(float delta)
         {
@@ -89,12 +89,12 @@ namespace FBD
             var r = new Rect(740, 70, 500, 590);
             Panel.Draw(p, r);
             float x = r.x + 22, w = r.width - 44, y = r.y + 22;
-            // Normal / Horror: same game, different nursery. Switches immediately.
+            // Normal / Horror / Custom: same game, different nursery. Switches immediately.
+            // Custom = your own sprites from Sprites/<folder>/custom/, Normal for the rest.
             p.String(new Vector2(x, y + 28), "Mode", HAlign.Left, -1, 24, UiStyle.ROSE_DARK);
-            string[] modes = { "normal", "horror" };
-            string[] modeLabels = { "Normal", "Horror" };
-            for (int i = 0; i < 2; i++)
-                if (gui.Button(new Rect(x + 152 + i * 118, y, 106, 38), modeLabels[i], 18, Settings.mode == modes[i])) SetMode(modes[i]);
+            string[] modeLabels = { "Normal", "Horror", "Custom" };
+            for (int i = 0; i < 3; i++)
+                if (gui.Button(new Rect(x + 110 + i * 110, y, 100, 38), modeLabels[i], 18, Settings.mode == Settings.MODES[i])) SetMode(Settings.MODES[i]);
             y += 46;
             p.String(new Vector2(x, y + 28), "Players", HAlign.Left, -1, 24, UiStyle.ROSE_DARK);
             int hc = gui.Option(new Rect(x + 152, y, 220, 38), new[] { "One Human", "Two Humans" }, Mathf.Clamp(Settings.human_count, 1, 2) - 1) + 1;

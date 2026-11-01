@@ -1,7 +1,7 @@
 # Fluffy Bears of Doom: Unity port
 
 A standalone Unity/C# port of the Godot 4.3 game. Gameplay, physics, AI, maps, power-ups,
-curses, the Doom Duck Parade, taunts, Normal/Horror modes, menus, HUD, settings, music and
+curses, the Doom Duck Parade, taunts, Normal/Horror/Custom modes, menus, HUD, settings, music and
 sound effects are all reimplemented natively in C#. The project needs nothing from the
 original Godot project.
 
@@ -59,6 +59,11 @@ All art and audio live in `Assets/StreamingAssets` and are loaded at runtime.
 2. `<folder>/<name>.png`: your shared art
 3. `<folder>/<mode>/template_<name>.png`: the built-in mode placeholder
 4. `<folder>/template_<name>.png`: the built-in placeholder
+
+**Custom mode** (the third button next to Normal and Horror) first looks for your art in
+`<folder>/custom/<name>.png`, using the same file names as the templates, and otherwise shows
+exactly what Normal shows. Custom files are never read in Normal or Horror. Custom plays and sounds
+like Normal (menus, music, taunts); only the sprites change. The choice is saved like the other settings.
 
 Your files always win and placeholders never overwrite anything. Sheets are a single row and the
 cell size is `image width / cell count`.

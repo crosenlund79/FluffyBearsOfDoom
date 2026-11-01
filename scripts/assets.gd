@@ -5,6 +5,9 @@
 ##   3. assets/sprites/bears/<mode>/template_bear.png  built-in mode placeholder
 ##   4. assets/sprites/bears/template_bear.png         built-in placeholder
 ## Creator files always win over templates; templates never overwrite anything.
+## Custom mode first looks in assets/sprites/<folder>/custom/<name>.png and
+## otherwise uses exactly what Normal mode would. Nothing in custom/ is ever
+## read in Normal or Horror, and the placeholder generator never writes there.
 extends Node
 
 const ROOT := "res://assets/sprites/"
@@ -41,8 +44,13 @@ func resolve(rel: String) -> String:
 	var mode: String = Settings.mode
 	var folder := ROOT + rel.get_base_dir() + "/"
 	var file := rel.get_file()
-	for candidate in [folder + mode + "/" + file + ".png", folder + file + ".png",
-			folder + mode + "/template_" + file + ".png", folder + "template_" + file + ".png"]:
+	var candidates := []
+	if mode == "custom":
+		candidates.append(folder + "custom/" + file + ".png")
+		mode = "normal"
+	candidates.append_array([folder + mode + "/" + file + ".png", folder + file + ".png",
+			folder + mode + "/template_" + file + ".png", folder + "template_" + file + ".png"])
+	for candidate in candidates:
 		if ResourceLoader.exists(candidate) or FileAccess.file_exists(candidate):
 			return candidate
 	return ""

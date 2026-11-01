@@ -80,7 +80,7 @@ namespace FBD
             }
         }
 
-        static string Key(string screen) => screen + "/" + Settings.mode;
+        static string Key(string screen) => screen + "/" + Settings.Style;   // Custom uses the Normal music
 
         /// The playlist that will really play for `key`, applying the Horror fallback.
         static string Resolve(string key)

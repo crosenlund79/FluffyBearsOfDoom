@@ -71,11 +71,17 @@ namespace FBD
             return o;
         }
 
+        public static readonly string[] MODES = { "normal", "horror", "custom" };
+
         public static void SetMode(string m)
         {
-            mode = (m == "horror") ? "horror" : "normal";
-            UiStyle.ApplyMode(mode);
+            mode = System.Array.IndexOf(MODES, m) >= 0 ? m : "normal";
+            UiStyle.ApplyMode(Style);
         }
+
+        /// The behaviour/audio/UI flavour of the current mode. Custom only swaps sprites
+        /// (StreamingAssets/Sprites/<folder>/custom/); everything else plays exactly like Normal.
+        public static string Style => mode == "horror" ? "horror" : "normal";
 
         public static void Save()
         {

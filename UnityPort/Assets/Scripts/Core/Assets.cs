@@ -4,7 +4,8 @@
 //   2. bears/bear.png                   your shared art
 //   3. bears/<mode>/template_bear.png   built-in mode placeholder
 //   4. bears/template_bear.png          built-in placeholder
-// Creator files always win; templates never overwrite anything. Files are read
+// Creator files always win; templates never overwrite anything.
+// Custom mode first looks in <folder>/custom/<name>.png, then falls back to Normal. Files are read
 // at runtime, so art can be replaced even in a built game.
 // All sheets of a mode are packed into one atlas (plus a white patch for shapes).
 using System.Collections.Generic;
@@ -66,6 +67,14 @@ namespace FBD
             string mode = Settings.mode;
             string folder = Path.Combine(Root, Path.GetDirectoryName(rel));
             string file = Path.GetFileName(rel);
+            // Custom: your art in <folder>/custom/ first, otherwise exactly what Normal uses.
+            // Nothing in custom/ is ever read in Normal or Horror.
+            if (mode == "custom")
+            {
+                string own = Path.Combine(folder, "custom", file + ".png");
+                if (File.Exists(own)) return own;
+                mode = "normal";
+            }
             string[] candidates =
             {
                 Path.Combine(folder, mode, file + ".png"),

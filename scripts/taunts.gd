@@ -42,7 +42,7 @@ const VOICE := {"Player": 1.0, "Player 1": 1.0, "Player 2": 1.18, "Oswald": 0.95
 
 
 static func line(kind: String, who: String, rng: RandomNumberGenerator) -> String:
-	var mode: String = Settings.mode
+	var mode: String = Settings.style()
 	var personal: Array = PERSONAL[mode].get(who, [])
 	if not personal.is_empty() and kind in ["stun", "steal"] and rng.randf() < 0.3:
 		return personal[rng.randi() % personal.size()]
@@ -51,5 +51,5 @@ static func line(kind: String, who: String, rng: RandomNumberGenerator) -> Strin
 
 
 static func anim(rng: RandomNumberGenerator) -> String:
-	var list: Array = ANIMS[Settings.mode]
+	var list: Array = ANIMS[Settings.style()]
 	return list[rng.randi() % list.size()]

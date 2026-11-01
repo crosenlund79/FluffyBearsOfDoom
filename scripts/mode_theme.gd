@@ -19,7 +19,7 @@ const BLURB := {
 
 
 static func mode() -> String:
-	return Settings.mode
+	return Settings.style()   # Custom looks and plays like Normal apart from its sprites
 
 
 static func horror() -> bool:

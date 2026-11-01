@@ -45,13 +45,19 @@ In the last 3 seconds she flashes and the cells she will hit are outlined. Then 
 and the confetti **flows around corners** for up to 4 grid steps, stunning any bear it reaches.
 Spawn timing, countdown, speed and reach are the `DUCK_*` values in `scripts/tuning.gd`.
 
-## Normal & Horror mode
+## Normal, Horror & Custom mode
 Choose the mode at the top of the menu. The change applies immediately and is saved.
-Gameplay is identical in both modes; only the presentation changes.
+Gameplay is identical in all modes; only the presentation changes.
 - **Normal:** cute plush bears, playful taunts, stuffing puffs and confetti, cheerful sounds.
 - **Horror:** grimy stitched bears with mismatched, glowing eyes, creepy taunts, blood splatters,
   a darker, flickering nursery with a vignette, twitchy idle animations, crows and skulls
   circling stunned bears, and darker sounds.
+- **Custom:** your own art. For every sprite the game first looks for
+  `assets/sprites/<folder>/custom/<name>.png` (same file names as the templates, e.g.
+  `bears/custom/bunny.png`, `tiles/custom/tiles.png`, `powerups/custom/powerups.png`). Anything
+  you haven't supplied is shown exactly as in Normal. Custom files are never read in Normal or
+  Horror, and the placeholder generator never writes into `custom/`. Custom mode plays, sounds
+  and looks (menus, music, taunts) like Normal; only the sprites change.
 
 **Taunts:** a bear gloats when its bomb stuns someone, mocks bombers who stun themselves,
 crows when it starts stealing, and complains when it wakes up robbed. Each taunt is a short
@@ -93,7 +99,8 @@ the game uses the first file that exists:
 3. `<folder>/<mode>/template_<name>.png`: the built-in mode placeholder
 4. `<folder>/template_<name>.png`: the built-in placeholder
 
-Horror placeholders exist for `bears` (all four characters), `tiles`, `effects`,
+Custom mode reads only `<folder>/custom/<name>.png` and otherwise uses the Normal lookup above
+(see *Normal, Horror & Custom mode*). Horror placeholders exist for `bears` (all four characters), `tiles`, `effects`,
 `powerups` and `objects/chair`. Everything else is shared and
 tinted darker in code. The
 generator (`tools/generate_placeholders.py`) only ever writes `template_` files. Sheets are a

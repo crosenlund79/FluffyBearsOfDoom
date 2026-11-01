@@ -23,7 +23,7 @@ namespace FBD
             { "horror", "The bombs only stun. The stuffing comes out anyway.\nThe more you take, the heavier you get. Nothing that full can run." },
         };
 
-        public static string Mode => Settings.mode;
+        public static string Mode => Settings.Style;   // Custom looks and plays like Normal apart from its sprites
         public static bool Horror => Settings.mode == "horror";
         public static Color[] Confetti => CONFETTI[Mode];
         public static string Text(Dictionary<string, string> table) => table[Mode];
@@ -105,7 +105,7 @@ namespace FBD
 
         public static string Line(string kind, string who, Rng rng)
         {
-            string mode = Settings.mode;
+            string mode = Settings.Style;
             if (PERSONAL[mode].TryGetValue(who, out string[] personal) && (kind == "stun" || kind == "steal") && rng.F() < 0.3f)
                 return personal[rng.Int(personal.Length)];
             string[] lines = LINES[mode][kind];
@@ -114,7 +114,7 @@ namespace FBD
 
         public static string Anim(Rng rng)
         {
-            string[] list = ANIMS[Settings.mode];
+            string[] list = ANIMS[Settings.Style];
             return list[rng.Int(list.Length)];
         }
     }

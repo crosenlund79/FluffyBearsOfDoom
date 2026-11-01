@@ -21,7 +21,8 @@ var sfx_volume := 0.85
 var muted := false
 var shuffle_music := true
 var bear_outlines := true  # dark outline around bears for visibility
-var mode := "normal"  # "normal" or "horror": same gameplay, different look/sound
+const MODES := ["normal", "horror", "custom"]
+var mode := "normal"  # "normal", "horror" or "custom": same gameplay, different look (and sound)
 
 const ACTIONS := ["up", "down", "left", "right", "bomb", "steal", "special"]
 # Keys per scheme. Negative values = left-hand key location, positive modifiers = right-hand.
@@ -109,8 +110,14 @@ func _add_pad(action: String, a: String, device: int) -> void:
 
 
 func set_mode(m: String) -> void:
-	mode = m if m in ["normal", "horror"] else "normal"
-	preload("res://scripts/ui_style.gd").apply_mode(mode)
+	mode = m if m in MODES else "normal"
+	preload("res://scripts/ui_style.gd").apply_mode(style())
+
+
+## The behaviour/audio/UI flavour of the current mode. Custom only swaps sprites
+## (assets/sprites/<folder>/custom/); everything else plays exactly like Normal.
+func style() -> String:
+	return "horror" if mode == "horror" else "normal"
 
 
 # --- audio ----------------------------------------------------------------------
