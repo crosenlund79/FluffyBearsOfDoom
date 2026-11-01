@@ -7,6 +7,8 @@ extends Node2D
 const Tuning = preload("res://scripts/tuning.gd")
 const Terrain = preload("res://scripts/terrain.gd")
 const BearVisual = preload("res://scripts/bear_visual.gd")
+const Taunts = preload("res://scripts/taunts.gd")
+const Mode = preload("res://scripts/mode_theme.gd")
 
 var slot := 0
 var bear_name := ""
@@ -44,6 +46,15 @@ var infect_cd := 0.0          # can't pass reverse on yet
 var reinfect_immune := 0.0    # just cured
 var _diarrhea_cd := 0.0
 
+# Taunts (purely cosmetic)
+var last_hit_by = null
+var bubble_text := ""
+var bubble_t := 0.0
+var taunt_cd := 0.0
+var taunt_count := 0
+var fluff_at_stun := 0.0
+var _rng := RandomNumberGenerator.new()
+
 # State
 var stun_t := 0.0
 var immune_t := 0.0
@@ -65,6 +76,8 @@ var _steal_sfx_t := 0.0
 ## Drawn above the rig: cartoon birds and stars, curse icons, the
 ## immortality halo, the human players' markers.
 class Overlay extends Node2D:
+	const Taunts_BUBBLE := 1.7
+	const Mode = preload("res://scripts/mode_theme.gd")
 	var bear
 	var tex: Texture2D
 	var icons: Texture2D
@@ -85,6 +98,8 @@ class Overlay extends Node2D:
 		var head: Vector2 = v.head.global_position - global_position
 		var above := head + Vector2(0, -v.head_r - 10.0)
 		var t: float = v.t
+		if bear.bubble_t > 0.0:
+			_draw_bubble(above + Vector2(0, -30.0 if bear.is_stunned() else -24.0))
 		if bear.immortal_t > 0.0:
 			var a := 0.25 + 0.15 * sin(t * 6.0)
 			if bear.immortal_t < 3.0 and fmod(t * 6.0, 1.0) < 0.5:
@@ -122,12 +137,36 @@ class Overlay extends Node2D:
 				draw_texture_rect_region(icons, Rect2(-10, -10, 20, 20), Assets.region(icons, Assets.POWERUP_CELLS, curse[1]))
 				x += 20.0
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		if bear.is_human:
+		if bear.is_human and bear.bubble_t <= 0.0:
 			var y: float = above.y - (22.0 if x != 0.0 else 2.0)
 			var c := Color(bear.color.darkened(0.3), 0.95)
 			draw_colored_polygon(PackedVector2Array([Vector2(above.x - 6, y - 8), Vector2(above.x + 6, y - 8), Vector2(above.x, y)]), c)
 			if bear.bear_name.begins_with("Player "):
 				draw_string(font, Vector2(above.x - 20, y - 11), bear.bear_name.substr(7).insert(0, "P"), HORIZONTAL_ALIGNMENT_CENTER, 40, 13, c)
+
+	## A small, short-lived speech bubble that never blocks much of the arena.
+	func _draw_bubble(anchor: Vector2) -> void:
+		var life: float = bear.bubble_t
+		var pop := clampf((Taunts_BUBBLE - life) / 0.15, 0.0, 1.0)
+		var fade := clampf(life / 0.3, 0.0, 1.0)
+		var cols: Array = Mode.bubble_colors()
+		var fs := 12
+		var w := font.get_string_size(bear.bubble_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 12.0
+		var h := 18.0
+		var sc := 0.6 + 0.4 * pop
+		var jitter := Vector2.ZERO
+		if Mode.horror():
+			jitter = Vector2(randf_range(-0.6, 0.6), randf_range(-0.6, 0.6))
+		draw_set_transform(anchor + jitter, 0.0, Vector2(sc, sc))
+		var r := Rect2(-w * 0.5, -h, w, h)
+		var bg: Color = cols[0]
+		var fg: Color = cols[1]
+		var ol: Color = cols[2]
+		draw_rect(r, Color(bg.r, bg.g, bg.b, bg.a * fade))
+		draw_rect(r, Color(ol.r, ol.g, ol.b, fade), false, 1.2)
+		draw_colored_polygon(PackedVector2Array([Vector2(-4, 0), Vector2(4, 0), Vector2(0, 6)]), Color(ol.r, ol.g, ol.b, fade))
+		draw_string(font, Vector2(-w * 0.5 + 6, -5), bear.bubble_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(fg.r, fg.g, fg.b, fade))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func setup(g, s: int, n: String, col: Color, spawn: Vector2i) -> void:
@@ -140,6 +179,7 @@ func setup(g, s: int, n: String, col: Color, spawn: Vector2i) -> void:
 	visual = BearVisual.new()
 	visual.source = self
 	visual.tint = col
+	_rng.randomize()
 	visual.seed_offset = s * 1.7
 	add_child(visual)
 	overlay = Overlay.new()
@@ -210,6 +250,8 @@ func _physics_process(delta: float) -> void:
 	immune_t = maxf(0.0, immune_t - delta)
 	robbed_t = maxf(0.0, robbed_t - delta)
 	immortal_t = maxf(0.0, immortal_t - delta)
+	bubble_t = maxf(0.0, bubble_t - delta)
+	taunt_cd = maxf(0.0, taunt_cd - delta)
 	infect_cd = maxf(0.0, infect_cd - delta)
 	reinfect_immune = maxf(0.0, reinfect_immune - delta)
 	if reverse_t > 0.0:
@@ -240,6 +282,7 @@ func _update_steal(delta: float) -> void:
 		if target != null:
 			if not stealing:
 				Sfx.play("squeak", 1.4, -4.0)
+				game.on_steal_started(self, target)
 			stealing = true
 			steal_target = target
 			var amount := minf(Tuning.STEAL_RATE * delta, target.fluff)
@@ -399,6 +442,7 @@ func stun(from_pos: Vector2) -> void:
 		return
 	stun_t = Tuning.STUN_TIME
 	times_stunned += 1
+	fluff_at_stun = fluff
 	stealing = false
 	steal_target = null
 	var away := position - from_pos
@@ -413,7 +457,25 @@ func _recover() -> void:
 	stun_t = 0.0
 	immune_t = Tuning.STUN_IMMUNE
 	visual.on_recover()
+	if fluff_at_stun - fluff > 10.0:
+		taunt("robbed", true)  # wakes up noticeably lighter
 	Sfx.play("pop", 1.3)
+
+
+## Show a cheeky (or creepy) line with a reaction animation and voice.
+## Cosmetic only: never affects movement. Rate-limited so it can't clutter.
+func taunt(kind: String, force := false) -> void:
+	if not game.controls_enabled() and kind != "robbed":
+		return
+	if not force and (taunt_cd > 0.0 or game.bubble_count() >= 2):
+		return
+	bubble_text = Taunts.line(kind, bear_name, _rng)
+	bubble_t = 1.7
+	taunt_cd = 4.0
+	taunt_count += 1
+	visual.play_taunt(Taunts.anim(_rng))
+	var pitch: float = Taunts.VOICE.get(bear_name, 1.0) * _rng.randf_range(0.93, 1.07) / pow(maxf(fluff_ratio(), 0.4), 0.2)
+	Sfx.play("taunt", pitch, -3.0)
 
 
 func add_fluff(amount: float) -> void:

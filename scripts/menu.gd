@@ -2,12 +2,14 @@
 extends Control
 
 signal start_requested
+signal mode_changed
 
 const UiStyle = preload("res://scripts/ui_style.gd")
 const StitchPanel = preload("res://scripts/stitch_panel.gd")
 const AudioPanel = preload("res://scripts/audio_panel.gd")
 const BearVisual = preload("res://scripts/bear_visual.gd")
 const Maps = preload("res://scripts/arena_maps.gd")
+const Mode = preload("res://scripts/mode_theme.gd")
 
 var puppets: Array = []
 var holders: Array = []
@@ -24,11 +26,11 @@ func _ready() -> void:
 	size = Vector2(1280, 720)
 
 	var title := UiStyle.label("Fluffy Bears of Doom", 64, UiStyle.ROSE_DARK)
-	title.add_theme_color_override("font_outline_color", Color("fbf5e8"))
+	title.add_theme_color_override("font_outline_color", UiStyle.PAPER)
 	title.add_theme_constant_override("outline_size", 12)
 	title.position = Vector2(48, 40)
 	add_child(title)
-	var sub := UiStyle.label("Four adorable teddy bears. One finite supply of stuffing.", 22, UiStyle.INK_SOFT)
+	var sub := UiStyle.label(Mode.text(Mode.SUBTITLE), 22, UiStyle.INK_SOFT)
 	sub.position = Vector2(54, 124)
 	add_child(sub)
 
@@ -45,7 +47,7 @@ func _ready() -> void:
 		p.fluff = fluffs[i]
 		var vis := BearVisual.new()
 		vis.source = p
-		vis.tint = colors[i]
+		vis.tint = Mode.bear_color(colors[i])
 		vis.seed_offset = i * 2.0
 		holder.add_child(vis)
 		puppets.append(p)
@@ -56,19 +58,36 @@ func _ready() -> void:
 		cap.size = Vector2(120, 50)
 		add_child(cap)
 
-	var blurb := UiStyle.label("Confetti bombs don't hurt - they stun. Hold Steal beside a stunned bear to pull out its fluff.\nThe more you steal, the rounder, wobblier and harder to stop you become.", 16, UiStyle.INK)
+	var blurb := UiStyle.label(Mode.text(Mode.BLURB), 16, UiStyle.INK)
 	blurb.position = Vector2(54, 560)
 	blurb.size = Vector2(640, 60)
 	blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(blurb)
 
 	var panel := StitchPanel.new()
-	panel.position = Vector2(740, 90)
-	panel.size = Vector2(500, 540)
+	panel.position = Vector2(740, 70)
+	panel.size = Vector2(500, 590)
 	add_child(panel)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	panel.add_child(v)
+
+	# Normal / Horror: same game, different nursery. Switches immediately.
+	var mrow := HBoxContainer.new()
+	mrow.add_theme_constant_override("separation", 12)
+	mrow.add_child(_fixed(UiStyle.label("Mode", 24, UiStyle.ROSE_DARK), 140))
+	var group := ButtonGroup.new()
+	for m in [["Normal", "normal"], ["Horror", "horror"]]:
+		var mb := Button.new()
+		mb.text = m[0]
+		mb.toggle_mode = true
+		mb.button_group = group
+		mb.button_pressed = Settings.mode == m[1]
+		mb.custom_minimum_size = Vector2(106, 38)
+		var mode_id: String = m[1]
+		mb.pressed.connect(func(): _set_mode(mode_id))
+		mrow.add_child(mb)
+	v.add_child(mrow)
 
 	var prow := HBoxContainer.new()
 	prow.add_theme_constant_override("separation", 12)
@@ -91,7 +110,7 @@ func _ready() -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
 		var sw := ColorRect.new()
-		sw.color = Settings.AI_COLORS[i]
+		sw.color = Mode.bear_color(Settings.AI_COLORS[i])
 		sw.custom_minimum_size = Vector2(22, 22)
 		sw.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(sw)
@@ -174,6 +193,15 @@ func _ready() -> void:
 	_refresh()
 	start_button.grab_focus()
 	Music.play_context("menu")
+
+
+func _set_mode(m: String) -> void:
+	if m == Settings.mode:
+		return
+	Settings.set_mode(m)
+	Settings.save()
+	Sfx.play("mode")
+	mode_changed.emit()  # main rebuilds the menu in the new look; music switches
 
 
 func _fixed(c: Control, w: float) -> Control:
@@ -262,8 +290,8 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	UiStyle.draw_wallpaper(self, Rect2(Vector2.ZERO, size))
-	draw_rect(Rect2(40, 380, 640, 90), Color(0.9, 0.82, 0.74, 0.8))
-	UiStyle.stitch_rect(self, Rect2(46, 386, 628, 78), Color(0.7, 0.5, 0.48, 0.6), 1.6, 6.0)
+	draw_rect(Rect2(40, 380, 640, 90), Color(UiStyle.FRAME, 0.8))
+	UiStyle.stitch_rect(self, Rect2(46, 386, 628, 78), Color(UiStyle.ROSE_DARK, 0.6), 1.6, 6.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:

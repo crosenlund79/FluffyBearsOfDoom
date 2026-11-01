@@ -32,24 +32,55 @@ In the last 3 seconds she flashes and the cells she will hit are outlined. Then 
 and the confetti **flows around corners** for up to 4 grid steps, stunning any bear it reaches.
 Spawn timing, countdown, speed and reach are the `DUCK_*` values in `scripts/tuning.gd`.
 
+## Normal & Horror mode
+Choose the mode at the top of the menu. The change applies immediately and is saved.
+Gameplay is identical in both modes; only the presentation changes.
+- **Normal:** cute plush bears, playful taunts, stuffing puffs and confetti, cheerful sounds.
+- **Horror:** grimy stitched bears with mismatched, glowing eyes, creepy taunts, blood splatters,
+  a darker, flickering nursery with a vignette, twitchy idle animations, crows and skulls
+  circling stunned bears, and darker sounds.
+
+**Taunts:** a bear gloats when its bomb stuns someone, mocks bombers who stun themselves,
+crows when it starts stealing, and complains when it wakes up robbed. Each taunt is a short
+bubble with a reaction animation and a voice. The animations are purely visual and never
+block movement, and taunts are rate-limited (at most 2 bubbles on screen at once). Edit the
+lines and per-bear quips in `scripts/taunts.gd`. Mode palettes and tints are in
+`scripts/mode_theme.gd`.
+
 ## Music & sound
-- **Menu music:** `assets/audio/music/menu/`. **Gameplay music:** `assets/audio/music/gameplay/`.
-  Put `.mp3`, `.ogg` or `.wav` files there; they are found automatically. Tracks play in
-  sequence or shuffled and loop. Music fades out when you switch between the menu and a match,
-  and an empty folder just means silence. Godot imports these files, so they are packed into
-  exported Windows builds (the `Windows Desktop` preset in `export_presets.cfg`).
-- **After exporting**, you can also add `.mp3`/`.ogg` files without re-exporting by placing them in
-  `music/menu/` or `music/gameplay/` next to the `.exe`, or in `user://music/<menu|gameplay>/`.
-- **Sound effects:** put a file named after the sound in `assets/audio/sfx/` (ogg/wav/mp3) to
-  replace the generated placeholder. The names are `place fuse confetti concussion steal pickup
-  curse squeak bump kick boing pop menu tick go shuffle immortal victory`. Duck parade sounds:
-  `portal clock_tick quack duckling_quack duck_warning duck_confetti`.
+- **Music folders** (`.mp3` / `.ogg` / `.wav`, found automatically):
+
+  | | Normal | Horror |
+  |---|---|---|
+  | Menu | `assets/audio/music/menu/normal/` | `assets/audio/music/menu/horror/` |
+  | Gameplay | `assets/audio/music/gameplay/normal/` | `assets/audio/music/gameplay/horror/` |
+
+  Files placed loose in `menu/` or `gameplay/` are shared by both modes. If a Horror folder is
+  empty, the Normal tracks play slowed and detuned instead. An empty Normal folder just means
+  silence. Switching between screens fades the music out first.
+- **Exported builds:** these tracks are imported and packed automatically (see the
+  `Windows Desktop` preset in `export_presets.cfg`). You can also add `.mp3`/`.ogg` files later
+  under `music/<menu|gameplay>/<normal|horror>/` next to the `.exe`.
+- **Sound effects:** put a file named after the sound in `assets/audio/sfx/` to replace it in both
+  modes, or in `assets/audio/sfx/horror/` to replace it in Horror only. In Horror the order is
+  `sfx/horror/<name>` → `sfx/<name>` → built-in horror sound → built-in normal sound (played
+  slower). The names are `place fuse confetti concussion steal pickup curse squeak bump kick boing
+  pop menu tick go shuffle immortal victory taunt mode`, plus the duck parade sounds `portal
+  clock_tick quack duckling_quack duck_warning duck_confetti`.
 - Volumes, mute and shuffle are set from Menu → Audio (also in the pause menu) and saved to
-  `user://settings.cfg`. One music volume covers both playlists. N skips to the next track.
+  `user://settings.cfg`. N skips to the next track.
 
 ## Replacing the art
 Every placeholder is named `template_<name>.png`. To replace one, put `<name>.png` in the **same
-folder**. The game uses your file when it exists and falls back to the template otherwise. The
+folder** (both modes), or in that folder's `horror/` sub-folder (Horror only). For each sprite
+the game uses the first file that exists:
+1. `<folder>/<mode>/<name>.png`: your mode-specific art
+2. `<folder>/<name>.png`: your shared art
+3. `<folder>/<mode>/template_<name>.png`: the built-in mode placeholder
+4. `<folder>/template_<name>.png`: the built-in placeholder
+
+Horror placeholders exist for `bears`, `tiles` and `effects`. Everything else is shared and
+tinted darker in code. The
 generator (`tools/generate_placeholders.py`) only ever writes `template_` files. Sheets are a
 single row, and the cell size is `image width / cell count`, so you can use any resolution.
 Draw each part centred in its cell.
@@ -62,7 +93,7 @@ Draw each part centred in its cell.
 | `objects/template_fluff.png` | 32×32 | a tuft of stuffing |
 | `objects/template_duck.png` | 128×64 | 2 cells: wind-up pull-along duck facing right (shared by mother and ducklings at different scales), wind-up key |
 | `powerups/template_powerups.png` | 640×64 | 10 cells: bomb, blast, speed, shuffle, kick, line, rubber, immortality, reverse, diarrhea |
-| `effects/template_effects.png` | 448×64 | 7 cells: confetti centre, confetti arm (horizontal), confetti end (pointing right), star, dust, sparkle, cartoon bird (facing right) |
+| `effects/template_effects.png` | 512×64 | 8 cells: blast centre, blast arm (horizontal), blast end (pointing right), star, dust, sparkle, cartoon bird (facing right), floor splat decal. In Horror: blood bursts, a skull, a crow and a blood splatter. |
 
 ## Tuning
 All gameplay numbers are in `scripts/tuning.gd`: the fluff→mass curve, braking, bombs,

@@ -35,7 +35,7 @@ class BearCard extends Control:
 
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, size)
-		var bg := Color("fbf5e8")
+		var bg := UiStyle.PAPER
 		draw_rect(r, bg)
 		draw_rect(Rect2(0, 0, 8, size.y), bear.color)
 		UiStyle.stitch_rect(self, r.grow(-5), Color(bear.color.darkened(0.2), 0.7), 1.4, 5.0)
@@ -51,11 +51,11 @@ class BearCard extends Control:
 		if bear.is_stunned():
 			for ex in [-1.0, 1.0]:
 				var e := Vector2(c.x + ex * rad * 0.4, eye_y)
-				draw_line(e - Vector2(3, 3), e + Vector2(3, 3), UiStyle.INK, 2.0)
-				draw_line(e - Vector2(3, -3), e + Vector2(3, -3), UiStyle.INK, 2.0)
+				draw_line(e - Vector2(3, 3), e + Vector2(3, 3), Color("2b2220"), 2.0)
+				draw_line(e - Vector2(3, -3), e + Vector2(3, -3), Color("2b2220"), 2.0)
 		else:
-			draw_circle(Vector2(c.x - rad * 0.4, eye_y), 2.8, UiStyle.INK)
-			draw_circle(Vector2(c.x + rad * 0.4, eye_y), 2.8, UiStyle.INK)
+			draw_circle(Vector2(c.x - rad * 0.4, eye_y), 2.8, Color("2b2220"))
+			draw_circle(Vector2(c.x + rad * 0.4, eye_y), 2.8, Color("2b2220"))
 		draw_circle(c + Vector2(0, rad * 0.25), 2.6, Color("4a3127"))
 		# name + controller
 		draw_string(font, Vector2(84, 32), bear.bear_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, UiStyle.INK)
@@ -65,7 +65,7 @@ class BearCard extends Control:
 		draw_string(font, Vector2(size.x - 220, 40), "%d" % roundi(shown), HORIZONTAL_ALIGNMENT_RIGHT, 200, 30, UiStyle.INK)
 		draw_string(font, Vector2(size.x - 220, 58), "fluff", HORIZONTAL_ALIGNMENT_RIGHT, 200, 13, UiStyle.INK_SOFT)
 		var bar := Rect2(84, 64, size.x - 170, 10)
-		draw_rect(bar, Color("eadfcb"))
+		draw_rect(bar, UiStyle.BAR)
 		var frac := clampf(shown / (Tuning.START_FLUFF * 4.0), 0.0, 1.0)
 		draw_rect(Rect2(bar.position, Vector2(bar.size.x * frac, bar.size.y)), bear.color)
 		draw_rect(Rect2(bar.position + Vector2(bar.size.x * 0.25, 0), Vector2(1, bar.size.y)), Color(0.4, 0.3, 0.25, 0.4))
@@ -94,13 +94,13 @@ class BearCard extends Control:
 			scol = UiStyle.ROSE_DARK
 		elif bear.stealing:
 			status = "stealing stuffing..."
-			scol = Color("6c8f5e")
+			scol = UiStyle.GOOD
 		elif bear.robbed_t > 0.0:
 			status = "robbed!!"
 			scol = UiStyle.ROSE_DARK
 		elif not timed.is_empty():
 			status = " · ".join(timed)
-			scol = Color("b08a2e") if bear.immortal_t > 0.0 and timed.size() == 1 else Color("7a5a8c")
+			scol = UiStyle.GOLD if bear.immortal_t > 0.0 and timed.size() == 1 else UiStyle.CURSE
 		elif g > 2.5:
 			status = "dangerously huggable"
 		elif g < 0.4:
@@ -144,7 +144,7 @@ func setup(g) -> void:
 	side.add_child(help)
 
 	banner_label = UiStyle.label("", 64, UiStyle.ROSE_DARK)
-	banner_label.add_theme_color_override("font_outline_color", Color("fbf5e8"))
+	banner_label.add_theme_color_override("font_outline_color", UiStyle.PAPER)
 	banner_label.add_theme_constant_override("outline_size", 14)
 	banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -190,7 +190,7 @@ func banner(text: String, duration: float) -> void:
 func toast(text: String, col: Color) -> void:
 	var l := UiStyle.label(text, 18, col.darkened(0.45))
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.add_theme_color_override("font_outline_color", Color("fbf5e8"))
+	l.add_theme_color_override("font_outline_color", UiStyle.PAPER)
 	l.add_theme_constant_override("outline_size", 8)
 	toast_box.add_child(l)
 	if toast_box.get_child_count() > 3:

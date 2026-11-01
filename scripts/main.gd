@@ -9,6 +9,8 @@ var current: Node
 
 func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--mode="):
+			Settings.set_mode(a.get_slice("=", 1))  # dev/test override, not saved
 		if a.begins_with("--menu-shot="):
 			show_menu()
 			await get_tree().create_timer(1.5).timeout
@@ -18,6 +20,12 @@ func _ready() -> void:
 	# `godot -- --autotest` runs an all-AI match and prints the result (for CI / smoke tests).
 	if "--autotest" in OS.get_cmdline_user_args():
 		Settings.human_count = 0
+		for a in OS.get_cmdline_user_args():
+			if a == "--assets":
+				for rel in ["bears/bear", "tiles/tiles", "effects/effects", "objects/bomb", "objects/duck"]:
+					print("asset %s [%s] -> %s" % [rel, Settings.mode, Assets.resolve(rel)])
+				get_tree().quit()
+				return
 		Settings.ai_levels = ["easy", "normal", "hard"]
 		Settings.round_time_index = 0
 		for a in OS.get_cmdline_user_args():
@@ -58,7 +66,12 @@ func _autotest() -> void:
 			if a.begins_with("--shots="):
 				get_viewport().get_texture().get_image().save_png("%s/shot_%03d.png" % [a.get_slice("=", 1), int((90.0 - g.time_left) * 10.0)])
 	await get_tree().create_timer(1.0).timeout
-	print("music context=%s menu_tracks=%d gameplay_tracks=%d playing=%s" % [Music.context, Music.playlists["menu"].size(), Music.playlists["gameplay"].size(), Music.title])
+	var counts := []
+	for k in Music.playlists:
+		counts.append("%s:%d" % [k, Music.playlists[k].size()])
+	print("music context=%s playing=%s tracks=%s" % [Music.context, Music.title, ", ".join(counts)])
+	for b in g.bears:
+		print("%s taunts=%d" % [b.bear_name, b.taunt_count])
 	for b in g.bears:
 		print("%s fluff=%d stole=%d stunned=%d bombs=%d range=%d speed=%d" % [b.bear_name, roundi(b.fluff), roundi(b.stolen_total), b.times_stunned, b.bombs_max, b.bomb_range, b.speed_level])
 	get_tree().quit()
@@ -68,6 +81,7 @@ func show_menu() -> void:
 	var m := Menu.new()
 	_swap(m)
 	m.start_requested.connect(start_game)
+	m.mode_changed.connect(show_menu)
 
 
 func start_game() -> void:

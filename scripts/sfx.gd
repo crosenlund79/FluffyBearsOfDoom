@@ -1,11 +1,15 @@
-## Sound effects. Each is a tiny procedural placeholder; drop a file with the
-## same name (ogg / wav / mp3) into res://assets/audio/sfx/ to replace it,
-## e.g. assets/audio/sfx/concussion.ogg.
+## Sound effects. Each is a tiny procedural placeholder. To replace one, drop
+## a file with the same name (ogg / wav / mp3) into res://assets/audio/sfx/
+## (both modes) or res://assets/audio/sfx/horror/ (Horror only).
+## Lookup in Horror: sfx/horror/<name> -> sfx/<name> -> built-in horror
+## placeholder -> built-in normal placeholder (played lower and slower).
 extends Node
 
 const RATE := 22050
 const SFX_DIR := "res://assets/audio/sfx/"
 var _streams := {}
+var _horror := {}       # built-in horror variants
+var _over := {}         # "normal" / "horror" -> {name: replacement}
 var _players: Array[AudioStreamPlayer] = []
 
 
@@ -43,16 +47,70 @@ func _ready() -> void:
 	_streams["duckling_quack"] = _wav(_quack(0.11, 560.0))
 	_streams["duck_warning"] = _tone(0.06, 1760.0, 1760.0, 0.3, 0.0, 0.0)
 	_streams["duck_confetti"] = _concat([_quack(0.16, 300.0), _confetti_samples(0.9)])
+	_streams["taunt"] = _concat([_samples(0.07, 700.0, 1100.0, 0.35, 0.0, 0.0), _samples(0.07, 900.0, 1300.0, 0.35, 0.0, 0.0), _samples(0.12, 800.0, 1500.0, 0.35, 12.0, 0.0)])
+	_streams["mode"] = _concat([_samples(0.08, 784.0, 784.0, 0.35, 0.0, 0.0), _samples(0.08, 988.0, 988.0, 0.35, 0.0, 0.0), _samples(0.2, 1175.0, 1175.0, 0.3, 6.0, 0.0)])
+	_build_horror()
+	_over = {"normal": {}, "horror": {}}
 	for n in _streams.keys():
 		for ext in ["ogg", "wav", "mp3"]:
-			var path: String = SFX_DIR + n + "." + ext
-			if ResourceLoader.exists(path):
-				_streams[n] = load(path)
-				break
+			var shared: String = SFX_DIR + n + "." + ext
+			var horror: String = SFX_DIR + "horror/" + n + "." + ext
+			if not _over["normal"].has(n) and ResourceLoader.exists(shared):
+				_over["normal"][n] = load(shared)
+			if not _over["horror"].has(n) and ResourceLoader.exists(horror):
+				_over["horror"][n] = load(horror)
+
+
+## Darker built-in variants for Horror mode.
+func _build_horror() -> void:
+	_horror["taunt"] = _wav(_chuckle())
+	_horror["confetti"] = _wav(_splat(0.5))
+	_horror["duck_confetti"] = _concat([_quack(0.2, 180.0), _splat(0.9)])
+	_horror["concussion"] = _concat([_bonk(), _samples(0.08, 0.0, 0.0, 0.0, 0.0, 0.0), _samples(0.35, 900.0, 500.0, 0.3, 6.0, 0.45)])
+	_horror["pickup"] = _concat([_samples(0.1, 330.0, 330.0, 0.4, 0.0, 0.0), _samples(0.18, 311.0, 311.0, 0.4, 4.0, 0.0)])
+	_horror["victory"] = _concat([_samples(0.25, 440.0, 440.0, 0.4, 0.0, 0.0), _samples(0.25, 415.0, 415.0, 0.4, 0.0, 0.0), _samples(0.25, 392.0, 392.0, 0.4, 0.0, 0.0), _samples(0.6, 370.0, 370.0, 0.4, 5.0, 0.0)])
+	_horror["mode"] = _concat([_samples(0.5, 110.0, 70.0, 0.5, 3.0, 0.2), _samples(0.4, 233.0, 220.0, 0.25, 8.0, 0.3)])
+	_horror["steal"] = _wav(_splat(0.08))
+
+
+## A low, breathy "heh heh heh".
+func _chuckle() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for k in 3:
+		out.append_array(_samples(0.11, 150.0 - k * 12.0, 110.0, 0.4, 0.0, 0.55))
+		out.append_array(_samples(0.05, 0.0, 0.0, 0.0, 0.0, 0.0))
+	return out
+
+
+## A wet, muffled splat.
+func _splat(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var lp := 0.0
+	for i in n:
+		var k := float(i) / n
+		lp = lerpf(lp, randf_range(-1.0, 1.0), 0.05 + 0.1 * (1.0 - k))
+		var drip := 0.0
+		if randf() < 0.004 * (1.0 - k):
+			drip = randf_range(-0.6, 0.6)
+		out[i] = (lp * 2.2 * pow(1.0 - k, 2.5) + drip) * 0.6
+	return out
 
 
 func play(sound: String, pitch := 1.0, volume_db := 0.0) -> void:
-	var s = _streams.get(sound)
+	var s = null
+	if Settings.mode == "horror":
+		s = _over["horror"].get(sound)
+		if s == null:
+			s = _over["normal"].get(sound)
+		if s == null:
+			s = _horror.get(sound)
+		if s == null:
+			s = _streams.get(sound)
+			pitch *= 0.8  # borrowed cheerful placeholder, slowed into something worse
+	else:
+		s = _over["normal"].get(sound, _streams.get(sound))
 	if s == null:
 		return
 	for p in _players:

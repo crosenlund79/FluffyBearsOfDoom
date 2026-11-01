@@ -548,7 +548,7 @@ def make_powerups():
 
 
 # ---------------------------------------------------------------- effects
-# 7 cells of 64x64: 0 confetti burst (blast centre), 1 confetti band (blast arm, horizontal),
+# 8 cells of 64x64 (cell 7 = floor decal left where a bear got stunned): 0 confetti burst (blast centre), 1 confetti band (blast arm, horizontal),
 # 2 confetti tip (blast end, pointing right), 3 star, 4 dust puff, 5 sparkle, 6 cartoon bird
 def confetti_pieces(c, n, box, size=(3.5, 2.2), seed=0):
     rnd = random.Random(seed)
@@ -644,7 +644,7 @@ def fx_bird():
 
 
 def make_effects():
-    cells = [fx_center(), fx_arm(), fx_end(), fx_star(), fx_dust(), fx_sparkle(), fx_bird()]
+    cells = [fx_center(), fx_arm(), fx_end(), fx_star(), fx_dust(), fx_sparkle(), fx_bird(), fx_stuffing_splat()]
     sheet = Image.new("RGBA", (64 * len(cells), 64), (0, 0, 0, 0))
     for i, im in enumerate(cells):
         paste(sheet, im, i * 64, 0)
@@ -707,6 +707,217 @@ def make_duck():
     return sheet
 
 
+def fx_stuffing_splat():
+    """Normal mode floor decal: a scatter of stuffing tufts."""
+    c = Canvas(64, 64)
+    rnd = random.Random(11)
+    for i in range(9):
+        x, y = 32 + rnd.uniform(-20, 20), 32 + rnd.uniform(-14, 14)
+        r = rnd.uniform(3, 7)
+        c.ellipse(x, y + 1, r, r * 0.85, fill=rgba("d9d2ca"))
+        c.ellipse(x, y, r * 0.9, r * 0.75, fill=rgba("fffdf8"))
+    return c.result()
+
+
+# ---------------------------------------------------------------- horror mode
+# Same layouts as the normal sheets, saved in <folder>/horror/template_*.png.
+BLOOD = "8a0f18"
+BLOOD_DARK = "4f070c"
+
+
+def grim(img, bright=0.62, sat=0.45):
+    """Dim and desaturate an existing image (keeps alpha)."""
+    from PIL import ImageEnhance
+    a = img.getchannel("A")
+    rgb = ImageEnhance.Color(img.convert("RGB")).enhance(sat)
+    rgb = ImageEnhance.Brightness(rgb).enhance(bright)
+    out = rgb.convert("RGBA")
+    out.putalpha(a)
+    return out
+
+
+def scar(c, pts, col=BLOOD_DARK):
+    c.line(pts, rgba(col), 1.6)
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+        dx, dy = (y1 - y0) * 0.25, (x0 - x1) * 0.25
+        c.line([(mx - dx, my - dy), (mx + dx, my + dy)], rgba("2a1a18"), 1.4)
+
+
+def horror_part(index):
+    base = make_bear().crop((index * BEAR_CELL, 0, (index + 1) * BEAR_CELL, BEAR_CELL))
+    base = grim(base, 0.86, 0.5)
+    c = Canvas(128, 128)
+    if index == 0:  # body: torn seam with stuffing bulging out
+        scar(c, [(40, 40), (52, 50), (46, 64), (58, 76)])
+        c.ellipse(76, 86, 11, 8, fill=rgba("3a2422"))
+        for (x, y, r) in ((72, 84, 5), (80, 86, 5), (76, 81, 4)):
+            c.ellipse(x, y, r, r, fill=rgba("d9cfc4"))
+        c.ellipse(70, 96, 7, 4, fill=rgba(BLOOD, 170))
+    elif index == 1:  # belly: stain
+        c.ellipse(70, 74, 14, 10, fill=rgba(BLOOD, 120))
+        c.ellipse(58, 60, 6, 4, fill=rgba(BLOOD, 90))
+    elif index == 2:  # head: stitched scar across the scalp
+        scar(c, [(30, 40), (50, 30), (74, 34), (92, 26)])
+    over = c.result()
+    base.alpha_composite(over)
+    return base
+
+
+def horror_eye_button(c, x, y, r=8.5, glow=False):
+    c.ellipse(x, y, r, r, fill=rgba("120c0c"))
+    for dx, dy in ((-2.2, -2.2), (2.2, -2.2), (-2.2, 2.2), (2.2, 2.2)):
+        c.ellipse(x + dx, y + dy, 1.2, 1.2, fill=rgba("3a2a2a"))
+    if glow:
+        c.ellipse(x, y, r * 0.38, r * 0.38, fill=rgba("e0262f"))
+        c.ellipse(x, y, r * 0.16, r * 0.16, fill=rgba("ffd0c0"))
+
+
+def horror_face_base(c):
+    c.ellipse(64, 84, 22, 16, fill=rgba("b9a796"))
+    c.dashed_ellipse(64, 84, 22, 16, rgba("5a463c"), 1.0, 26)
+    c.ellipse(64, 76, 7, 5, fill=rgba("1c1212"))
+
+
+def jagged_grin(c, y, w, open_mouth=False):
+    pts = [(64 - w + i * (2 * w / 8), y + (3 if i % 2 else -2)) for i in range(9)]
+    if open_mouth:
+        c.polygon(pts + [(64 + w * 0.7, y + 9), (64 - w * 0.7, y + 9)], fill=rgba("1a0b0c"))
+    c.line(pts, rgba("1a0b0c"), 1.8)
+    for x, yy in pts[1:-1:2]:
+        c.line([(x, yy - 3), (x, yy + 3)], rgba(BLOOD), 1.2)
+
+
+def horror_face(kind):
+    c = Canvas(128, 128)
+    horror_face_base(c)
+    if kind == "normal":  # mismatched: one button, one cross-stitch
+        horror_eye_button(c, 42, 58)
+        c.line([(79, 51), (93, 65)], rgba("1a0b0c"), 3)
+        c.line([(93, 51), (79, 65)], rgba("1a0b0c"), 3)
+        jagged_grin(c, 88, 12)
+    elif kind == "smug":  # glowing eyes, wide stitched grin
+        horror_eye_button(c, 42, 58, glow=True)
+        horror_eye_button(c, 86, 58, glow=True)
+        jagged_grin(c, 90, 20, open_mouth=True)
+    elif kind == "indignant":  # hollow eyes, gaping mouth
+        horror_eye_button(c, 42, 60, 10, glow=True)
+        horror_eye_button(c, 86, 60, 7, glow=True)
+        c.line([(30, 44), (54, 54)], rgba("1a0b0c"), 2.6)
+        c.line([(98, 44), (74, 54)], rgba("1a0b0c"), 2.6)
+        c.ellipse(64, 92, 7, 8, fill=rgba("1a0b0c"))
+    else:  # stunned: X-eyes weeping red
+        for x in (42, 86):
+            c.line([(x - 7, 51), (x + 7, 65)], rgba("1a0b0c"), 3.2)
+            c.line([(x + 7, 51), (x - 7, 65)], rgba("1a0b0c"), 3.2)
+            c.line([(x, 66), (x + 1, 80)], rgba(BLOOD), 2.0)
+            c.ellipse(x + 1, 81, 2, 2.5, fill=rgba(BLOOD))
+        jagged_grin(c, 90, 10)
+    return c.result()
+
+
+def make_horror_bear():
+    sheet = Image.new("RGBA", (BEAR_CELL * 10, BEAR_CELL), (0, 0, 0, 0))
+    for i in range(6):
+        paste(sheet, horror_part(i), i * BEAR_CELL, 0)
+    for i, kind in enumerate(("normal", "smug", "indignant", "stunned")):
+        paste(sheet, horror_face(kind), (6 + i) * BEAR_CELL, 0)
+    return sheet
+
+
+def make_horror_tiles():
+    sheet = grim(make_tiles(), 0.55, 0.4)
+    c = Canvas(sheet.width, sheet.height)
+    rnd = random.Random(5)
+    for cell in (0, 1, 2, 3, 4, 5):  # stains on the floors
+        for _ in range(2):
+            x, y = cell * 64 + rnd.uniform(10, 54), rnd.uniform(10, 54)
+            c.ellipse(x, y, rnd.uniform(4, 9), rnd.uniform(3, 6), fill=rgba(BLOOD_DARK, 110))
+    for x0 in (6 * 64, 8 * 64):  # claw scratches on wood
+        for k in range(3):
+            c.line([(x0 + 18 + k * 7, 10), (x0 + 30 + k * 7, 40)], rgba("1a0f0c", 150), 1.4)
+    sheet.alpha_composite(c.result())
+    return sheet
+
+
+def blood_blobs(c, blobs, drops=8, seed=0):
+    rnd = random.Random(seed)
+    for (x, y, r) in blobs:
+        c.ellipse(x, y + 1.5, r, r, fill=rgba(BLOOD_DARK))
+        c.ellipse(x, y, r * 0.92, r * 0.92, fill=rgba(BLOOD))
+        c.ellipse(x - r * 0.3, y - r * 0.35, r * 0.25, r * 0.15, fill=(255, 200, 200, 90))
+    for _ in range(drops):
+        x, y = rnd.uniform(4, 60), rnd.uniform(6, 58)
+        c.ellipse(x, y, rnd.uniform(1.2, 2.6), rnd.uniform(1.2, 2.6), fill=rgba(BLOOD))
+
+
+def hfx_center():
+    c = Canvas(64, 64)
+    blood_blobs(c, [(32, 32, 14)] + [(32 + math.cos(a) * 15, 32 + math.sin(a) * 15, 7)
+                                       for a in [i * math.pi / 4 for i in range(8)]], 12, 1)
+    return c.result()
+
+
+def hfx_arm():
+    c = Canvas(64, 64)
+    blood_blobs(c, [(x, 32 + (3 if i % 2 else -3), 9) for i, x in enumerate(range(0, 72, 11))], 8, 2)
+    return c.result()
+
+
+def hfx_end():
+    c = Canvas(64, 64)
+    blood_blobs(c, [(0, 32, 9), (11, 30, 9), (22, 33, 8), (31, 31, 6), (38, 33, 4)], 6, 3)
+    return c.result()
+
+
+def hfx_skull():
+    c = Canvas(64, 64)
+    c.ellipse(32, 28, 18, 16, fill=rgba("e6dccb"))
+    c.rect(22, 34, 42, 48, fill=rgba("e6dccb"), radius=4)
+    c.ellipse(25, 28, 5, 6, fill=rgba("1a0f0f"))
+    c.ellipse(39, 28, 5, 6, fill=rgba("1a0f0f"))
+    c.polygon([(32, 33), (29, 39), (35, 39)], fill=rgba("1a0f0f"))
+    for x in (26, 30, 34, 38):
+        c.line([(x, 43), (x, 48)], rgba("1a0f0f"), 1.2)
+    return c.result()
+
+
+def hfx_crow():
+    c = Canvas(64, 64)
+    ink = rgba("15100f")
+    c.polygon([(14, 34), (2, 26), (5, 40)], fill=ink)
+    c.ellipse(28, 36, 15, 11, fill=ink)
+    c.ellipse(41, 26, 9, 9, fill=ink)
+    c.polygon([(48, 24), (60, 28), (48, 31)], fill=rgba("3a3330"))
+    c.ellipse(43, 24, 2.2, 2.2, fill=rgba("e0262f"))
+    c.polygon([(18, 30), (34, 28), (22, 16)], fill=rgba("2a2220"))
+    c.line([(26, 46), (25, 53)], rgba("3a3330"), 1.6)
+    c.line([(31, 46), (32, 53)], rgba("3a3330"), 1.6)
+    return c.result()
+
+
+def hfx_splat():
+    c = Canvas(64, 64)
+    rnd = random.Random(9)
+    blobs = [(32, 32, 12)] + [(32 + rnd.uniform(-20, 20), 32 + rnd.uniform(-16, 16), rnd.uniform(3, 7)) for _ in range(9)]
+    for (x, y, r) in blobs:
+        c.ellipse(x, y, r, r * 0.8, fill=rgba(BLOOD))
+    for _ in range(14):
+        c.ellipse(rnd.uniform(4, 60), rnd.uniform(6, 58), rnd.uniform(0.8, 2), rnd.uniform(0.8, 2), fill=rgba(BLOOD))
+    return c.result()
+
+
+def make_horror_effects():
+    normal = make_effects()
+    cell = lambda i: normal.crop((i * 64, 0, (i + 1) * 64, 64))
+    cells = [hfx_center(), hfx_arm(), hfx_end(), hfx_skull(), grim(cell(4), 0.45, 0.3), grim(cell(5), 0.9, 0.2),
+             hfx_crow(), hfx_splat()]
+    sheet = Image.new("RGBA", (64 * len(cells), 64), (0, 0, 0, 0))
+    for i, im in enumerate(cells):
+        paste(sheet, im, i * 64, 0)
+    return sheet
+
+
 def make_icon():
     # a tinted bear head for the project icon
     bear = make_bear()
@@ -745,4 +956,7 @@ if __name__ == "__main__":
     save(make_duck(), "objects", "template_duck.png")
     save(make_powerups(), "powerups", "template_powerups.png")
     save(make_effects(), "effects", "template_effects.png")
+    save(make_horror_bear(), "bears", "horror", "template_bear.png")
+    save(make_horror_tiles(), "tiles", "horror", "template_tiles.png")
+    save(make_horror_effects(), "effects", "horror", "template_effects.png")
     make_icon().save(os.path.join(ROOT, "..", "..", "icon.png"))

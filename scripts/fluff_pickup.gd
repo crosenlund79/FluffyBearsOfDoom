@@ -37,5 +37,5 @@ func _draw() -> void:
 	draw_set_transform(Vector2(0, 8), 0.0, Vector2(1, 0.4))
 	draw_circle(Vector2.ZERO, s * 0.4, Color(0.3, 0.2, 0.15, 0.18))
 	draw_set_transform(Vector2(0, -hop), sin(t * 2.0) * 0.2, Vector2.ONE)
-	draw_texture_rect(tex, Rect2(-s * 0.5, -s * 0.5, s, s), false)
+	draw_texture_rect(tex, Rect2(-s * 0.5, -s * 0.5, s, s), false, preload("res://scripts/mode_theme.gd").stuffing_color())
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

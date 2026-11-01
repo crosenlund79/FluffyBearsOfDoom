@@ -20,6 +20,8 @@ const AiController = preload("res://scripts/ai_controller.gd")
 const HudScript = preload("res://scripts/hud.gd")
 const UiStyle = preload("res://scripts/ui_style.gd")
 const DuckParade = preload("res://scripts/duck_parade.gd")
+const Mode = preload("res://scripts/mode_theme.gd")
+const DecalScript = preload("res://scripts/decal.gd")
 
 enum State { COUNTDOWN, PLAYING, ENDED }
 
@@ -42,6 +44,10 @@ var hud
 var bears: Array = []
 var bombs: Array = []
 var flames := {}      # Vector2i -> seconds left
+var flame_owner := {} # Vector2i -> bear whose bomb made it (for taunts)
+var decal_layer: Node2D
+var world_tint: CanvasModulate
+var _flicker := 0.0
 var powerups := {}    # Vector2i -> power-up node
 var pickups: Array = []
 var shuffle_events: Array = []
@@ -66,6 +72,7 @@ func _ready() -> void:
 	add_child(arena)
 	arena.setup(Maps.MAPS[Settings.arena_index], rng, PowerupScript.WEIGHTS)
 
+	decal_layer = _layer(1)
 	powerup_layer = _layer(1)
 	bomb_layer = _layer(2)
 	duck_layer = _layer(4)
@@ -80,7 +87,7 @@ func _ready() -> void:
 		var r: Dictionary = roster[i]
 		var b = BearScript.new()
 		bear_layer.add_child(b)
-		b.setup(self, i, r["name"], r["color"], ArenaScript.SPAWNS[i])
+		b.setup(self, i, r["name"], Mode.bear_color(r["color"]), ArenaScript.SPAWNS[i])
 		if r["controller"] == "human":
 			b.is_human = true
 			b.controller = HumanController.new(b, r["schemes"])
@@ -90,12 +97,54 @@ func _ready() -> void:
 			b.ctrl_label = Settings.LEVEL_LABELS[Settings.LEVELS.find(r["controller"])] + " AI"
 		bears.append(b)
 	Music.play_context("gameplay")
+	_setup_mode_atmosphere()
 
 	hud = HudScript.new()
 	add_child(hud)
 	hud.setup(self)
 	hud.banner("3", 1.0)
 	Sfx.play("tick")
+
+
+## Darker, flickering nursery with a vignette in Horror mode.
+func _setup_mode_atmosphere() -> void:
+	world_tint = CanvasModulate.new()
+	world_tint.color = Mode.world_modulate()
+	add_child(world_tint)
+	if not Mode.horror():
+		return
+	var layer := CanvasLayer.new()
+	layer.layer = 5
+	add_child(layer)
+	var grad := Gradient.new()
+	grad.set_color(0, Color(0, 0, 0, 0))
+	grad.set_color(1, Color(0.05, 0.0, 0.01, 0.75))
+	grad.add_point(0.55, Color(0, 0, 0, 0.05))
+	var gt := GradientTexture2D.new()
+	gt.gradient = grad
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.05, 1.05)
+	gt.width = 256
+	gt.height = 256
+	var tr := TextureRect.new()
+	tr.texture = gt
+	tr.position = Vector2(-40, -60)
+	tr.size = Vector2(840, 840)  # centred on the arena; the HUD side stays readable
+	tr.stretch_mode = TextureRect.STRETCH_SCALE
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(tr)
+
+
+func _process(delta: float) -> void:
+	if world_tint == null or not Mode.horror():
+		return
+	# the nursery lamp flickers now and then
+	_flicker -= delta
+	if _flicker <= 0.0 and rng.randf() < delta * 0.35:
+		_flicker = rng.randf_range(0.05, 0.18)
+	world_tint.color = Mode.world_modulate() * (0.6 if _flicker > 0.0 else 1.0)
+	world_tint.color.a = 1.0
 
 
 func _layer(z: int) -> Node2D:
@@ -113,8 +162,8 @@ func _draw() -> void:
 	UiStyle.draw_wallpaper(self, Rect2(Vector2.ZERO, Vector2(1280, 720)))
 	# a stitched frame around the play area
 	var r := Rect2(ARENA_ORIGIN - Vector2(10, 10), Vector2(Tuning.COLS, Tuning.ROWS) * Tuning.TILE + Vector2(20, 20))
-	draw_rect(r, Color(0.86, 0.76, 0.66))
-	UiStyle.stitch_rect(self, r.grow(-4), Color(0.6, 0.45, 0.4, 0.7), 1.6, 6.0)
+	draw_rect(r, UiStyle.FRAME)
+	UiStyle.stitch_rect(self, r.grow(-4), Color(UiStyle.ROSE_DARK, 0.6), 1.6, 6.0)
 
 
 func _physics_process(delta: float) -> void:
@@ -246,6 +295,7 @@ func explode(bomb) -> void:
 				break
 	for c in hit:
 		flames[c] = Tuning.FLAME_TIME
+		flame_owner[c] = bomb.owner_bear
 	_break_blocks(broken)
 	_finish_bomb(bomb, origin, hit, segs, chain)
 
@@ -292,6 +342,7 @@ func _update_flames(delta: float) -> void:
 		flames[c] -= delta
 		if flames[c] <= 0.0:
 			flames.erase(c)
+			flame_owner.erase(c)
 	_check_flame_hits(Vector2i(-1, -1))
 
 
@@ -299,6 +350,7 @@ func _check_flame_hits(origin: Vector2i) -> void:
 	for b in bears:
 		if flames.has(b.cell()) and not b.is_stunned() and b.immune_t <= 0.0:
 			var src: Vector2 = arena.cell_center(origin) if origin.x >= 0 else b.position - b.velocity.normalized() * 10.0
+			b.last_hit_by = flame_owner.get(b.cell())
 			b.stun(src)
 
 
@@ -361,6 +413,7 @@ func duck_explode(p) -> void:
 	var segs := []
 	for c in hit:
 		flames[c] = Tuning.FLAME_TIME
+		flame_owner.erase(c)  # nobody to gloat: the duck did it
 		if arena.cell_type(c) == ArenaScript.BLOCK:
 			broken.append(c)
 		if arena.bombs.has(c):
@@ -427,6 +480,10 @@ func find_steal_target(thief):
 
 func on_bear_stunned(bear) -> void:
 	_burst(bear.position + Vector2(0, -20), fx_tex, Assets.region(fx_tex, Assets.EFFECT_CELLS, 3), 4, 14.0, Color.WHITE)
+	_splat(bear.position + Vector2(0, 10), 34.0 + 10.0 * minf(bear.fluff_ratio(), 3.0))
+	if Mode.horror():
+		_confetti(bear.position + Vector2(0, -12), 10)  # a spray of red
+	_gloat(bear)
 	# A little stuffing pops out and lands nearby.
 	var amount := minf(Tuning.STUN_SPILL, bear.fluff)
 	if amount < 1.0:
@@ -446,6 +503,49 @@ func on_bear_stunned(bear) -> void:
 	p.cell = dest
 	powerup_layer.add_child(p)
 	pickups.append(p)
+
+
+## Floor mark where a bear went down (stuffing / blood). Old ones are recycled.
+func _splat(pos: Vector2, size: float) -> void:
+	var d = DecalScript.new()
+	d.position = pos
+	d.size = size
+	d.color = Mode.splat_color()
+	decal_layer.add_child(d)
+	if decal_layer.get_child_count() > 30:
+		decal_layer.get_child(0).queue_free()
+
+
+# --- taunts -----------------------------------------------------------------------
+
+## Someone stunned `victim`: the bomber gloats; an own goal gets mocked by a bystander.
+func _gloat(victim) -> void:
+	var attacker = victim.last_hit_by
+	if attacker != null and is_instance_valid(attacker) and attacker != victim:
+		attacker.taunt("stun")
+		return
+	if attacker == victim:
+		var best = null
+		var best_d: float = 7.0 * arena.T
+		for b in bears:
+			if b != victim and not b.is_stunned() and b.position.distance_to(victim.position) < best_d:
+				best_d = b.position.distance_to(victim.position)
+				best = b
+		if best != null:
+			best.taunt("self_stun")
+
+
+func on_steal_started(thief, _victim) -> void:
+	if rng.randf() < 0.7:
+		thief.taunt("greedy" if thief.fluff_ratio() > 2.5 else "steal")
+
+
+func bubble_count() -> int:
+	var n := 0
+	for b in bears:
+		if b.bubble_t > 0.0:
+			n += 1
+	return n
 
 
 func _update_pickups() -> void:
@@ -540,10 +640,8 @@ func _update_steal_fx(delta: float) -> void:
 			p.size = rng.randf_range(10, 16)
 			p.spin = rng.randf_range(-6, 6)
 			p.arc = rng.randf_range(14, 34)
+			p.color = Mode.stuffing_color()
 			fx_layer.add_child(p)
-
-
-const CONFETTI := [Color("f2a7b5"), Color("a7c8e8"), Color("f5dc8a"), Color("a8dcc0"), Color("c9b2e3"), Color("f6c1a0")]
 
 
 func _confetti(pos: Vector2, n: int) -> void:
@@ -557,7 +655,8 @@ func _confetti(pos: Vector2, n: int) -> void:
 		p.life = rng.randf_range(0.6, 1.1)
 		p.size = rng.randf_range(5.0, 8.0)
 		p.spin = rng.randf_range(-10, 10)
-		p.color = CONFETTI[rng.randi() % CONFETTI.size()]
+		var pal: Array = Mode.confetti()
+		p.color = pal[rng.randi() % pal.size()]
 		fx_layer.add_child(p)
 
 

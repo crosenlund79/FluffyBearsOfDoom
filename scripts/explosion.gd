@@ -3,7 +3,7 @@
 extends Node2D
 
 const Tuning = preload("res://scripts/tuning.gd")
-const CONFETTI := [Color("f2a7b5"), Color("a7c8e8"), Color("f5dc8a"), Color("a8dcc0"), Color("c9b2e3"), Color("f6c1a0")]
+const Mode = preload("res://scripts/mode_theme.gd")
 
 # Each segment: {"pos": Vector2, "kind": 0 centre / 1 arm / 2 end, "rot": float}
 var segments: Array = []
@@ -24,6 +24,7 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	var CONFETTI: Array = Mode.confetti()
 	var k := age / Tuning.FLAME_TIME
 	var grow := clampf(k * 6.0, 0.0, 1.0)
 	var fade := 1.0 - clampf((k - 0.8) / 0.5, 0.0, 1.0)

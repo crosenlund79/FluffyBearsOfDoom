@@ -35,9 +35,7 @@ func setup(g, bear, c: Vector2i, r: int) -> void:
 	tex = Assets.tex("objects/bomb")
 	fx = Assets.tex("effects/effects")
 	# pastel version of the owner's colour; rubber bombs are brighter
-	tint = Color.from_hsv(bear.color.h, 0.32, 1.0)
-	if rubber:
-		tint = Color.from_hsv(fmod(bear.color.h + 0.08, 1.0), 0.55, 1.0)
+	tint = preload("res://scripts/mode_theme.gd").bomb_tint(bear.color, rubber)
 
 
 func is_moving() -> bool:

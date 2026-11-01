@@ -1,0 +1,1 @@
+Horror-mode sound replacements (same names as ../PUT_SFX_HERE.txt, plus taunt). Falls back to ../<name> then the built-in placeholder.

@@ -3,7 +3,7 @@ extends PanelContainer
 
 const UiStyle = preload("res://scripts/ui_style.gd")
 
-var stitch_color := Color("c9a7a0")
+var stitch_color := UiStyle.ROSE.lerp(UiStyle.INK_SOFT, 0.4)
 
 
 func _draw() -> void:

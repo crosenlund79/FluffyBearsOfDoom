@@ -1,6 +1,10 @@
-## Replaceable art loader.
-## For "bears/bear" it loads assets/sprites/bears/bear.png when present and
-## otherwise falls back to assets/sprites/bears/template_bear.png.
+## Replaceable art loader. For "bears/bear" in the current mode (normal/horror)
+## it uses the first file that exists:
+##   1. assets/sprites/bears/<mode>/bear.png           your mode-specific art
+##   2. assets/sprites/bears/bear.png                  your shared art
+##   3. assets/sprites/bears/<mode>/template_bear.png  built-in mode placeholder
+##   4. assets/sprites/bears/template_bear.png         built-in placeholder
+## Creator files always win over templates; templates never overwrite anything.
 extends Node
 
 const ROOT := "res://assets/sprites/"
@@ -10,28 +14,38 @@ const ROOT := "res://assets/sprites/"
 const BEAR_CELLS := 10      # body, belly, head, ear, arm, leg, face x4
 const TILE_CELLS := 9       # rug, rug alt, ice, honey, bouncy, conveyor, pillar, cushion block, border
 const POWERUP_CELLS := 10    # bomb, blast, speed, shuffle, kick, line, rubber, immortal, reverse, diarrhea
-const EFFECT_CELLS := 7     # confetti centre, confetti arm, confetti end, star, dust, sparkle, bird
+const EFFECT_CELLS := 8     # blast centre, blast arm, blast end, star, dust, sparkle, bird, floor splat
 
 var _cache := {}
 
 
 func tex(rel: String) -> Texture2D:
-	if _cache.has(rel):
-		return _cache[rel]
-	var folder := rel.get_base_dir()
-	var file := rel.get_file()
+	var key: String = Settings.mode + ":" + rel
+	if _cache.has(key):
+		return _cache[key]
 	var t: Texture2D = null
-	for candidate in [ROOT + rel + ".png", ROOT + folder + "/template_" + file + ".png"]:
-		t = _load(candidate)
-		if t:
-			break
+	var path := resolve(rel)
+	if path != "":
+		t = _load(path)
 	if t == null:
 		push_warning("Missing sprite: " + rel)
 		var img := Image.create(8, 8, false, Image.FORMAT_RGBA8)
 		img.fill(Color.MAGENTA)
 		t = ImageTexture.create_from_image(img)
-	_cache[rel] = t
+	_cache[key] = t
 	return t
+
+
+## The file `tex(rel)` will use in the current mode ("" if none exists).
+func resolve(rel: String) -> String:
+	var mode: String = Settings.mode
+	var folder := ROOT + rel.get_base_dir() + "/"
+	var file := rel.get_file()
+	for candidate in [folder + mode + "/" + file + ".png", folder + file + ".png",
+			folder + mode + "/template_" + file + ".png", folder + "template_" + file + ".png"]:
+		if ResourceLoader.exists(candidate) or FileAccess.file_exists(candidate):
+			return candidate
+	return ""
 
 
 func _load(path: String) -> Texture2D:

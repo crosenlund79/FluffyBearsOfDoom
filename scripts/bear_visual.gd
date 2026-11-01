@@ -60,6 +60,14 @@ var shadow_w := 20.0
 var head_top := -50.0
 var head_r := 18.0
 
+# Taunt reaction (cosmetic) and Horror-mode idle twitching
+const TAUNT_TIME := 1.1
+var taunt_kind := ""
+var taunt_t := 0.0
+var _twitch_t := 3.0
+var _twitch := 0.0
+var horror := false
+
 
 class Wrinkles extends Node2D:
 	var amount := 0.0
@@ -119,6 +127,7 @@ func _ready() -> void:
 		ears.append(ear)
 	face = _part(6, Color.WHITE, head)
 	g = _target_g()
+	horror = Settings.mode == "horror"
 
 
 func _part(index: int, col: Color, parent: Node = null) -> Sprite2D:
@@ -167,6 +176,12 @@ func on_stunned(from_dir: float) -> void:
 	flop_v += flop_dir * 6.0
 	squash_v += 9.0
 	ear_wob_v += 20.0 * flop_dir
+
+
+func play_taunt(kind: String) -> void:
+	taunt_kind = kind
+	taunt_t = TAUNT_TIME
+	squash_v += 4.0
 
 
 func on_recover() -> void:
@@ -314,6 +329,46 @@ func _process(delta: float) -> void:
 		arms[i].rotation = rot
 		arms[i].scale = Vector2.ONE * unit * (0.85 + 0.1 * minf(g, 4.0))
 
+	# Taunt reactions: purely visual, layered on top of the normal animation.
+	var taunt_rot := 0.0
+	var taunt_off := Vector2.ZERO
+	if taunt_t > 0.0 and not stunned:
+		taunt_t -= delta
+		var k := 1.0 - taunt_t / TAUNT_TIME          # 0 -> 1 progress
+		var env := sin(clampf(k, 0.0, 1.0) * PI)       # ease in and out
+		match taunt_kind:
+			"wiggle":
+				body.rotation += sin(t * 30.0) * 0.3 * env
+				belly_v.x += sin(t * 30.0) * 40.0 * env * delta * 60.0
+			"spin":
+				taunt_rot = TAU * (k * k * (3.0 - 2.0 * k))
+			"hop":
+				taunt_off.y = -sin(k * PI) * 16.0
+			"cheer":
+				for i in 2:
+					var side := -1.0 if i == 0 else 1.0
+					arms[i].rotation = side * (2.7 + sin(t * 22.0 + i) * 0.35)
+			"tilt":
+				head.rotation += 1.15 * env
+			"twitch":
+				head.rotation += (0.7 if fmod(t * 9.0, 1.0) < 0.5 else -0.5) * env
+				taunt_off.x = (1.5 if fmod(t * 13.0, 1.0) < 0.5 else -1.5) * env
+			"lean":
+				taunt_rot = 0.4 * env * (1.0 if seed_offset > 2.0 else -1.0)
+				head.rotation -= 0.5 * env
+			"shudder":
+				taunt_off.x = randf_range(-2.5, 2.5) * env
+				body.rotation += randf_range(-0.1, 0.1) * env
+	if horror and not stunned:
+		# every so often the head snaps sideways, holds... and snaps back
+		_twitch_t -= delta
+		if _twitch_t <= 0.0:
+			_twitch_t = randf_range(3.0, 8.0)
+			_twitch = 0.35
+		if _twitch > 0.0:
+			_twitch -= delta
+			head.rotation += 0.55 * (1.0 if fmod(seed_offset, 2.0) < 1.0 else -1.0)
+
 	# Tiny legs that barely grow at all.
 	for i in 2:
 		var side := -1.0 if i == 0 else 1.0
@@ -338,8 +393,8 @@ func _process(delta: float) -> void:
 	face.position = Vector2(facing.x * 11.0, maxf(facing.y, 0.0) * 4.0)
 
 	# Whole rig: lean + stun flop, pivoting at the feet. Hop on bouncy floors.
-	rotation = lean + flop
-	position = Vector2(-flop * 10.0, 14.0 - hop)
+	rotation = lean + flop + taunt_rot
+	position = Vector2(-flop * 10.0, 14.0 - hop) + taunt_off
 	shadow_w = body_hw * 1.15 + 4.0
 	modulate.a = 1.0
 	if source.immune_t > 0.0 and not stunned:

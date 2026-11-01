@@ -224,7 +224,7 @@ func _draw_duck(pos: Vector2, dir: Vector2, sc: float, ph: float, u: float, warn
 	draw_set_transform(base + Vector2(-size * 0.28 * flip, -size * 0.62).rotated(wobble * flip), wobble * flip, Vector2(flip * 0.55 * key_spin, 0.55))
 	draw_texture_rect_region(tex, Rect2(-size * 0.5, -size * 0.5, size, size), kr)
 	draw_set_transform(base, wobble * flip, Vector2(flip, 1.0))
-	var col := Color.WHITE
+	var col := Color(0.78, 0.7, 0.68) if Settings.mode == "horror" else Color.WHITE
 	if warn and fmod(t * (4.0 + 10.0 * u), 1.0) < 0.5:
 		col = Color(1.0, 0.68, 0.7)
 	draw_texture_rect_region(tex, Rect2(-size * 0.5, -size, size, size), Assets.region(tex, 2, 0), col)

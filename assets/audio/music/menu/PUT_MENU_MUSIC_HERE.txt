@@ -1,1 +1,0 @@
-Menu music: drop .mp3 / .ogg / .wav files here. They are found automatically.

@@ -74,6 +74,6 @@ func _ready() -> void:
 
 func _on_track(title: String) -> void:
 	if not Music.has_tracks():
-		now_playing.text = "No %s music found. Add mp3/ogg/wav files to assets/audio/music/%s/" % [Music.context, Music.context]
+		now_playing.text = "No music found for %s. Add mp3/ogg/wav files to assets/audio/music/%s/" % [Music.context, Music.context]
 	else:
 		now_playing.text = "Now playing: " + (title if title != "" else "-")
