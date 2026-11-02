@@ -190,7 +190,7 @@ func controls_enabled() -> bool:
 
 
 func _draw() -> void:
-	UiStyle.draw_wallpaper(self, Rect2(Vector2.ZERO, Vector2(1280, 720)))
+	UiStyle.draw_wallpaper(self, Rect2(-position, get_viewport_rect().size))   # whole window, even ultrawide
 	# a stitched frame around the play area
 	var r := Rect2(ARENA_ORIGIN - Vector2(10, 10), Vector2(Tuning.COLS, Tuning.ROWS) * Tuning.TILE + Vector2(20, 20))
 	draw_rect(r, UiStyle.FRAME)

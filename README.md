@@ -21,13 +21,24 @@ A lone player can use either layout. Gamepads: stick/d-pad, A bomb, X/B/RT steal
 Esc/P pauses, N skips to the next music track, H hides or shows the controls strip under the arena.
 
 ## The match screen
-The arena sits in the middle, uncovered. Each character has a card in the side column nearest its
-starting corner: rank (#1 wears a crown), name, a big portrait, the **score beneath the portrait**
-(it blinks while someone is pulling that character's stuffing out), and a fluff bar that runs up
-to the instant-win line. **Time of Doom** counts down above the arena. Overtakes are announced
-("Harald overtakes Oswald (#2)", "Theodor takes the lead!"). The controls strip under the arena can
-be hidden with H; the player cards always stay. Which power-ups a bear has picked up is not shown:
-**Power-ups** in the main menu lists every badge with its name and effect.
+The arena sits in the middle, uncovered. On **both** sides of it is the same ranked stack of four
+small playing-card panels, 1st at the top and 4th at the bottom: rank (gold, silver and bronze;
+the leader has a crown; tied players share a rank), name, portrait, fluff score (it blinks while
+someone is stealing that player's stuffing) and a small fluff bar running to the instant-win line.
+Both stacks show one shared ranking and always move together.
+
+When places change, the cards physically **slide** to their new slots, wobbling on the way. Cards
+moving up get a brief **gold glow** (▲) and pass on an outer lane. Cards moving down get a
+**splatter of blood** (▼) and pass on an inner lane, so every card stays visible. The effects fade
+as the cards settle, and the splatter never covers the score. The ranking updates as soon as a
+whole-number score changes. Equal scores keep their current order, so ties never flicker, and
+score changes that don't affect places don't animate anything. Overtakes are also announced
+("Harald overtakes Oswald (#2)").
+
+**Time of Doom** counts down above the arena. The controls strip under the arena can be hidden with
+H; the player cards always stay. Which power-ups a bear has picked up is not shown: **Power-ups** in
+the main menu lists every badge with its name and effect. The layout is designed for 1280x720 and
+stays centred on any window shape; ultrawide and 4:3 screens just get more wallpaper.
 
 ## Winning
 The round ends when the timer runs out (most fluff wins), or **instantly** when a bear's fluff
@@ -153,6 +164,13 @@ and positions on screen don't change, only the detail.
 | `powerups/template_powerups.png` | 640×64 | 10 cells: bomb, blast, speed, shuffle, kick, line, rubber, immortality, reverse, diarrhea. The glow halo, outline, sparkles and pickup burst are drawn in code, so a replacement only needs the badge. Horror has its own sheet: dark badges with a blood-red rim (eyeball bomb, blood drops, a spine, a staring eye, a crossed-out heart; the curses in sickly green). |
 | `objects/horror/template_clown.png` | 192×64 | Horror only, 3 cells: jack-in-the-box clown head (facing you), mallet (head up), the striped box (front; the lid is drawn in code) |
 | `effects/template_effects.png` | 512×64 | 8 cells: blast centre, blast arm (horizontal), blast end (pointing right), star, dust, sparkle, cartoon bird (facing right), floor splat decal. In Horror: blood bursts, a skull, a crow and a blood splatter. |
+
+## Tests
+- `godot --headless -- --autotest [--mode=horror|custom] [--arena=N] [--crane] [--clown] [--duck] [--win=N]`
+  plays an all-AI match and prints standings (`--shots=DIR` with a display saves screenshots).
+- `godot --headless -- --rank-test` drives the HUD ranking through ties, a single overtake, a full
+  simultaneous reversal, rapid consecutive changes and gradual stealing, and checks that both card
+  stacks show the right order with every card settled in its slot.
 
 ## Tuning
 All gameplay numbers are in `scripts/tuning.gd`: the fluff→mass curve, braking, bombs,

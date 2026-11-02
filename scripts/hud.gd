@@ -1,6 +1,6 @@
-## In-match interface: four character cards in the side columns (by spawn
-## corner), Time of Doom above the arena, banners, toasts, a hideable controls
-## strip, pause and results. The arena itself is never covered.
+## In-match interface: the arena in the middle with a ranked stack of four
+## player cards on BOTH sides (1st at the top), Time of Doom above the arena,
+## banners, toasts, a hideable controls strip, pause and results.
 extends CanvasLayer
 
 const UiStyle = preload("res://scripts/ui_style.gd")
@@ -11,112 +11,33 @@ const Maps = preload("res://scripts/arena_maps.gd")
 const AudioPanel = preload("res://scripts/audio_panel.gd")
 const NowPlaying = preload("res://scripts/now_playing.gd")
 const Mode = preload("res://scripts/mode_theme.gd")
+const RankCard = preload("res://scripts/rank_card.gd")
 
-# Layout (1280x720): arena frame at x 270..1010, cards in the columns either side.
+# Layout (1280x720 design area): arena frame at x 270..1010, a card stack centred in each side column.
 const ARENA_RECT := Rect2(280, 52, 720, 624)
-const CARD_SIZE := Vector2(250, 322)
-const CARD_SLOTS := [Vector2(10, 10), Vector2(1020, 388), Vector2(1020, 10), Vector2(10, 388)]  # = Arena.SPAWNS corners
+const STACK_TOP := 30.0
+const STACK_GAP := 8.0
+const STACK_X := [65.0, 1075.0]       # left, right
+const SLIDE_K := 140.0                # card slide spring stiffness (critically damped)
+const GLOW_TIME := 0.9                # gold promotion glow
+const SPLAT_TIME := 1.0               # demotion splatter
 
 var game
 var root: Control
 var timer_label: Label
 var doom_label: Label
-var cards: Array = []
+var cards: Array = []           # 8 cards: one per player per side
 var banner_label: Label
 var toast_box: VBoxContainer
 var controls_box: Control
 var controls_hint: Label
 var pause_panel: Control
 var results_panel: Control
-var _order: Array = []          # bears, best first (last announced ranking)
-var _pending: Array = []        # candidate new order and how long it has held
-var _pending_t := 0.0
+var ranking: Array = []         # the one ranking both stacks show: bears, 1st first
+var anim := {}                  # bear -> {pos, vel, target, dir, glow, splat, drops}: shared by both of its cards
+var rank_changes := 0           # how many re-orderings happened (tests)
 var _announce_cd := 0.0
-
-
-## One player's card: rank, name, big portrait, score beneath it (blinks while
-## someone is pulling its stuffing out), fluff bar and a one-word status.
-class BearCard extends Control:
-	var bear
-	var hud
-	var font: Font
-	var shown := 100.0
-	var rank := 1
-	var t := 0.0
-
-	func _ready() -> void:
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _process(delta: float) -> void:
-		t += delta
-		shown = lerpf(shown, bear.fluff, 1.0 - exp(-delta * 10.0))
-		queue_redraw()
-
-	func being_robbed() -> bool:
-		for b in bear.game.bears:
-			if b != bear and b.stealing and b.steal_target == bear:
-				return true
-		return false
-
-	func _draw() -> void:
-		var r := Rect2(Vector2.ZERO, size)
-		draw_rect(r, UiStyle.PAPER)
-		draw_rect(Rect2(0, 0, size.x, 8), bear.color)
-		UiStyle.stitch_rect(self, r.grow(-5), Color(bear.color.darkened(0.2), 0.75), 1.4, 5.0)
-		# rank badge (a little crown for the leader)
-		var bc := Vector2(30, 34)
-		draw_circle(bc, 17.0, UiStyle.ROSE_DARK if rank == 1 else UiStyle.BAR)
-		draw_string(font, bc + Vector2(-17, 7), "#%d" % rank, HORIZONTAL_ALIGNMENT_CENTER, 34, 17,
-			UiStyle.PAPER if rank == 1 else UiStyle.INK)
-		if rank == 1:
-			var cr := bc + Vector2(0, -21)
-			draw_colored_polygon(PackedVector2Array([cr + Vector2(-9, 4), cr + Vector2(-9, -4), cr + Vector2(-4, 0),
-				cr + Vector2(0, -7), cr + Vector2(4, 0), cr + Vector2(9, -4), cr + Vector2(9, 4)]), UiStyle.GOLD)
-		# name and who's playing it
-		draw_string(font, Vector2(52, 34), bear.bear_name, HORIZONTAL_ALIGNMENT_CENTER, size.x - 70, 22, UiStyle.INK)
-		draw_string(font, Vector2(12, 58), bear.ctrl_label, HORIZONTAL_ALIGNMENT_CENTER, size.x - 24, 13, UiStyle.INK_SOFT)
-		# the character's own head and face, growing a little with its stuffing
-		var g: float = clampf(shown / Tuning.START_FLUFF, 0.0, 5.0)
-		var robbed := being_robbed()
-		var face_i := 3 if bear.is_stunned() else (1 if bear.stealing else (2 if robbed or bear.robbed_t > 0.0 else 0))
-		var wob := Vector2(sin(t * 40.0), 0) * 2.0 if robbed else Vector2.ZERO
-		var fit := BearVisual.fit_portrait(bear.species, Rect2(16, 66, size.x - 32, 128), 38.0 + 6.0 * sqrt(g))
-		BearVisual.draw_portrait(self, fit[1] + wob, fit[0], bear.species, bear.color, face_i)
-		# the score, right beneath the portrait
-		var blink := robbed and fmod(t * 6.0, 1.0) < 0.5
-		var sc := UiStyle.ROSE_DARK if blink else UiStyle.INK
-		var fs := 46 if not blink else 50
-		draw_string(font, Vector2(0, 238), "%d" % roundi(shown), HORIZONTAL_ALIGNMENT_CENTER, size.x, fs, sc)
-		draw_string(font, Vector2(0, 256), "fluff", HORIZONTAL_ALIGNMENT_CENTER, size.x, 13, UiStyle.INK_SOFT)
-		# fluff bar: towards the instant-win line when that's on
-		var goal: float = Settings.instant_win if Settings.instant_win > 0.0 else Tuning.START_FLUFF * 4.0
-		var bar := Rect2(20, 266, size.x - 40, 14)
-		draw_rect(bar, UiStyle.BAR)
-		var frac := clampf(shown / goal, 0.0, 1.0)
-		draw_rect(Rect2(bar.position, Vector2(bar.size.x * frac, bar.size.y)), bear.color.darkened(0.08))
-		var start_x := bar.position.x + bar.size.x * clampf(Tuning.START_FLUFF / goal, 0.0, 1.0)
-		draw_rect(Rect2(start_x, bar.position.y, 1.5, bar.size.y), Color(UiStyle.INK, 0.35))
-		draw_rect(bar, Color(UiStyle.INK, 0.35), false, 1.0)
-		if Settings.instant_win > 0.0:
-			draw_string(font, Vector2(bar.position.x, bar.end.y + 13), "0", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, UiStyle.INK_SOFT)
-			draw_string(font, Vector2(bar.position.x, bar.end.y + 13), "%d wins" % int(goal), HORIZONTAL_ALIGNMENT_RIGHT, bar.size.x, 11, UiStyle.INK_SOFT)
-		# status (no power-up info: that's what the pickup pops are for)
-		var status := ""
-		var scol := UiStyle.INK_SOFT
-		if bear.is_stunned():
-			status = "stunned!"
-			scol = UiStyle.ROSE_DARK
-		elif robbed:
-			status = "being robbed!"
-			scol = UiStyle.ROSE_DARK if blink else UiStyle.INK
-		elif bear.stealing:
-			status = "stealing stuffing..."
-			scol = UiStyle.GOOD
-		elif g > 2.5:
-			status = "dangerously huggable"
-		elif g < 0.4:
-			status = "sadly deflated"
-		draw_string(font, Vector2(0, 310), status, HORIZONTAL_ALIGNMENT_CENTER, size.x, 14, scol)
+var _rng := RandomNumberGenerator.new()
 
 
 func setup(g) -> void:
@@ -147,29 +68,34 @@ func setup(g) -> void:
 	arena_name.size = Vector2(230, 24)
 	root.add_child(arena_name)
 
-	for i in game.bears.size():
-		var c := BearCard.new()
-		c.bear = game.bears[i]
-		c.hud = self
-		c.font = UiStyle.font()
-		c.position = CARD_SLOTS[i % CARD_SLOTS.size()]
-		c.size = CARD_SIZE
-		root.add_child(c)
-		cards.append(c)
-	_order = game.bears.duplicate()
-	_update_ranks()
+	# the ranked card stacks, one on each side, both driven by the same ranking
+	_rng.randomize()
+	ranking = game.bears.duplicate()
+	ranking = _resort(ranking)
+	for i in ranking.size():
+		var b = ranking[i]
+		anim[b] = {"pos": float(i), "vel": 0.0, "target": i, "dir": 0, "glow": 0.0, "splat": 0.0, "drops": []}
+	for side in [-1.0, 1.0]:
+		for b in game.bears:
+			var c := RankCard.new()
+			c.hud = self
+			c.bear = b
+			c.side = side
+			c.font = UiStyle.font()
+			root.add_child(c)
+			cards.append(c)
 
-	# little title + music note in the gaps between the cards
-	var title := UiStyle.label("Fluffy Bears of Doom", 20, UiStyle.ROSE_DARK)
+	# music note under the left stack, title under the right one
+	var np := NowPlaying.new()
+	np.position = Vector2(8, 688)
+	np.size = Vector2(256, 26)
+	root.add_child(np)
+	var title := UiStyle.label("Fluffy Bears of Doom", 16, UiStyle.ROSE_DARK)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.position = Vector2(1020, 342)
-	title.size = Vector2(250, 40)
+	title.position = Vector2(1010, 684)
+	title.size = Vector2(270, 30)
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	root.add_child(title)
-	var np := NowPlaying.new()
-	np.position = Vector2(10, 349)
-	np.size = Vector2(250, 26)
-	root.add_child(np)
 
 	# controls: their own strip under the arena, hideable with H
 	controls_box = Control.new()
@@ -241,71 +167,120 @@ func _process(delta: float) -> void:
 	timer_label.add_theme_color_override("font_color", UiStyle.ROSE_DARK if ((t < 10.0 or warn) and pulse and game.controls_enabled()) else UiStyle.INK)
 	doom_label.text = "THE ARENA CLOSES  ·  Time of Doom" if warn else ("Time of Doom" if not doom_on else "Doom is here  ·  Time of Doom")
 	doom_label.add_theme_color_override("font_color", UiStyle.ROSE_DARK if (doom_on or warn) else UiStyle.INK_SOFT)
-	if game.controls_enabled():
-		_track_ranks(delta)
-	_update_ranks()   # ties can break without the order changing
+	_update_ranking(delta)
 
 
 # --- ranking ------------------------------------------------------------------------
 
-func _sorted_bears() -> Array:
-	var order: Array = _order.duplicate()
-	# stable sort: equal fluff keeps the previous order (no flicker on ties)
-	var idx := {}
-	for i in order.size():
-		idx[order[i]] = i
-	order.sort_custom(func(a, b):
-		if absf(a.fluff - b.fluff) > 0.5:
-			return a.fluff > b.fluff
-		return idx[a] < idx[b])
-	return order
+## The score a card shows (and the ranking uses): whole fluff.
+func score_of(bear) -> int:
+	return roundi(bear.fluff)
 
 
-func _update_ranks() -> void:
-	var place := 1
-	for i in _order.size():
-		if i > 0 and absf(_order[i].fluff - _order[i - 1].fluff) >= 0.5:
-			place = i + 1
-		for c in cards:
-			if c.bear == _order[i]:
-				c.rank = place
+## Shared rank number: ties share it (two bears on 120 are both 2nd, say).
+func rank_of(bear) -> int:
+	var mine := score_of(bear)
+	var r := 1
+	for b in ranking:
+		if score_of(b) > mine:
+			r += 1
+	return r
 
 
-## Ranks update at once on the cards; an overtake is announced once the new
-## order has held for a moment (stealing makes scores swap back and forth).
-func _track_ranks(delta: float) -> void:
+## Where a stack's top card sits (side -1 = left, +1 = right).
+func stack_origin(side: float) -> Vector2:
+	return Vector2(STACK_X[0] if side < 0.0 else STACK_X[1], STACK_TOP)
+
+
+## Re-sort `order` by score, only swapping neighbours when the lower one is
+## strictly ahead: ties keep their current order, so nothing flickers.
+func _resort(order: Array) -> Array:
+	var o := order.duplicate()
+	var swapped := true
+	while swapped:
+		swapped = false
+		for i in range(o.size() - 1):
+			if score_of(o[i + 1]) > score_of(o[i]):
+				var tmp = o[i]
+				o[i] = o[i + 1]
+				o[i + 1] = tmp
+				swapped = true
+	return o
+
+
+## Every frame: re-rank immediately; cards whose slot changed get a new target
+## (gold glow when going up, splatter when going down) and slide there.
+func _update_ranking(delta: float) -> void:
+	var now := _resort(ranking)
+	if now != ranking:
+		var before := ranking
+		ranking = now
+		rank_changes += 1
+		var mover = null
+		for i in now.size():
+			var b = now[i]
+			var old_i: int = before.find(b)
+			if old_i == i:
+				continue
+			var st: Dictionary = anim[b]
+			st["target"] = i
+			if i < old_i:
+				st["dir"] = -1
+				st["glow"] = 1.0
+				st["splat"] = 0.0
+				if mover == null or i < now.find(mover):
+					mover = b
+			else:
+				st["dir"] = 1
+				st["splat"] = 1.0
+				st["glow"] = 0.0
+				st["drops"] = _make_drops()
+		if mover != null:
+			_announce(mover, before)
 	_announce_cd -= delta
-	var now := _sorted_bears()
-	if now == _order:
-		_pending.clear()
-		return
-	if now != _pending:
-		_pending = now
-		_pending_t = 0.0
-		return
-	_pending_t += delta
-	if _pending_t < 0.35:
-		return
-	var before := _order
-	_order = now
-	_pending.clear()
-	_update_ranks()
-	# who moved up, and past whom?
-	for i in now.size():
-		var b = now[i]
-		var old_i: int = before.find(b)
-		if old_i <= i:
+	# slide (critically damped spring per player; re-targeting mid-slide is smooth)
+	var c := 2.0 * sqrt(SLIDE_K)
+	var steps := maxi(1, ceili(delta / 0.004))   # fixed small substeps: stable at any frame rate
+	var dt := delta / steps
+	for b in anim:
+		var st: Dictionary = anim[b]
+		for _i in steps:
+			var acc: float = SLIDE_K * (float(st["target"]) - st["pos"]) - c * st["vel"]
+			st["vel"] += acc * dt
+			st["pos"] += st["vel"] * dt
+		if absf(st["pos"] - st["target"]) < 0.002 and absf(st["vel"]) < 0.01:
+			st["pos"] = float(st["target"])
+			st["vel"] = 0.0
+			st["dir"] = 0
+		st["glow"] = maxf(0.0, st["glow"] - delta / GLOW_TIME)
+		st["splat"] = maxf(0.0, st["splat"] - delta / SPLAT_TIME)
+
+
+## Splatter drops for a demoted card: on its frame, top corners and spilling
+## off the sides, never across the score and bar.
+func _make_drops() -> Array:
+	var out := []
+	var sz: Vector2 = RankCard.SIZE
+	var keep_clear := Rect2(16, 96, sz.x - 32, 46)
+	while out.size() < 11:
+		var p := Vector2(_rng.randf_range(-8, sz.x + 8), _rng.randf_range(-6, sz.y + 4))
+		if keep_clear.has_point(p):
 			continue
-		var passed = before[i]   # whoever used to hold the place it took
-		if _announce_cd > 0.0:
-			break
-		_announce_cd = 1.2
-		if i == 0:
-			toast("%s takes the lead!" % b.bear_name, b.color)
-		else:
-			toast("%s overtakes %s  (#%d)" % [b.bear_name, passed.bear_name, i + 1], b.color)
-		Sfx.play("overtake", 1.0 + 0.1 * (3 - i), -3.0)
-		break
+		var big := out.size() < 3
+		out.append([p, _rng.randf_range(4.5, 7.5) if big else _rng.randf_range(1.5, 3.5), _rng.randf_range(6, 16) if _rng.randf() < 0.35 else 0.0])
+	return out
+
+
+func _announce(b, before: Array) -> void:
+	if _announce_cd > 0.0 or not game.controls_enabled():
+		return
+	_announce_cd = 1.0
+	var i: int = ranking.find(b)
+	if i == 0:
+		toast("%s takes the lead!" % b.bear_name, b.color)
+	else:
+		toast("%s overtakes %s  (#%d)" % [b.bear_name, before[i].bear_name, i + 1], b.color)
+	Sfx.play("overtake", 1.0 + 0.1 * (3 - i), -3.0)
 
 
 func banner(text: String, duration: float) -> void:

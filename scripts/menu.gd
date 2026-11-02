@@ -368,7 +368,7 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	UiStyle.draw_wallpaper(self, Rect2(Vector2.ZERO, size))
+	UiStyle.draw_wallpaper(self, Rect2(-position, get_viewport_rect().size))   # whole window, even ultrawide
 	draw_rect(Rect2(40, 380, 640, 90), Color(UiStyle.FRAME, 0.8))
 	UiStyle.stitch_rect(self, Rect2(46, 386, 628, 78), Color(UiStyle.ROSE_DARK, 0.6), 1.6, 6.0)
 

@@ -6,8 +6,13 @@ const Game = preload("res://scripts/game.gd")
 
 var current: Node
 
+## Everything is laid out for 1280x720. Wider (ultrawide) or taller windows get
+## more wallpaper around it; the layout stays centred, nothing is stretched.
+const DESIGN := Vector2(1280, 720)
+
 
 func _ready() -> void:
+	get_viewport().size_changed.connect(_fit_view)
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--mode="):
 			Settings.set_mode(a.get_slice("=", 1))  # dev/test override, not saved
@@ -23,6 +28,19 @@ func _ready() -> void:
 			get_viewport().get_texture().get_image().save_png(a.get_slice("=", 1))
 			get_tree().quit()
 			return
+	# `godot -- --rank-test` drives the HUD ranking through scripted scores (tools/rank_test.gd).
+	if "--rank-test" in OS.get_cmdline_user_args():
+		Settings.human_count = 0
+		Settings.round_time_index = 2
+		start_game()
+		var shot_dir := ""
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--shots="):
+				shot_dir = a.get_slice("=", 1)
+		var tester = load("res://tools/rank_test.gd").new()
+		add_child(tester)
+		tester.run.call_deferred(current, shot_dir)
+		return
 	# `godot -- --autotest` runs an all-AI match and prints the result (for CI / smoke tests).
 	if "--autotest" in OS.get_cmdline_user_args():
 		Settings.human_count = 0
@@ -131,3 +149,25 @@ func _swap(n: Node) -> void:
 		current.queue_free()
 	current = n
 	add_child(n)
+	_fit_view.call_deferred()
+
+
+## Offset of the centred 1280x720 design area inside the actual viewport.
+func view_offset() -> Vector2:
+	return ((get_viewport().get_visible_rect().size - DESIGN) * 0.5).floor()
+
+
+func _fit_view() -> void:
+	if current == null or not is_instance_valid(current):
+		return
+	var off := view_offset()
+	if current is Control:
+		current.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		current.position = off
+		current.size = DESIGN
+	elif current is Node2D:
+		current.position = off
+	for layer in current.find_children("*", "CanvasLayer", true, false):
+		layer.offset = off
+	if current is CanvasItem:
+		current.queue_redraw()
