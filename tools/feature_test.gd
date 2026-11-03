@@ -34,7 +34,25 @@ func _run_checks() -> void:
 	for b in game.bears:
 		b.controller = Idle.new()
 	game.bears[0].is_human = true   # to show the human-player card highlight
-	await _wait(3.4)   # countdown
+	# --- pre-round: everyone dances, nothing else moves until Space/Enter
+	var t0: float = game.time_left
+	var spots: Array = game.bears.map(func(x): return x.position)
+	var rig_y: Array = game.bears.map(func(x): return x.visual.position.y)
+	await _wait(1.0)
+	await _shot("preround")
+	var moved := false
+	for i in game.bears.size():
+		if game.bears[i].position.distance_to(spots[i]) > 0.5:
+			moved = true
+	var danced: bool = game.bears.any(func(x): return absf(x.visual.position.y - rig_y[game.bears.find(x)]) > 0.5 or absf(x.visual.rotation) > 0.05)
+	_expect(game.state == game.State.READY and game.time_left == t0 and not moved and game.bombs.is_empty(), "pre-round: paused (timer, bears, bombs) until Space/Enter")
+	_expect(danced and game.hud.ready_label != null, "pre-round: bears dance and the start prompt shows")
+	var ev := InputEventKey.new()
+	ev.physical_keycode = KEY_ENTER
+	ev.pressed = true
+	Input.parse_input_event(ev)
+	await _wait(0.3)
+	_expect(game.state == game.State.PLAYING and game.time_left < t0 and game.hud.ready_label == null, "Enter starts the round for everyone")
 	var arena = game.arena
 
 	# --- sounds: the supplied recordings are loaded and named as expected
@@ -61,7 +79,7 @@ func _run_checks() -> void:
 	await _wait(0.18)
 	var growled: bool = b.growl_t > 0.0 and b.visual.growl_t > 0.0
 	await _wait(1.1)
-	_expect(a.cell() == Vector2i(13, 3), "knockback slides to the last open tile before the border wall (%s)" % a.cell())
+	_expect(a.cell() == Vector2i(game.arena.cols - 2, 3), "knockback slides to the last open tile before the border wall (%s)" % a.cell())
 	_expect(a.reverse_t > 0.0 and not game.powerups.has(Vector2i(6, 3)), "knockback collects power-ups on the way (Reverse Controls)")
 	_expect(not arena.is_solid(a.cell()) and absf(a.position.y - arena.cell_center(a.cell()).y) < 0.5, "knocked bear ends centred on an open tile")
 	_expect(growled, "the bomber growls when its bomb stuns someone")
@@ -103,10 +121,13 @@ func _run_checks() -> void:
 	game.start_princess()
 	var p = game.princess
 	_expect(p != null, "princess appears")
+	var rim_scale: float = p.perspective_scale() if p != null else 0.0   # outside the wall, before her leap
 	var guard := 0
 	while is_instance_valid(p) and p.phase != p.FIRE and guard < 600:
 		await get_tree().physics_frame
 		guard += 1
+	var floor_scale: float = p.perspective_scale() if is_instance_valid(p) else 0.0   # down in the arena, firing
+	_expect(rim_scale > floor_scale and floor_scale > 1.2, "princess: bigger on the raised rim (%.2f) than down in the arena (%.2f), always bigger than a bear (1.0)" % [rim_scale, floor_scale])
 	var shot_at = p.target if is_instance_valid(p) else null
 	_expect(shot_at != null and not shot_at.eliminated and p.blank, "princess hunts an active bear (%s) and fires a blank at an immortal one" % (shot_at.bear_name if shot_at else "-"))
 	_expect(shot_at != null and shot_at.stun_t <= 0.0, "the blank does no harm")
@@ -168,7 +189,7 @@ func _run_checks() -> void:
 	game.time_left = game.round_duration * (1.0 - 0.6) - 9.0   # jump ahead into the Time of Doom
 	await _wait(1.5)
 	await _shot("doom")
-	_expect(rings_ok and doom.order.size() == 128, "four rings, outermost first (%d tiles)" % doom.order.size())
+	_expect(rings_ok and doom.order.size() == 180, "five rings, outermost first (%d tiles)" % doom.order.size())
 	var times_ok := true
 	for i in range(1, doom.order.size()):
 		if doom.close_at[doom.order[i]] <= doom.close_at[doom.order[i - 1]]:
@@ -192,7 +213,7 @@ func _clear_row(y: int) -> void:
 
 
 func _park_others(keep: Array) -> void:
-	var spots := [Vector2i(1, 11), Vector2i(13, 11), Vector2i(1, 9)]
+	var spots := [Vector2i(1, game.arena.rows - 2), Vector2i(game.arena.cols - 2, game.arena.rows - 2), Vector2i(1, game.arena.rows - 4)]
 	var i := 0
 	for b in game.bears:
 		if not b in keep:

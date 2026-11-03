@@ -468,6 +468,21 @@ func _process(delta: float) -> void:
 			_twitch -= delta
 			head.rotation += 0.55 * (1.0 if fmod(seed_offset, 2.0) < 1.0 else -1.0)
 
+	# Pre-round dance: on the beat of the music (120 bpm from the track's playback
+	# position), hop, sway side to side and pump the paws in the air alternately.
+	if not (source is Puppet) and source.game.is_dancing() and not stunned:
+		var beat := t * 2.0
+		if Music.player and Music.player.playing:
+			beat = Music.player.get_playback_position() * 2.0
+		beat += seed_offset * 0.25   # not quite in unison: they're plush toys, not a boy band
+		var on := absf(sin(beat * PI))
+		taunt_off += Vector2(sin(beat * PI * 0.5) * 6.0, -on * 9.0)
+		taunt_rot += sin(beat * PI * 0.5) * 0.22
+		head.rotation += sin(beat * PI) * 0.25
+		for i in 2:
+			var up := 1.0 if (int(floor(beat)) + i) % 2 == 0 else 0.0
+			arms[i].rotation = (-1.0 if i == 0 else 1.0) * (0.6 + 2.0 * up * on)
+
 	# Tiny legs that barely grow at all.
 	for i in 2:
 		var side := -1.0 if i == 0 else 1.0

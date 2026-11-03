@@ -21,6 +21,7 @@ var sfx_volume := 0.85
 var muted := false
 var shuffle_music := true
 var bear_outlines := true  # dark outline around bears for visibility
+var diseases := true      # Reverse Controls and Bomb Diarrhea can drop (off = never)
 var instant_win: float = preload("res://scripts/tuning.gd").INSTANT_WIN_FLUFF   # fluff that ends a round at once (0 = off)
 var key_overrides := {}   # action -> [[physical keycode, location], ...] chosen in Settings > Controls
 const MODES := ["normal", "horror", "custom"]
@@ -214,7 +215,7 @@ func _set_bus(bus: String, v: float) -> void:
 func save() -> void:
 	var cf := ConfigFile.new()
 	for k in ["master_volume", "music_volume", "sfx_volume", "muted", "shuffle_music", "human_count",
-			"ai_levels", "sitting_out", "arena_index", "round_time_index", "mode", "bear_outlines", "instant_win", "key_overrides"]:
+			"ai_levels", "sitting_out", "arena_index", "round_time_index", "mode", "bear_outlines", "instant_win", "key_overrides", "diseases"]:
 		cf.set_value("settings", k, get(k))
 	cf.save(SAVE_PATH)
 

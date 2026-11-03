@@ -1,15 +1,21 @@
-## Horror-only hazard: a wooden pillar starts to rattle and flash (faster and
-## faster), a jack-in-the-box clown bursts out of it cackling, locks on to the
-## nearest bear (wherever it is), lunges on its spring neck and hammers it.
-## It never changes the grid, so it can't block anyone's way.
+## Horror-only hazard: one wooden pillar carries a striped box with a hatch from
+## the start of the round. Every so often it rattles and flashes, the hatch
+## creaks open, a pause... the clown rises out, a pause... it cackles
+## frantically, locks on to the nearest bear (wherever it is), and lunges on its
+## spring neck to hammer it, looming bigger as it arcs toward you and shrinking
+## as it comes down. It never changes the grid, so it can't block anyone's way.
 extends Node2D
 
 const Tuning = preload("res://scripts/tuning.gd")
 
-enum { WARN, BURST, AIM, STRIKE, SLAM, RETRACT }
+enum { IDLE, WARN, HATCH, PAUSE1, BURST, PAUSE2, AIM, STRIKE, SLAM, RETRACT }
 
+const WARN_TIME := 1.0
+const HATCH_TIME := 0.55
+const PAUSE1_TIME := 0.45
 const BURST_TIME := 0.35
-const AIM_TIME := 0.6
+const PAUSE2_TIME := 0.4
+const AIM_TIME := 1.0             # the frantic laughter
 const STRIKE_SPEED := 2400.0      # px/s: crosses the whole arena in about a third of a second
 const SLAM_TIME := 0.35
 const RETRACT_TIME := 0.5
@@ -17,7 +23,10 @@ const RETRACT_TIME := 0.5
 var game
 var arena
 var pillar := Vector2i.ZERO
-var phase := WARN
+var phase := IDLE
+var hatch := 0.0                  # 0 shut .. 1 wide open
+var zoom := 1.0                   # looms bigger mid-lunge (toward the camera)
+var strike_len := 1.0
 var t := 0.0
 var age := 0.0
 var done := false
@@ -43,16 +52,35 @@ func _box_top() -> Vector2:
 	return arena.cell_center(pillar) + Vector2(0, -arena.T * 0.62)
 
 
-## Time of Doom shut our pillar while we were still rattling: the box is gone.
+## Start an attack (from IDLE only).
+func trigger() -> void:
+	if phase == IDLE:
+		_next(WARN)
+
+
+## The Time of Doom shut our pillar: the box moves to another pillar (an
+## attack that hadn't really started yet is called off).
 func on_cells_closed(shut: Dictionary) -> void:
-	if shut.has(pillar) and phase == WARN:
+	if not shut.has(pillar):
+		return
+	if phase in [WARN, HATCH, PAUSE1]:
 		_finish()
+	var p = game.pick_clown_pillar()
+	if p != null:
+		pillar = p
+		head_rest = _box_top() + Vector2(0, -arena.T * 1.25)
+		if phase == IDLE:
+			head = _box_top()
 
 
 func _finish() -> void:
-	done = true
+	phase = IDLE
+	t = 0.0
+	hatch = 0.0
+	zoom = 1.0
+	target = null
+	head = _box_top()
 	game.clown = null
-	queue_free()
 
 
 func _next(p: int) -> void:
@@ -61,40 +89,60 @@ func _next(p: int) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if done:
-		return
 	t += delta
 	age += delta
 	match phase:
+		IDLE:
+			pass
 		WARN:
-			var u := clampf(t / Tuning.CLOWN_WARN, 0.0, 1.0)
+			var u := clampf(t / WARN_TIME, 0.0, 1.0)
 			_rattle -= delta
 			if _rattle <= 0.0:
-				_rattle = lerpf(0.35, 0.06, u * u)
+				_rattle = lerpf(0.3, 0.07, u * u)
 				Sfx.play("clown_rattle", 0.9 + 0.4 * u + _rng.randf_range(-0.05, 0.05), -4.0)
-			if t >= Tuning.CLOWN_WARN:
+			if t >= WARN_TIME:
+				_next(HATCH)
+				Sfx.play("clown_rattle", 0.55, 0.0)   # the hatch creaks open
+		HATCH:
+			hatch = clampf(t / HATCH_TIME, 0.0, 1.0)
+			if t >= HATCH_TIME:
+				_next(PAUSE1)
+		PAUSE1:
+			if t >= PAUSE1_TIME:   # ...something moves in the dark...
 				_next(BURST)
 				Sfx.play("clown_burst")
-				Sfx.play("clown_laugh", _rng.randf_range(0.95, 1.08), 2.0)
 				arena.add_shake(5.0)
 				game.spawn_dust(_box_top(), 6)
 		BURST:
 			var k := clampf(t / BURST_TIME, 0.0, 1.0)
 			head = _box_top().lerp(head_rest, _overshoot(k))
 			if t >= BURST_TIME:
+				_next(PAUSE2)
+		PAUSE2:
+			head = head_rest
+			if t >= PAUSE2_TIME:   # it stares... then it laughs
 				target = _pick_target()
-				_next(AIM if target != null else RETRACT)
+				if target == null:
+					_next(RETRACT)
+				else:
+					_next(AIM)
+					Sfx.play("clown_laugh", _rng.randf_range(0.95, 1.08), 2.0)
 		AIM:
-			head = head_rest + Vector2(sin(age * 40.0), cos(age * 33.0)) * 2.0   # shaking with glee
-			swing = lerpf(swing, -1.2, 1.0 - exp(-delta * 10.0))                 # wind up
+			# frantic laughter: shaking all over, bobbing on its spring
+			head = head_rest + Vector2(sin(age * 47.0) * 4.0, cos(age * 39.0) * 3.0 - absf(sin(age * 9.0)) * 6.0)
+			swing = lerpf(swing, -1.2, 1.0 - exp(-delta * 10.0))   # wind up
 			if t >= AIM_TIME:
 				lunge_from = head
+				strike_len = maxf(head.distance_to(_target_point()), 1.0)
 				_next(STRIKE)
 				Sfx.play("clown_laugh", 1.25, -2.0)
 		STRIKE:
 			var goal := _target_point()
 			var to := goal - head
 			var step := STRIKE_SPEED * delta
+			# looms toward the camera at the top of its arc, smaller as it comes down
+			var prog := clampf(1.0 - to.length() / strike_len, 0.0, 1.0)
+			zoom = 1.0 + 0.9 * sin(prog * PI)
 			if to.length() <= step + 6.0:
 				head = goal
 				_impact()
@@ -103,6 +151,7 @@ func _physics_process(delta: float) -> void:
 				head += to.normalized() * step
 		SLAM:
 			head = _target_point()
+			zoom = lerpf(zoom, 1.0, 1.0 - exp(-delta * 20.0))
 			swing = lerpf(swing, 0.0, 1.0 - exp(-delta * 25.0))
 			if t >= SLAM_TIME:
 				lunge_from = head
@@ -110,10 +159,11 @@ func _physics_process(delta: float) -> void:
 		RETRACT:
 			var k := clampf(t / RETRACT_TIME, 0.0, 1.0)
 			head = lunge_from.lerp(_box_top(), k * k)
+			zoom = 1.0
 			swing = 0.0
+			hatch = 1.0 - clampf((t - RETRACT_TIME * 0.6) / (RETRACT_TIME * 0.4), 0.0, 1.0)
 			if t >= RETRACT_TIME:
 				_finish()
-				return
 	queue_redraw()
 
 
@@ -155,7 +205,7 @@ func _draw() -> void:
 	var T: float = arena.T
 	var tex: Texture2D = Assets.tex("objects/clown")
 	var pc: Vector2 = arena.cell_center(pillar)
-	var u := clampf(t / Tuning.CLOWN_WARN, 0.0, 1.0) if phase == WARN else 1.0
+	var u := clampf(t / WARN_TIME, 0.0, 1.0) if phase == WARN else 1.0
 	# the pillar flashes blood-red, faster and faster, and the box rattles
 	if phase == WARN:
 		var freq := lerpf(2.0, 16.0, u * u)
@@ -170,13 +220,19 @@ func _draw() -> void:
 	# the box on top of the pillar
 	var box := Rect2(pc + Vector2(-T * 0.42, -T * 0.95) + jitter, Vector2(T * 0.84, T * 0.7))
 	draw_texture_rect_region(tex, box, Assets.region(tex, 3, 2))
-	var lid_open := phase != WARN
-	var lid_a := -2.2 if lid_open else (sin(age * 30.0) * 0.12 * u)
+	# the hatch: a hinged trapdoor on top (rattling when it's about to go)
+	var lid_a := -2.2 * hatch + (sin(age * 30.0) * 0.12 * u if phase == WARN else 0.0)
+	if hatch > 0.05:
+		draw_rect(Rect2(box.position + Vector2(3, -2), Vector2(box.size.x - 6, 6)), Color(0.02, 0.0, 0.0))   # the dark inside
+		if phase == PAUSE1:   # eyes in the dark
+			for ex in [-5.0, 5.0]:
+				draw_circle(Vector2(box.get_center().x + ex, box.position.y + 1), 1.6, Color(1, 0.15, 0.1, 0.6 + 0.4 * sin(age * 20.0)))
 	draw_set_transform(box.position + Vector2(0, 2), lid_a, Vector2.ONE)
 	draw_rect(Rect2(0, -6, box.size.x, 6), Color(0.35, 0.06, 0.09))
 	draw_rect(Rect2(0, -6, box.size.x, 6), Color(0.07, 0.02, 0.02), false, 1.5)
+	draw_circle(Vector2(box.size.x - 4, -3), 2.0, Color(0.7, 0.6, 0.4))   # hinge latch
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	if phase == WARN:
+	if phase in [IDLE, WARN, HATCH, PAUSE1]:
 		return
 	# telegraph: a shaking dashed line and a crosshair on the victim
 	if phase == AIM and target != null:
@@ -209,13 +265,13 @@ func _draw() -> void:
 	for i in 8:
 		var a := TAU * i / 8.0 + age * 2.0
 		draw_circle(head + Vector2(0, T * 0.45) + Vector2(cos(a) * 16.0, sin(a) * 6.0), 8.0, Color(0.45, 0.04, 0.08) if i % 2 else Color(0.78, 0.72, 0.62))
-	var hs := T * 1.45 * (1.0 + 0.06 * sin(age * 18.0))
+	var hs := T * 1.45 * (1.0 + 0.06 * sin(age * 18.0)) * zoom
 	draw_set_transform(head, lean + sin(age * 25.0) * 0.08, Vector2.ONE)
 	draw_texture_rect_region(tex, Rect2(-hs * 0.5, -hs * 0.5, hs, hs), Assets.region(tex, 3, 0))
 	# the mallet in a little gloved fist beside the head
-	var hand := Vector2(T * 0.75, T * 0.2)
+	var hand := Vector2(T * 0.75, T * 0.2) * zoom
 	draw_set_transform(head + hand.rotated(lean), lean + swing, Vector2.ONE)
-	var ms := T * 1.3
+	var ms := T * 1.3 * zoom
 	draw_texture_rect_region(tex, Rect2(-ms * 0.5, -ms * 0.95, ms, ms), Assets.region(tex, 3, 1))
 	draw_circle(Vector2.ZERO, 8.0, Color(0.9, 0.88, 0.84))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

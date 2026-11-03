@@ -29,7 +29,7 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	size = Vector2(1280, 720)
 
-	var title := UiStyle.label("Fluffy Bears of Doom", 64, UiStyle.ROSE_DARK)
+	var title := UiStyle.label("Fluffy Horror Bears", 64, UiStyle.ROSE_DARK)
 	title.add_theme_color_override("font_outline_color", UiStyle.PAPER)
 	title.add_theme_constant_override("outline_size", 12)
 	title.position = Vector2(48, 40)
@@ -57,7 +57,7 @@ func _ready() -> void:
 		holder.add_child(vis)
 		puppets.append(p)
 		holders.append(holder)
-		var cap := UiStyle.label("%s\n%s" % [names[i], Species.info(Species.for_name(names[i]))["label"]], 16, UiStyle.INK_SOFT)
+		var cap := UiStyle.label("%s\n%s" % [names[i], Species.label(Species.for_name(names[i]))], 16, UiStyle.INK_SOFT)
 		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cap.position = Vector2(30 + i * 150, 470)
 		cap.size = Vector2(160, 50)
@@ -103,11 +103,11 @@ func _ready() -> void:
 	var mode := OptionButton.new()
 	mode.add_item("One Human")
 	mode.add_item("Two Humans")
-	mode.selected = clampi(Settings.human_count, 1, 2) - 1
-	Settings.human_count = mode.selected + 1
+	mode.add_item("Pure AI (watch)")   # every bear AI-controlled
+	mode.selected = [2, 0, 1][clampi(Settings.human_count, 0, 2)]
 	mode.custom_minimum_size = Vector2(220, 38)
 	mode.item_selected.connect(func(idx):
-		Settings.human_count = idx + 1
+		Settings.human_count = [1, 2, 0][idx]
 		_refresh()
 		Settings.save())
 	prow.add_child(mode)
@@ -123,7 +123,7 @@ func _ready() -> void:
 		sw.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(sw)
 		var who := UiStyle.label(Settings.AI_NAMES[i], 20)
-		who.tooltip_text = Species.info(Species.for_name(Settings.AI_NAMES[i]))["label"]
+		who.tooltip_text = Species.label(Species.for_name(Settings.AI_NAMES[i]))
 		row.add_child(_fixed(who, 120))
 		var ob := OptionButton.new()
 		for lbl in Settings.LEVEL_LABELS:

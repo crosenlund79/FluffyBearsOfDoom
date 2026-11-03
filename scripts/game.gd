@@ -31,12 +31,15 @@ const DoomRings = preload("res://scripts/doom_rings.gd")
 const JackInTheBox = preload("res://scripts/jack_in_the_box.gd")
 const PrincessHunt = preload("res://scripts/princess_hunt.gd")
 
-enum State { COUNTDOWN, PLAYING, ENDED }
+enum State { READY, COUNTDOWN, PLAYING, ENDED }   # READY: everyone dances until Space/Enter
 
-const ARENA_ORIGIN := Vector2(280, 52)   # centred: the HUD lives in the side columns
+## The arena on screen: the grid, scaled to fit between the card columns, centred.
+const ARENA_SIZE := Vector2(Tuning.COLS, Tuning.ROWS) * Tuning.TILE * Tuning.ARENA_SCALE
+const ARENA_ORIGIN := Vector2(640.0 - ARENA_SIZE.x * 0.5, 52.0)
 const DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
-var state := State.COUNTDOWN
+var state := State.READY
+var start_clock := -10.0   # when the round started (a moment of grace for the start key)
 var time_left := 150.0
 var countdown := 3.0
 var rng := RandomNumberGenerator.new()
@@ -68,7 +71,7 @@ var _steal_fx_t := 0.0
 var _last_count := 4
 var duck_layer: Node2D
 var parade = null
-var crane = null          # the crane event in progress
+var crane = null          # the carnival claw (always there, parked in a corner with a chair)
 var chair = null          # a delivered chair waiting to be looted
 var crane_timer := 0.0
 var crane_layer: Node2D
@@ -92,8 +95,13 @@ func _ready() -> void:
 
 	arena = ArenaScript.new()
 	arena.position = ARENA_ORIGIN
+	arena.scale = Vector2.ONE * Tuning.ARENA_SCALE
 	add_child(arena)
-	arena.setup(Maps.MAPS[Settings.arena_index], rng, PowerupScript.WEIGHTS)
+	var weights: Array = PowerupScript.WEIGHTS.duplicate()
+	if not Settings.diseases:   # Settings: no diseases at all
+		weights[PowerupScript.REVERSE] = 0.0
+		weights[PowerupScript.DIARRHEA] = 0.0
+	arena.setup(Maps.MAPS[Settings.arena_index], rng, weights)
 	# rarely, one block hides the Princess Hunt trap (never more than one)
 	if rng.randf() < Tuning.PRINCESS_CHANCE and not arena.hidden_powerups.is_empty():
 		var spots: Array = arena.hidden_powerups.keys().filter(func(c): return arena.hidden_powerups[c] != PowerupScript.SHUFFLE)
@@ -118,7 +126,13 @@ func _ready() -> void:
 		doom = DoomRings.new()
 		_layer(1).add_child(doom)   # warnings sit on the floor, over blocks, under bears
 		doom.setup(self, round_duration)
+	if Tuning.CLOWN_ENABLED and Mode.horror():
+		_setup_clown_box()
 	crane_timer = rng.randf_range(Tuning.CRANE_FIRST_DELAY[0], Tuning.CRANE_FIRST_DELAY[1])
+	if Tuning.CRANE_ENABLED:
+		crane = CraneScript.new()
+		crane_layer.add_child(crane)
+		crane.setup(self)
 
 	var roster: Array = Settings.roster()
 	for i in roster.size():
@@ -130,10 +144,10 @@ func _ready() -> void:
 			b.is_human = true
 			b.controller = HumanController.new(b, r["schemes"])
 			b.ctrl_label = "you" if Settings.human_count == 1 else ("WASD" if r["schemes"][0] == "p1" else "Arrows")
-			b.ctrl_label = Species.info(b.species)["label"] + " · " + b.ctrl_label
+			b.ctrl_label = Species.label(b.species) + " · " + b.ctrl_label
 		else:
 			b.controller = AiController.new(b, self, Settings.LEVELS.find(r["controller"]))
-			b.ctrl_label = Species.info(b.species)["label"] + " · " + Settings.LEVEL_LABELS[Settings.LEVELS.find(r["controller"])] + " AI"
+			b.ctrl_label = Species.label(b.species) + " · " + Settings.LEVEL_LABELS[Settings.LEVELS.find(r["controller"])] + " AI"
 		bears.append(b)
 	Music.play_context("gameplay")
 	_setup_mode_atmosphere()
@@ -141,8 +155,7 @@ func _ready() -> void:
 	hud = HudScript.new()
 	add_child(hud)
 	hud.setup(self)
-	hud.banner("3", 1.0)
-	Sfx.play("tick")
+	hud.show_ready(true)   # bears dance to the music until someone presses Space or Enter
 
 
 ## Darker, flickering nursery with a vignette in Horror mode.
@@ -200,9 +213,71 @@ func controls_enabled() -> bool:
 func _draw() -> void:
 	UiStyle.draw_wallpaper(self, Rect2(-position, get_viewport_rect().size))   # whole window, even ultrawide
 	# a stitched frame around the play area
-	var r := Rect2(ARENA_ORIGIN - Vector2(10, 10), Vector2(Tuning.COLS, Tuning.ROWS) * Tuning.TILE + Vector2(20, 20))
+	# the raised rim around the sunken arena: a thick bevelled lip
+	var r := Rect2(ARENA_ORIGIN - Vector2(14, 14), ARENA_SIZE + Vector2(28, 28))
+	draw_rect(Rect2(r.position + Vector2(5, 7), r.size), Color(0, 0, 0, 0.22))   # the platform's own shadow
 	draw_rect(r, UiStyle.FRAME)
-	UiStyle.stitch_rect(self, r.grow(-4), Color(UiStyle.ROSE_DARK, 0.6), 1.6, 6.0)
+	draw_rect(Rect2(r.position, Vector2(r.size.x, 4)), Color(1, 1, 1, 0.22))     # lit outer top edge
+	draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Color(1, 1, 1, 0.16))
+	draw_rect(Rect2(r.position + Vector2(0, r.size.y - 4), Vector2(r.size.x, 4)), Color(0, 0, 0, 0.18))
+	draw_rect(Rect2(r.position + Vector2(r.size.x - 4, 0), Vector2(4, r.size.y)), Color(0, 0, 0, 0.14))
+	var pit := Rect2(ARENA_ORIGIN - Vector2(3, 3), ARENA_SIZE + Vector2(6, 6))
+	draw_rect(pit, Color(0.1, 0.05, 0.04, 0.75))                                  # the step down into the pit
+	UiStyle.stitch_rect(self, r.grow(-7), Color(UiStyle.ROSE_DARK, 0.6), 1.6, 6.0)
+	if Mode.horror():
+		_draw_rim_remains(r)
+
+
+## (Horror) grisly cartoon leftovers on the raised rim, outside the playfield:
+## headless bodies, severed heads, bones and blood. Decoration only.
+func _draw_rim_remains(rim: Rect2) -> void:
+	var spots := [
+		[Vector2(rim.position.x + 60, rim.end.y + 14), "body", 0.15],
+		[Vector2(rim.position.x + 150, rim.end.y + 18), "head", 0.0],
+		[Vector2(rim.end.x - 120, rim.end.y + 16), "bones", 0.0],
+		[Vector2(rim.end.x - 60, rim.end.y + 12), "head", 0.4],
+		[Vector2(rim.position.x - 34, rim.position.y + 140), "head", -0.3],
+		[Vector2(rim.position.x - 40, rim.position.y + 420), "bones", 0.6],
+		[Vector2(rim.end.x + 34, rim.position.y + 260), "body", -1.4],
+		[Vector2(rim.end.x + 30, rim.position.y + 520), "head", 0.2],
+		[Vector2(rim.position.x + 420, rim.end.y + 15), "bones", 1.2],
+	]
+	for sp in spots:
+		_remains(sp[0], sp[1], sp[2])
+
+
+func _remains(p: Vector2, kind: String, rot: float) -> void:
+	var blood := Color(0.42, 0.02, 0.05, 0.9)
+	draw_set_transform(p + Vector2(0, 4), 0.0, Vector2(1.6, 0.6))
+	draw_circle(Vector2.ZERO, 12.0, Color(0.32, 0.01, 0.04, 0.8))   # pool
+	draw_set_transform(p, rot, Vector2.ONE)
+	var skin := Color(0.72, 0.6, 0.52)
+	match kind:
+		"head":
+			draw_circle(Vector2.ZERO, 8.0, skin)
+			draw_arc(Vector2(0, -1), 8.0, PI * 1.05, PI * 1.95, 10, Color(0.2, 0.12, 0.08), 4.0)   # hair
+			for ex in [-3.0, 3.0]:
+				draw_line(Vector2(ex - 1.5, -1.5), Vector2(ex + 1.5, 1.5), Color(0.1, 0.05, 0.05), 1.2)
+				draw_line(Vector2(ex - 1.5, 1.5), Vector2(ex + 1.5, -1.5), Color(0.1, 0.05, 0.05), 1.2)
+			draw_line(Vector2(-3, 4), Vector2(3, 4), Color(0.25, 0.05, 0.05), 1.2)
+			draw_set_transform(p + Vector2(0, 8).rotated(rot), rot, Vector2(1.0, 0.5))
+			draw_circle(Vector2.ZERO, 5.0, blood)                                                  # neck stump
+		"body":
+			draw_rect(Rect2(-9, -6, 18, 14), Color(0.3, 0.32, 0.4))                                # shirt
+			draw_line(Vector2(-9, -4), Vector2(-17, 4), Color(0.3, 0.32, 0.4), 4.0)
+			draw_line(Vector2(9, -4), Vector2(16, 6), Color(0.3, 0.32, 0.4), 4.0)
+			draw_line(Vector2(-5, 8), Vector2(-7, 20), Color(0.2, 0.2, 0.25), 5.0)
+			draw_line(Vector2(5, 8), Vector2(8, 20), Color(0.2, 0.2, 0.25), 5.0)
+			draw_circle(Vector2(0, -8), 4.5, blood)                                                # no head
+			draw_circle(Vector2(3, -12), 1.8, blood)
+		"bones":
+			var bone := Color(0.88, 0.85, 0.76)
+			for b in [[Vector2(-12, -3), Vector2(10, 4)], [Vector2(-6, 6), Vector2(9, -6)]]:
+				draw_line(b[0], b[1], bone, 3.0)
+				for e in b:
+					draw_circle(e + Vector2(0, -1.5), 2.3, bone)
+					draw_circle(e + Vector2(0, 1.5), 2.3, bone)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _physics_process(delta: float) -> void:
@@ -240,8 +315,8 @@ func _physics_process(delta: float) -> void:
 # --- bombs and blasts ------------------------------------------------------------
 
 func try_place_bomb(bear) -> void:
-	if not bear.can_place_bomb():
-		return
+	if not bear.can_place_bomb() or clock - start_clock < 0.25:
+		return   # (the Space that starts the round mustn't also drop a bomb)
 	var c: Vector2i = bear.cell()
 	if arena.is_solid(c):
 		return
@@ -482,7 +557,7 @@ func collect_powerup_at(b, c: Vector2i) -> void:
 func _update_crane(delta: float) -> void:
 	if chair != null and is_instance_valid(chair) and chair.fluff <= 0.5:
 		_remove_chair(false)   # looted bare
-	if not Tuning.CRANE_ENABLED or crane != null or chair != null or parade != null:
+	if crane == null or crane.busy() or chair != null or parade != null:
 		return
 	crane_timer -= delta
 	if crane_timer <= 0.0 and time_left > 14.0:
@@ -507,10 +582,13 @@ func start_crane() -> void:
 	if cells.is_empty():
 		crane_timer = 5.0
 		return
-	crane = CraneScript.new()
-	crane_layer.add_child(crane)
-	crane.setup(self, cells[rng.randi() % cells.size()])
+	crane.deploy(cells[rng.randi() % cells.size()])
 	hud.banner("Something is coming down..." if Mode.horror() else "Special delivery!", 1.6)
+
+
+## The claw is back in its corner with a fresh chair.
+func crane_returned() -> void:
+	pass
 
 
 func land_chair(c: Vector2i) -> void:
@@ -544,24 +622,48 @@ func _update_clown(delta: float) -> void:
 		start_clown()
 
 
-func start_clown() -> void:
-	var pillars := []
+var clown_box = null      # (Horror) the jack-in-the-box: on its pillar, hatch shut, all round
+
+
+## A pillar for the clown's box: one that closes late in the Time of Doom (or
+## never), and isn't the duck's portal. Null if none is left.
+func pick_clown_pillar():
+	var best := []
 	for y in arena.rows:
 		for x in arena.cols:
 			var c := Vector2i(x, y)
 			if arena.cell_type(c) != ArenaScript.WALL:
 				continue
-			if doom != null and doom.time_until_close(c) < Tuning.CLOWN_WARN + 4.0:
-				continue   # its ring shuts before it would get going
+			if doom != null and doom.time_until_close(c) < 20.0:
+				continue
 			if parade != null and is_instance_valid(parade) and parade.wall == c:
-				continue   # the duck portal is busy
-			pillars.append(c)
-	clown_timer = rng.randf_range(Tuning.CLOWN_INTERVAL[0], Tuning.CLOWN_INTERVAL[1])
-	if pillars.is_empty():
+				continue
+			best.append(c)
+	if best.is_empty():
+		return null
+	return best[rng.randi() % best.size()]
+
+
+## Put the box on its pillar at the start of a Horror round.
+func _setup_clown_box() -> void:
+	var p = null
+	for tries in 20:   # prefer a pillar near the middle: it lasts longest
+		p = pick_clown_pillar()
+		if p == null or (doom == null or doom.ring_of(p) >= 3):
+			break
+	if p == null:
 		return
-	clown = JackInTheBox.new()
-	clown_layer.add_child(clown)
-	clown.setup(self, pillars[rng.randi() % pillars.size()])
+	clown_box = JackInTheBox.new()
+	clown_layer.add_child(clown_box)
+	clown_box.setup(self, p)
+
+
+func start_clown() -> void:
+	clown_timer = rng.randf_range(Tuning.CLOWN_INTERVAL[0], Tuning.CLOWN_INTERVAL[1])
+	if clown_box == null or clown_box.phase != clown_box.IDLE:
+		return
+	clown = clown_box
+	clown_box.trigger()
 	hud.toast("Something is rattling...", Color(0.7, 0.1, 0.12))
 
 
@@ -715,10 +817,10 @@ func doom_close(cells: Array) -> void:
 	# the duck and the crane keep to open ground too
 	if parade != null and is_instance_valid(parade) and shut.has(parade.mother_cell()):
 		parade.relocate(nearest_open_cell(parade.mother_cell()))
-	if crane != null and is_instance_valid(crane) and shut.has(crane.target):
+	if crane != null and crane.busy() and crane.phase <= crane.HOVER and shut.has(crane.target):
 		crane.target = nearest_open_cell(crane.target)
-	if clown != null and is_instance_valid(clown):
-		clown.on_cells_closed(shut)
+	if clown_box != null:
+		clown_box.on_cells_closed(shut)
 	arena.add_shake(2.5)
 	Sfx.play("doom_slam", randf_range(0.9, 1.1), -9.0)
 	for c in shut:
@@ -810,7 +912,8 @@ func start_duck_parade() -> void:
 		for x in arena.cols:
 			var c := Vector2i(x, y)
 			var below := c + Vector2i(0, 1)
-			if arena.cell_type(c) == ArenaScript.WALL and arena.cell_type(below) == ArenaScript.EMPTY and not arena.bombs.has(below):
+			if arena.cell_type(c) == ArenaScript.WALL and arena.cell_type(below) == ArenaScript.EMPTY and not arena.bombs.has(below) \
+					and (clown_box == null or clown_box.pillar != c):
 				walls.append(c)
 	if walls.is_empty():
 		duck_timer = 5.0
@@ -1073,7 +1176,7 @@ func infect(b) -> void:
 
 ## Reverse Controls is contagious: bumping into a cursed bear passes it on.
 func _update_contagion() -> void:
-	if state != State.PLAYING:
+	if state != State.PLAYING or not Settings.diseases:
 		return
 	var reach: float = Tuning.INFECT_DIST * arena.T
 	for a in bears:
@@ -1094,10 +1197,15 @@ func _update_steal_fx(delta: float) -> void:
 	_steal_fx_t -= delta
 	if _steal_fx_t > 0.0:
 		return
-	_steal_fx_t = 0.07
+	_steal_fx_t = 0.045
 	for b in bears:
 		if b.stealing and b.steal_target != null:
 			var v = b.steal_target
+			# chunks torn out: a burst of tufts (and, in Horror, a little red) flying off
+			if rng.randf() < 0.45:
+				_burst(v.position + Vector2(0, -16), fluff_tex, Rect2(Vector2.ZERO, fluff_tex.get_size()), 3, 11.0, Mode.stuffing_color(), 190.0)
+				if Mode.horror():
+					_confetti(v.position + Vector2(0, -14), 3)
 			var p = ParticleScript.new()
 			p.tex = fluff_tex
 			p.region = Rect2(Vector2.ZERO, fluff_tex.get_size())
@@ -1105,8 +1213,8 @@ func _update_steal_fx(delta: float) -> void:
 			p.position = p.start
 			p.target = b
 			p.life = 0.45
-			p.size = rng.randf_range(10, 16)
-			p.spin = rng.randf_range(-6, 6)
+			p.size = rng.randf_range(12, 20)
+			p.spin = rng.randf_range(-12, 12)
 			p.arc = rng.randf_range(14, 34)
 			p.color = Mode.stuffing_color()
 			fx_layer.add_child(p)
@@ -1240,12 +1348,10 @@ func _end_match(instant_winner = null) -> void:
 	if parade != null and is_instance_valid(parade):
 		parade.queue_free()  # the ducks wind down quietly
 		parade = null
-	if crane != null and is_instance_valid(crane):
-		crane.queue_free()
-		crane = null
-	if clown != null and is_instance_valid(clown):
-		clown.queue_free()
-		clown = null
+	if crane != null and crane.busy() and crane.carrying and crane.phase <= crane.HOVER:
+		crane.phase = crane.RETURN   # (round over: it takes its chair home)
+	if clown_box != null and clown_box.phase != clown_box.IDLE:
+		clown_box._finish()   # round over: back in the box
 	for b in bears:
 		b.stealing = false
 	var ranking := bears.duplicate()
@@ -1262,7 +1368,32 @@ func _end_match(instant_winner = null) -> void:
 	hud.show_results(ranking, instant_winner)
 
 
+## Space or Enter (or a pad's A / Start) ends the dance: everyone starts at once.
+func start_round() -> void:
+	if state != State.READY:
+		return
+	state = State.PLAYING
+	start_clock = clock
+	hud.show_ready(false)
+	hud.banner("Steal the stuffing!", 1.4)
+	Sfx.play("go")
+
+
+func is_dancing() -> bool:
+	return state == State.READY
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if state == State.READY and not get_tree().paused:
+		var go := false
+		if event is InputEventKey and event.pressed and not event.echo:
+			go = event.physical_keycode in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]
+		elif event is InputEventJoypadButton and event.pressed:
+			go = event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]
+		if go:
+			start_round()
+			get_viewport().set_input_as_handled()
+			return
 	if event.is_action_pressed("pause") and state != State.ENDED:
 		get_tree().paused = not get_tree().paused
 		hud.show_pause(get_tree().paused)

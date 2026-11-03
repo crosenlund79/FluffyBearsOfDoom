@@ -40,3 +40,16 @@ static func info(s: String) -> Dictionary:
 	if sp != SPECIES["bear"] and Assets.resolve(sp["sheet"]) == "":
 		return SPECIES["bear"]
 	return sp
+
+
+## Display name, by mode: in Horror the roster are creatures.
+const HORROR_LABELS := {"bear": "Elk Bear", "bunny": "Horror Bunny", "dino": "Zombie Bear", "princess": "Skeleton Bear"}
+
+
+static func label(s: String) -> String:
+	var sp: Dictionary = info(s)
+	if Settings.mode == "horror":
+		for k in SPECIES:
+			if SPECIES[k] == sp:
+				return HORROR_LABELS.get(k, sp["label"])
+	return sp["label"]

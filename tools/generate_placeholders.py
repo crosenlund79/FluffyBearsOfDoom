@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates the template_*.png placeholder art for Fluffy Bears of Doom.
+"""Generates the template_*.png placeholder art for Fluffy Horror Bears.
 
 Only files prefixed with ``template_`` are ever written, so your own
 replacement art (same name without the prefix) is never touched.
@@ -1286,6 +1286,280 @@ def make_horror_species(species):
     return species_sheet(out)
 
 
+# ---------------------------------------------------------------- horror characters
+# Horror mode turns the roster into creatures (same sheet layouts, so the rig and
+# replacement rules are unchanged): the bear becomes an Elk Bear, the bunny gets
+# much nastier, the dino becomes a Zombie Bear and the princess a Skeleton Bear.
+BONE = "ece4d2"
+BONE_D = "9c8f78"
+VOID = "120708"
+
+
+def blank_cell():
+    return new_img(128, 128)
+
+
+def antler():
+    """Elk antlers in the ear cell (drawn pale: the bear's tint browns them)."""
+    c = Canvas(128, 128)
+    col, edge = rgba("efe6d6"), rgba("6e5c48")
+    beam = [(64, 112), (60, 88), (54, 66), (50, 44), (52, 22), (58, 6)]
+    for w, cc in ((9, edge), (6.5, col)):
+        c.line(beam, cc, w)
+        for (a, b) in (((58, 80), (34, 62)), ((54, 60), (78, 40)), ((51, 40), (28, 24)), ((52, 26), (74, 10)), ((34, 62), (22, 66))):
+            c.line([a, b], cc, w * 0.8)
+    c.ellipse(64, 112, 9, 6, fill=rgba("8a7a66"))
+    return c.result()
+
+
+def elk_face(kind):
+    face = horror_face(kind)
+    c = Canvas(128, 128)
+    c.ellipse(64, 96, 20, 22, fill=rgba("5a4436"))             # a long, dark elk snout
+    c.ellipse(64, 104, 16, 12, fill=rgba("3a2a22"))
+    for x in (57, 71):
+        c.ellipse(x, 108, 3.4, 2.4, fill=rgba(VOID))
+    if kind in ("smug", "indignant"):
+        for x in (54, 60, 68, 74):
+            c.polygon([(x - 2, 115), (x + 2, 115), (x, 121)], fill=rgba("e6dcc0"))
+    face.alpha_composite(c.result())
+    return face
+
+
+def make_horror_elk():
+    base = make_horror_bear()
+    cells = [lcrop(base, (i * BEAR_CELL, 0, (i + 1) * BEAR_CELL, BEAR_CELL)) for i in range(10)]
+    cells[3] = antler()
+    for i, kind in enumerate(("normal", "smug", "indignant", "stunned")):
+        cells[6 + i] = elk_face(kind)
+    return species_sheet(cells)
+
+
+def needle_mouth(c, y, w, open_amt):
+    c.ellipse(64, y, w, 5 + open_amt, fill=rgba(VOID))
+    c.ellipse(64, y, w, 5 + open_amt, outline=rgba("6e1018"), width=1.4)
+    n = 9
+    for i in range(n):
+        x = 64 - w + (2 * w) * (i + 0.5) / n
+        c.polygon([(x - 1.6, y - 4 - open_amt), (x + 1.6, y - 4 - open_amt), (x, y + 2)], fill=rgba("f0e8d4"))
+        c.polygon([(x - 1.6, y + 4 + open_amt), (x + 1.6, y + 4 + open_amt), (x, y - 1)], fill=rgba("f0e8d4"))
+
+
+def scary_bunny_face(kind):
+    c = Canvas(128, 128)
+    c.ellipse(64, 86, 24, 18, fill=rgba("b0a59a"))
+    for x in (42, 86):                                           # sunken, glowing eyes
+        c.ellipse(x, 58, 12, 11, fill=rgba(VOID))
+        glow = kind != "stunned"
+        if glow:
+            c.ellipse(x, 58, 5.5, 5.5, fill=rgba("ff2a1e"))
+            c.ellipse(x, 58, 2.2, 2.2, fill=rgba("ffe0c8"))
+        else:
+            c.line([(x - 7, 51), (x + 7, 65)], rgba("e0d0c0"), 2.4)
+            c.line([(x + 7, 51), (x - 7, 65)], rgba("e0d0c0"), 2.4)
+        c.line([(x, 69), (x + 1, 82)], rgba(BLOOD), 2.2)
+    c.ellipse(64, 74, 5, 4, fill=rgba(VOID))
+    needle_mouth(c, 94, 22 if kind != "normal" else 16, {"normal": 1, "smug": 3, "indignant": 6, "stunned": 2}[kind])
+    for x, y in ((28, 80), (100, 80)):                           # mouth stitched up to the cheeks
+        c.line([(x, y), (x + (10 if x < 64 else -10), 92)], rgba("1a0b0c"), 1.4)
+    return c.result()
+
+
+def shredded_ear(img):
+    img = tear_ear(img)
+    big = img.resize((512 * OUT, 512 * OUT), Image.LANCZOS)
+    d = ImageDraw.Draw(big)
+    d.polygon([(v[0] * OUT, v[1] * OUT) for v in [(310, 230), (360, 260), (306, 300)]], fill=(0, 0, 0, 0))
+    out = big.resize((128 * OUT, 128 * OUT), Image.LANCZOS)
+    c = Canvas(128, 128)
+    c.line([(64, 30), (66, 60), (62, 90)], rgba(BLOOD), 2.2)
+    out.alpha_composite(c.result())
+    return out
+
+
+def make_horror_bunny():
+    sheet = make_horror_species("bunny")
+    cells = [lcrop(sheet, (i * BEAR_CELL, 0, (i + 1) * BEAR_CELL, BEAR_CELL)) for i in range(12)]
+    cells[3] = shredded_ear(cells[3])
+    for i, kind in enumerate(("normal", "smug", "indignant", "stunned")):
+        cells[6 + i] = scary_bunny_face(kind)
+    return species_sheet(cells)
+
+
+def zombie_part(index):
+    b = bear_cells()[index]
+    b = grim(b, 0.92, 0.35)
+    c = Canvas(128, 128)
+    rot = rgba("6f7a5c", 200)
+    if index == 0:
+        c.ellipse(44, 48, 12, 9, fill=rot)
+        c.ellipse(80, 80, 13, 10, fill=rgba(VOID))               # a hole, ribs showing
+        for k in range(3):
+            c.line([(70, 74 + k * 5), (90, 74 + k * 5)], rgba(BONE), 2.0)
+        scar(c, [(30, 70), (44, 82), (40, 96)])
+    elif index == 1:
+        c.ellipse(64, 70, 15, 12, fill=rgba("4a0a10"))
+        for (x, y) in ((58, 66), (68, 72), (62, 76)):
+            c.ellipse(x, y, 4, 3, fill=rgba("b04050"))
+    elif index == 2:
+        c.ellipse(84, 40, 14, 10, fill=rot)
+        c.ellipse(86, 38, 7, 5, fill=rgba("c9b8a0"))              # bone peeking through
+        scar(c, [(32, 46), (48, 36), (60, 40)])
+    elif index == 3:
+        c.polygon([(70, 46), (88, 56), (72, 70)], fill=(0, 0, 0, 0))
+        c.ellipse(64, 66, 10, 10, fill=rot)
+    elif index in (4, 5):
+        for k in range(3):                                         # rotting bandage wraps
+            y = 50 + k * 12
+            c.line([(46, y), (82, y + 5)], rgba("d8cfb8"), 4)
+            c.line([(46, y), (82, y + 5)], rgba("8a7a5a", 120), 1)
+    b.alpha_composite(c.result())
+    return b
+
+
+def zombie_face(kind):
+    c = Canvas(128, 128)
+    c.ellipse(64, 84, 22, 16, fill=rgba("8a917a"))
+    c.ellipse(64, 76, 7, 5, fill=rgba(VOID))
+    # one eye dangling on a thread, the other glowing
+    c.line([(42, 58), (40, 80)], rgba("2a2020"), 1.4)
+    c.ellipse(40, 84, 7, 7, fill=rgba("e8e0d0"))
+    c.ellipse(41, 85, 3, 3, fill=rgba(VOID))
+    c.ellipse(42, 58, 8, 7, fill=rgba(VOID))
+    if kind == "stunned":
+        c.line([(79, 51), (93, 65)], rgba(VOID), 3)
+        c.line([(93, 51), (79, 65)], rgba(VOID), 3)
+    else:
+        c.ellipse(86, 58, 9, 9, fill=rgba(VOID))
+        c.ellipse(86, 58, 4, 4, fill=rgba("b8ff40"))
+    open_amt = {"normal": 3, "smug": 6, "indignant": 9, "stunned": 4}[kind]
+    c.ellipse(64, 94, 15, 3 + open_amt, fill=rgba(VOID))
+    for x in range(52, 78, 5):
+        c.polygon([(x, 91 - open_amt * 0.5), (x + 3, 91 - open_amt * 0.5), (x + 1.5, 95)], fill=rgba("cfc6a6"))
+    c.line([(70, 96 + open_amt), (72, 108)], rgba("9ab070", 200), 2.0)   # drool
+    return c.result()
+
+
+def bone_spikes():
+    c = Canvas(128, 128)
+    for (x, h, lean) in ((40, 46, -10), (56, 62, -4), (72, 66, 4), (88, 48, 10)):
+        c.polygon([(x - 6, 110), (x + 6, 110), (x + lean, 110 - h)], fill=rgba(BONE))
+        c.line([(x - 6, 110), (x + lean, 110 - h)], rgba(BONE_D), 1.2)
+    c.ellipse(64, 112, 34, 7, fill=rgba("4a0a10", 200))
+    return c.result()
+
+
+def make_zombie_bear():
+    cells = [zombie_part(i) for i in range(6)]
+    cells += [zombie_face(k) for k in ("normal", "smug", "indignant", "stunned")]
+    cells += [blank_cell(), bone_spikes()]   # no dino tail; bone shards on the back
+    return species_sheet(cells)
+
+
+def skel_ribcage():
+    c = Canvas(128, 128)
+    c.ellipse(64, 66, 40, 46, fill=rgba("2a2228", 150))           # a shadow of the old body
+    c.line([(64, 24), (64, 108)], rgba(BONE), 7)                  # spine
+    for k in range(5):
+        y = 36 + k * 13
+        w = 34 - abs(k - 2) * 4
+        c.arc(64, y + 10, w, 12, 200, 340, rgba(BONE), 4.5)
+    return c.result()
+
+
+def skel_pelvis():
+    c = Canvas(128, 128)
+    c.ellipse(52, 86, 16, 12, fill=rgba(BONE))
+    c.ellipse(76, 86, 16, 12, fill=rgba(BONE))
+    c.ellipse(52, 86, 7, 5, fill=rgba(VOID))
+    c.ellipse(76, 86, 7, 5, fill=rgba(VOID))
+    return c.result()
+
+
+def skel_skull():
+    c = Canvas(128, 128)
+    c.ellipse(64, 62, 48, 44, fill=rgba(BONE))
+    c.ellipse(64, 92, 30, 18, fill=rgba(BONE))
+    c.arc(64, 62, 48, 44, 200, 340, rgba(BONE_D), 2.0)
+    c.line([(80, 26), (86, 40), (82, 50)], rgba(BONE_D), 1.6)     # crack
+    return c.result()
+
+
+def skel_ear():
+    c = Canvas(128, 128)
+    c.ellipse(64, 64, 20, 20, fill=rgba(BONE))
+    c.ellipse(64, 66, 10, 10, fill=rgba(VOID))
+    return c.result()
+
+
+def skel_bone(leg):
+    c = Canvas(128, 128)
+    top, bot = (40, 82) if leg else (34, 96)
+    c.line([(64, top), (64, bot)], rgba(BONE), 9)
+    for y in (top, bot):
+        c.ellipse(59, y, 7, 6, fill=rgba(BONE))
+        c.ellipse(69, y, 7, 6, fill=rgba(BONE))
+    return c.result()
+
+
+def skel_face(kind):
+    c = Canvas(128, 128)
+    for x in (44, 84):
+        r = 13 if kind != "indignant" else 11
+        c.ellipse(x, 60, r, r + 1, fill=rgba(VOID))
+        if kind == "stunned":
+            c.line([(x - 6, 54), (x + 6, 66)], rgba(BONE_D), 2.4)
+            c.line([(x + 6, 54), (x - 6, 66)], rgba(BONE_D), 2.4)
+        else:
+            c.ellipse(x, 61, 2.6, 2.6, fill=rgba("ff3020"))
+    if kind == "indignant":
+        c.line([(30, 44), (56, 52)], rgba(VOID), 3)
+        c.line([(98, 44), (72, 52)], rgba(VOID), 3)
+    c.polygon([(64, 74), (58, 84), (70, 84)], fill=rgba(VOID))
+    gap = {"normal": 0, "smug": 2, "indignant": 6, "stunned": 3}[kind]
+    for i in range(7):
+        x = 46 + i * 6
+        c.rect(x, 90, x + 5, 98, fill=rgba(BONE), outline=rgba(BONE_D), width=0.8)
+        c.rect(x, 99 + gap, x + 5, 106 + gap, fill=rgba(BONE), outline=rgba(BONE_D), width=0.8)
+    if kind == "smug":
+        c.line([(40, 104), (88, 96)], rgba(BONE_D), 1.0)
+    return c.result()
+
+
+def rag_tutu():
+    c = Canvas(128, 128)
+    pts = [(14, 54), (114, 54)]
+    for i in range(9):                                            # torn, hanging strips
+        x = 16 + i * 12
+        pts.append((x, 54))
+    c.polygon([(16, 50), (112, 50), (118, 74), (10, 74)], fill=rgba("3a2a3a"))
+    for i in range(10):
+        x = 12 + i * 11
+        c.polygon([(x, 72), (x + 9, 72), (x + 5, 84 + (i * 7) % 13)], fill=rgba("2c2030"))
+    c.dashed_line(16, 58, 112, 58, rgba("6a5070"), 1.2, 4, 3)
+    c.ellipse(70, 66, 8, 4, fill=rgba(BLOOD, 170))
+    return c.result()
+
+
+def rusty_crown():
+    c = Canvas(128, 128)
+    c.polygon([(24, 92), (24, 54), (42, 74), (52, 40), (64, 70), (78, 36), (88, 72), (104, 50), (104, 92)], fill=rgba("8a6a2a"))
+    c.polygon([(24, 92), (24, 54), (42, 74), (52, 40), (64, 70), (78, 36), (88, 72), (104, 50), (104, 92)], outline=rgba("3a2a12"))
+    for (x, y, r) in ((40, 84, 6), (90, 82, 5), (60, 88, 4)):
+        c.ellipse(x, y, r, r * 0.7, fill=rgba("5a3a1a", 200))     # rust
+    c.ellipse(64, 80, 7, 7, fill=rgba(BONE))                      # a little skull gem
+    c.ellipse(61, 79, 2, 2, fill=rgba(VOID))
+    c.ellipse(67, 79, 2, 2, fill=rgba(VOID))
+    return c.result()
+
+
+def make_skeleton_bear():
+    cells = [skel_ribcage(), skel_pelvis(), skel_skull(), skel_ear(), skel_bone(False), skel_bone(True)]
+    cells += [skel_face(k) for k in ("normal", "smug", "indignant", "stunned")]
+    cells += [rag_tutu(), rusty_crown()]
+    return species_sheet(cells)
+
+
 # ---------------------------------------------------------------- crane chair
 def make_chair():
     """An overstuffed armchair, bursting with fluff (96x96)."""
@@ -1563,16 +1837,20 @@ if __name__ == "__main__":
     save(make_duck(), "objects", "template_duck.png")
     save(make_powerups(), "powerups", "template_powerups.png")
     save(make_effects(), "effects", "template_effects.png")
-    save(make_horror_bear(), "bears", "horror", "template_bear.png")
+    # (the order below keeps each sheet's random sequence stable; new sheets go last)
+    save(make_horror_elk(), "bears", "horror", "template_bear.png")       # Horror: Elk Bear
     save(make_horror_tiles(), "tiles", "horror", "template_tiles.png")
     save(make_horror_effects(), "effects", "horror", "template_effects.png")
     save(make_bunny(), "bears", "template_bunny.png")
     save(make_dino(), "bears", "template_dino.png")
     save(make_princess(), "bears", "template_princess.png")
-    for sp in ("bunny", "dino", "princess"):
-        save(make_horror_species(sp), "bears", "horror", "template_%s.png" % sp)
+    save(make_horror_bunny(), "bears", "horror", "template_bunny.png")    # Horror: a nastier bunny
+    make_horror_species("dino")       # (replaced below, but drawn to keep the sequence stable)
+    make_horror_species("princess")
     save(make_chair(), "objects", "template_chair.png")
     save(make_horror_chair(), "objects", "horror", "template_chair.png")
     save(make_horror_powerups(), "powerups", "horror", "template_powerups.png")
     save(make_clown(), "objects", "horror", "template_clown.png")
     make_icon().save(os.path.join(ROOT, "..", "..", "icon.png"))
+    save(make_zombie_bear(), "bears", "horror", "template_dino.png")         # Horror: Zombie Bear
+    save(make_skeleton_bear(), "bears", "horror", "template_princess.png")   # Horror: Skeleton Bear

@@ -65,7 +65,7 @@ func setup(g) -> void:
 	visual.source = puppet
 	visual.tint = Color(0.82, 0.74, 0.76) if Mode.horror() else Color("f2b3cf")
 	visual.seed_offset = 3.3
-	visual.scale = Vector2.ONE * 1.25
+	visual.scale = Vector2.ONE * perspective_scale()
 	visual.visible = false
 	add_child(visual)
 	var gun := Gun.new()
@@ -279,9 +279,29 @@ func _fire() -> void:
 
 # --- drawing ------------------------------------------------------------------------------
 
+## Perspective: the arena is a pit below the raised rim, so she looks biggest
+## up on the rim / outside the wall and in mid-leap, and a little smaller once
+## she's down on the playfield, where she is still clearly bigger than a bear.
+const SCALE_FLOOR := 1.3     # down in the arena (bears are 1.0)
+const SCALE_RIM := 1.65      # up on the raised rim, outside the wall
+
+
+func perspective_scale() -> float:
+	var T: float = arena.T
+	var inner := Rect2(Vector2(T, T), Vector2(arena.cols - 2, arena.rows - 2) * T)
+	var outside := 0.0
+	if not inner.has_point(position):
+		var dx := maxf(inner.position.x - position.x, position.x - inner.end.x)
+		var dy := maxf(inner.position.y - position.y, position.y - inner.end.y)
+		outside = clampf(maxf(dx, dy) / T, 0.0, 1.0)
+	var lift := clampf(height / (T * 2.4), 0.0, 1.0)
+	return lerpf(SCALE_FLOOR, SCALE_RIM, maxf(outside, lift * 0.8))
+
+
 func _process(_delta: float) -> void:
 	if visual != null:
 		visual.position = Vector2(0, -height)
+		visual.scale = Vector2.ONE * perspective_scale()
 	queue_redraw()
 
 

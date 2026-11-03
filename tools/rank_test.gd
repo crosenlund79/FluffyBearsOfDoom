@@ -83,8 +83,30 @@ func run(g, shot_dir: String) -> void:
 	print("steady stealing re-rankings: %d" % (game.hud.rank_changes - start_changes))
 	_expect(game.hud.rank_changes - start_changes <= 3, "steady stealing re-ranks only when places really change")
 
+	_expect(spider_hits == 0 and spider_samples > 100, "spider and webs never touch the arena (%d frames watched)" % spider_samples)
 	print("RANK TEST: %s" % ("ALL PASS" if fails == 0 else "%d FAILED" % fails))
 	get_tree().quit()
+
+
+var spider_hits := 0
+var spider_samples := 0
+
+
+## Watch the decorative spider and its webs: they must never touch the arena.
+func _process(_delta: float) -> void:
+	if game == null or game.hud == null or game.hud.spider == null:
+		return
+	var arena_rect: Rect2 = game.hud.ARENA_RECT
+	var sp = game.hud.spider
+	spider_samples += 1
+	if arena_rect.intersects(Rect2(sp.pos - Vector2(32, 32), Vector2(64, 64))):
+		spider_hits += 1
+	for w in sp.webs:
+		var a: Vector2 = w["from"]
+		var b: Vector2 = w["to"]
+		for k in 9:
+			if arena_rect.has_point(a.lerp(b, k / 8.0)):
+				spider_hits += 1
 
 
 func _set_scores(vals: Array) -> void:
@@ -124,9 +146,9 @@ func _check(what: String, expected: Array) -> void:
 			ok = false
 		for i in col.size():
 			var want: Vector2 = hud.slot_top_left(side, i) - col[i].size * (1.0 - hud.CARD_SCALE) * 0.5
-			if col[i].position.distance_to(want) > 0.5 or absf(col[i].rotation) > 0.01 or absf(col[i].scale.x - hud.CARD_SCALE) > 0.001:
+			if col[i].position.distance_to(want) > 0.5 or absf(col[i].rotation - hud.slot_rotation(side, i)) > 0.01 or absf(col[i].scale.x - hud.CARD_SCALE) > 0.001:
 				ok = false
-			if i > 0 and col[i].position.y < col[i - 1].position.y + hud.card_size().y:
+			if i > 0 and col[i].position.y < col[i - 1].position.y + hud.slot_step() - 0.5:
 				ok = false
 	if not ok:
 		for c in hud.cards:

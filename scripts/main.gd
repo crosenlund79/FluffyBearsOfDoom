@@ -37,6 +37,7 @@ func _ready() -> void:
 		for a in OS.get_cmdline_user_args():
 			if a.begins_with("--shots="):
 				shot_dir = a.get_slice("=", 1)
+		current.start_round.call_deferred()
 		var tester = load("res://tools/rank_test.gd").new()
 		add_child(tester)
 		tester.run.call_deferred(current, shot_dir)
@@ -90,6 +91,7 @@ func _ready() -> void:
 		if "--crane" in OS.get_cmdline_user_args():
 			current.crane_timer = 2.0
 			current.duck_timer = 999.0
+		current.start_round.call_deferred()   # no one to press Space: start right away
 		_autotest.call_deferred()
 		return
 	show_menu()
@@ -111,7 +113,7 @@ func _autotest() -> void:
 			line += "clown=%d tgt=%s " % [g.clown.phase, g.clown.target.bear_name if g.clown.target != null else "-"]
 		if g.doom != null:
 			line += "doom=%d/%d%s " % [g.doom.closed_count(), g.doom.order.size(), "!" if g.doom.warning_active() else ""]
-		if g.crane != null:
+		if g.crane != null and g.crane.busy():
 			line += "crane=%d " % g.crane.phase
 		if g.chair != null and is_instance_valid(g.chair):
 			line += "chair=%s fluff=%d " % [g.chair.cell, roundi(g.chair.fluff)]

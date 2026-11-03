@@ -1,4 +1,6 @@
-# 🧸💣 Fluffy Bears of Doom
+# 🧸💣 Fluffy Horror Bears
+
+(Formerly *Fluffy Bears of Doom*. Saved settings and key bindings carry over.)
 
 A Godot 4.3 arcade game. Four plush toys (a teddy bear, a teddy bunny, a small dino and a
 teddy bear princess) play classic fixed-grid bomb tactics with pastel
@@ -25,26 +27,36 @@ with the settings, and "Reset to defaults" restores the table above. There is no
 overview during a match any more.
 
 ## The match screen
-The arena sits in the middle, uncovered. On **both** sides of it is the same ranked stack of four
-small playing-card panels, 1st at the top and 4th at the bottom: rank (gold, silver and bronze;
-the leader has a crown; tied players share a rank), name, portrait, fluff score (it blinks while
-someone is stealing that player's stuffing) and a small fluff bar running to the instant-win line.
-The human player's cards have a thick frame in their colour and a **YOU** (or P1/P2) tab, which
-travels with the card through every animation. Both stacks show one shared ranking and always
-move together.
+The arena sits in the middle, a step **below** the raised, bevelled rim around it (the rim casts a
+shadow into the pit). The grid is 17x15 tiles, one ring larger than before, drawn slightly zoomed
+out so it fills the same space. Above it: the round timer and, quietly on the left, the song that's
+playing.
 
-When places change, the cards physically **slide** to their new slots, wobbling on the way. Cards
-moving up get a brief **gold glow** (▲) and pass on an outer lane. Cards moving down get a
-**splatter of blood** (▼) and pass on an inner lane, so every card stays visible. The effects fade
-as the cards settle, and the splatter never covers the score. The ranking updates as soon as a
-whole-number score changes; equal scores keep their current order, so ties never flicker.
+On **both** sides is the same ranked stack of four small playing cards, 1st at the top. They lie a
+little crooked and overlapping, like a dealt pile. Each card shows a rank skull, name, portrait,
+fluff score (it blinks while someone is stealing that player's stuffing) and a small fluff bar. The
+skulls get nastier with rank: a small cracked one for 4th, a meaner one for 3rd, a fanged skull with
+a heavy brow for 2nd, and a huge, muscular, red-eyed brute for 1st. The human player's cards have a
+thick frame and a **YOU** (or P1/P2) tab. Both stacks show one shared ranking and move together.
+When places change, the cards slide to their new slots, wobbling on the way. Promoted cards glow
+**gold** and demoted ones get a **blood splatter**, as before.
 
-A bear whose bomb stuns someone **growls**: an angry face, a head shake and a "GRRR!" in the arena,
-and the same snarl on its two cards. An eliminated bear's cards are greyed and stamped DEFLATED.
+A big **spider** with glowing red eyes crawls around the card stacks (and along the top of the
+screen to the other side). Now and then it shoots a strand between cards and leaves a cobweb that
+fades. It never goes over the arena and has no effect on play.
 
-**Time of Doom** counts down above the arena. Which power-ups a bear has picked up is not shown:
-**Power-ups** in the main menu lists every badge with its name and effect. The layout is designed
-for 1280x720 and stays centred on any window shape; ultrawide and 4:3 screens get more wallpaper.
+A bear whose bomb stuns someone **growls** in the arena and on its cards; an eliminated bear's cards
+are greyed and stamped DEFLATED. **Power-ups** in the main menu lists every badge with its effect.
+
+## Starting a round
+Every round starts paused. The music plays and all the bears **dance** to it, while the timer,
+bombs and AI wait. "Press SPACE or ENTER to start" (or a pad's A / Start) starts the round for
+everyone at once; that key press never drops a bomb.
+
+## Options
+- **Players:** One Human, Two Humans, or **Pure AI (watch)**, where all four bears are AI-controlled.
+- **Settings → Diseases:** turn off Reverse Controls and Bomb Diarrhea entirely (they never drop and
+  nothing spreads).
 
 ## Winning, knockback and elimination
 **Bomb knockback:** a bear stunned by a bomb is blown along the blast direction, sliding down the
@@ -61,7 +73,7 @@ in `scripts/tuning.gd`; *Off* plays to the timer).
 
 ## Time of Doom: the closing arena
 From 60% of the round the arena closes in **one tile at a time**, walking clockwise around the
-outermost playable ring, then the next ring in: four rings (128 tiles), the last one shut at 97% of
+outermost playable ring, then the next ring in: five rings (180 tiles), the last one shut at 97% of
 the round. Each tile flashes before it shuts (faster as its moment comes, with an inward arrow and
 ticking), so the closing edge is always visible. A shut tile is permanently solid. Bombs there
 vanish (their owners get them back), power-ups and cushion blocks are cleared, loose stuffing hops
@@ -70,10 +82,13 @@ eliminated. The middle 5x3 tiles always stay open. The AI treats flashing tiles 
 `DOOM_*` in `scripts/tuning.gd`.
 
 ## Horror: the jack-in-the-box
-Horror only. Every so often a wooden pillar rattles and flashes red, faster and faster. Then a clown
-bursts out of a box on top of it, cackling, locks on to the **nearest bear wherever it is** (crosshair
-and a dashed line), lunges across the arena on its spring neck and hammers it (stunned). It never
-changes the grid, so it can't trap anyone. Replace its art with `objects/horror/clown.png`
+Horror only. One wooden pillar carries a striped box with a **hatch** from the start of the round,
+so you know where the trouble lives. Every so often it rattles and flashes, the hatch creaks open,
+there's a pause (eyes glint in the dark), the clown rises out, another pause, then it cackles
+frantically, locks on to the nearest bear wherever it is, and lunges at it on its spring neck. It
+looms bigger as it arcs toward the camera and shrinks as it comes down with the hammer. If the Time
+of Doom shuts its pillar, the box moves to another one. While it aims, a crosshair and a dashed line
+mark the victim, and the hammer stuns. It never changes the grid, so it can't trap anyone. Replace its art with `objects/horror/clown.png`
 (3 cells: head, mallet, box). Timing is `CLOWN_*` in `scripts/tuning.gd`.
 
 ## Power-ups
@@ -97,15 +112,18 @@ switching to another bear when it gets clearly closer (by 2+ tiles, so she never
 two). If no corridor leads to her target, or a chase drags on past 10 s, she simply leaps over. When she reaches it she laughs, takes aim (a red laser line) and fires one shotgun blast:
 a long stun, a quarter of the victim's stuffing blown out and a shove away. Against an immortal or
 just-recovered bear it's a harmless **blank**. Then she leaps back out over the wall. A bomb blast
-on her tile drives her off early. She uses the princess character sheet, so Horror and Custom art
+on her tile drives her off early. She is drawn bigger than the bears, biggest up on the raised rim and in mid-leap, and a little
+smaller once she's down in the pit, to match the arena's perspective. She uses the princess character sheet, so Horror and Custom art
 apply to her, and she is always gone within 30 s. Timing is `PRINCESS_*` in `scripts/tuning.gd`.
 
-## Crane chair delivery
-Rarely (first after 40–65 s, then every 60–90 s) a crane hook swings in from the top of the
-screen carrying an armchair. It hovers over a free cell with a pulsing drop marker, then lets
-go. The chair is stuffed with 60 fluff: stand next to it and hold **Steal** to loot it, just
-like a stunned bear. A blast bursts it open and scatters what is left as pickups. The AI goes
-for it too. Timing and amount are the `CRANE_*` / `CHAIR_FLUFF` values in `scripts/tuning.gd`.
+## The claw and the chair
+A carnival **claw** hangs from a rail along the top edge of the arena, parked in the top-left corner
+with a stuffed chair in its prongs, all round. Rarely (first after 40–65 s, then every 60–90 s after
+the last chair is gone) the warning bulbs along the rail light up and race toward the drop point.
+The claw rides along the rail, lowers over its target (a pulsing marker on the floor), opens its
+prongs and drops the chair, then rides back for a fresh one. The chair holds 60 fluff: stand next to
+it and hold **Steal** to loot it. A blast bursts it open into pickups, and the AI goes for it too.
+Timing and amount are the `CRANE_*` / `CHAIR_FLUFF` values in `scripts/tuning.gd`.
 
 ## Doom Duck Parade
 Every now and then a portal opens in a wooden pillar. A wind-up mother duck marches out with
@@ -113,6 +131,20 @@ three ducklings and wanders the corridors for about 12 seconds, ticking faster a
 In the last 3 seconds she flashes and the cells she will hit are outlined. Then she bursts,
 and the confetti **flows around corners** for up to 4 grid steps, stunning any bear it reaches.
 Spawn timing, countdown, speed and reach are the `DUCK_*` values in `scripts/tuning.gd`.
+
+## Horror's cast and dressing
+In Horror the bears become creatures: Player is an **Elk Bear** (antlers, a long dark snout), Oswald
+a much nastier **Bunny** (shredded ears, glowing eyes, a mouth full of needle teeth), Harald a
+**Zombie Bear** (rotting patches, a dangling eye, bone spikes), and Theodor a **Skeleton Bear**
+(ribcage, bones, a grinning skull, a rag tutu and a rusty crown). Normal and Custom are unchanged.
+The outer wall is dressed with jack-o'-lanterns, skulls, spiders, bats and corner cobwebs, and
+faint webs hang in some corridor corners. The floor drops its checkerboard for a calmer grid.
+Cartoon remains (headless bodies, severed heads, bones, blood) lie on the rim outside the
+playfield. All of it is decoration only.
+
+Gameplay feel: a bomb-stunned bear is launched after a short beat (0.18 s), honey is a little less
+sticky, and stealing stuffing is more violent: the victim jerks and shakes, tufts and (in Horror)
+red spray fly, fabric rips and the screen jolts. How stealing works is unchanged.
 
 ## Normal, Horror & Custom mode
 Choose the mode at the top of the menu. The change applies immediately and is saved.

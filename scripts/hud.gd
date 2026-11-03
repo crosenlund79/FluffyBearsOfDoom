@@ -12,11 +12,16 @@ const AudioPanel = preload("res://scripts/audio_panel.gd")
 const NowPlaying = preload("res://scripts/now_playing.gd")
 const Mode = preload("res://scripts/mode_theme.gd")
 const RankCard = preload("res://scripts/rank_card.gd")
+const CardSpider = preload("res://scripts/card_spider.gd")
 
 # Layout (1280x720 design area): arena frame at x 270..1010, a card stack centred in each side column.
-const ARENA_RECT := Rect2(280, 52, 720, 624)
+# the arena on screen (same formula as Game.ARENA_ORIGIN / ARENA_SIZE)
+const ARENA_SIZE := Vector2(Tuning.COLS, Tuning.ROWS) * Tuning.TILE * Tuning.ARENA_SCALE
+const ARENA_RECT := Rect2(Vector2(640.0 - ARENA_SIZE.x * 0.5, 52.0), ARENA_SIZE)
 const CARD_SCALE := 0.8               # cards are drawn at 80% of RankCard.SIZE
-const STACK_GAP := 10.0
+const STACK_GAP := -10.0               # negative: cards overlap a little, like a dealt pile
+const SLOT_TILT := [-0.06, 0.045, -0.035, 0.065]   # each slot's own slight rotation (radians)
+const SLOT_JITTER := [-7.0, 6.0, -3.0, 8.0]        # ...and sideways offset (px)
 const STACK_CENTRE_X := [135.0, 1145.0]   # left, right column centres
 const SLIDE_K := 140.0                # card slide spring stiffness (critically damped)
 const GLOW_TIME := 0.9                # gold promotion glow
@@ -25,7 +30,8 @@ const SPLAT_TIME := 1.0               # demotion splatter
 var game
 var root: Control
 var timer_label: Label
-var doom_label: Label
+var song_label: Label
+var spider
 var cards: Array = []           # 8 cards: one per player per side
 var banner_label: Label
 var toast_box: VBoxContainer
@@ -48,21 +54,16 @@ func setup(g) -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	# Time of Doom, centred above the arena
-	doom_label = UiStyle.label("Time of Doom", 16, UiStyle.ROSE_DARK)
-	doom_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	doom_label.position = Vector2(ARENA_RECT.position.x, 6)
-	doom_label.size = Vector2(ARENA_RECT.size.x * 0.5 - 8, 34)
-	doom_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	root.add_child(doom_label)
+	# the round timer, centred above the arena
 	timer_label = UiStyle.label("2:30", 34)
-	timer_label.position = Vector2(ARENA_RECT.get_center().x, 0)
+	timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	timer_label.position = Vector2(ARENA_RECT.get_center().x - 100, -6)
 	timer_label.size = Vector2(200, 42)
 	timer_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	root.add_child(timer_label)
 	var arena_name := UiStyle.label(Maps.MAPS[Settings.arena_index]["name"], 14, UiStyle.INK_SOFT)
 	arena_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	arena_name.position = Vector2(ARENA_RECT.end.x - 230, 12)
+	arena_name.position = Vector2(ARENA_RECT.end.x - 230, 4)
 	arena_name.size = Vector2(230, 24)
 	root.add_child(arena_name)
 
@@ -83,17 +84,23 @@ func setup(g) -> void:
 			root.add_child(c)
 			cards.append(c)
 
-	# music note under the left stack, title under the right one
-	var np := NowPlaying.new()
-	np.position = Vector2(8, 688)
-	np.size = Vector2(256, 26)
-	root.add_child(np)
-	var title := UiStyle.label("Fluffy Bears of Doom", 16, UiStyle.ROSE_DARK)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.position = Vector2(1010, 684)
-	title.size = Vector2(270, 30)
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	root.add_child(title)
+	# a big decorative spider roaming the card columns (never over the arena)
+	spider = CardSpider.new()
+	spider.z_index = 40
+	root.add_child(spider)
+	var rim := ARENA_RECT.grow(18.0)
+	# (columns kept a leg's length away from the rim, so even its legs stay off the arena)
+	spider.setup(Rect2(28, 60, rim.position.x - 28 - 34, 600), Rect2(rim.end.x + 34, 60, 1252 - rim.end.x - 34, 600), 12.0)
+
+	# the song that's playing: a quiet line above the arena, left of the timer
+	song_label = UiStyle.label("", 13, Color(UiStyle.INK_SOFT, 0.85))
+	song_label.position = Vector2(ARENA_RECT.position.x, 4)
+	song_label.size = Vector2(ARENA_RECT.size.x * 0.5 - 70, 24)
+	song_label.clip_text = true
+	song_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	root.add_child(song_label)
+	Music.track_changed.connect(_on_track)
+	_on_track(Music.title)
 
 
 	banner_label = UiStyle.label("", 60, UiStyle.ROSE_DARK)
@@ -121,13 +128,38 @@ func _process(delta: float) -> void:
 		return
 	var t: float = maxf(game.time_left, 0.0)
 	timer_label.text = "%d:%02d" % [int(t) / 60, int(t) % 60]
-	var doom_on: bool = game.doom != null and game.round_duration - t >= game.round_duration * Tuning.DOOM_START
 	var warn: bool = game.doom != null and game.doom.warning_active()
 	var pulse := fmod(Time.get_ticks_msec() / 1000.0 * (6.0 if warn else 2.0), 1.0) > 0.5
 	timer_label.add_theme_color_override("font_color", UiStyle.ROSE_DARK if ((t < 10.0 or warn) and pulse and game.controls_enabled()) else UiStyle.INK)
-	doom_label.text = "THE ARENA CLOSES  ·  Time of Doom" if warn else ("Time of Doom" if not doom_on else "Doom is here  ·  Time of Doom")
-	doom_label.add_theme_color_override("font_color", UiStyle.ROSE_DARK if (doom_on or warn) else UiStyle.INK_SOFT)
+	if ready_label != null:
+		var rp := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * 4.0)
+		ready_label.scale = Vector2.ONE * (1.0 + 0.04 * rp)
+		ready_label.modulate.a = 0.75 + 0.25 * rp
 	_update_ranking(delta)
+
+
+var ready_label: Label
+
+
+## "Press SPACE or ENTER to start", pulsing over the arena while everyone dances.
+func show_ready(on: bool) -> void:
+	if on and ready_label == null:
+		ready_label = UiStyle.label("Press SPACE or ENTER to start", 40, UiStyle.ROSE_DARK)
+		ready_label.add_theme_color_override("font_outline_color", UiStyle.PAPER)
+		ready_label.add_theme_constant_override("outline_size", 12)
+		ready_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ready_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		ready_label.position = Vector2(ARENA_RECT.position.x, ARENA_RECT.get_center().y - 50)
+		ready_label.size = Vector2(ARENA_RECT.size.x, 100)
+		ready_label.pivot_offset = ready_label.size * 0.5
+		root.add_child(ready_label)
+	elif not on and ready_label != null:
+		ready_label.queue_free()
+		ready_label = null
+
+
+func _on_track(title: String) -> void:
+	song_label.text = ("Now playing: " + title) if title != "" else ""
 
 
 # --- ranking ------------------------------------------------------------------------
@@ -160,7 +192,18 @@ func slot_step() -> float:
 func slot_top_left(side: float, pos: float) -> Vector2:
 	var total: float = 4.0 * card_size().y + 3.0 * STACK_GAP
 	var x: float = (STACK_CENTRE_X[0] if side < 0.0 else STACK_CENTRE_X[1]) - card_size().x * 0.5
-	return Vector2(x, 360.0 - total * 0.5 + pos * slot_step())
+	return Vector2(x + _slot_value(SLOT_JITTER, pos) * side, 360.0 - total * 0.5 + pos * slot_step())
+
+
+## The tilt of slot `pos` (mirrored on the right; blends while a card slides).
+func slot_rotation(side: float, pos: float) -> float:
+	return _slot_value(SLOT_TILT, pos) * -side
+
+
+func _slot_value(table: Array, pos: float) -> float:
+	var p := clampf(pos, 0.0, 3.0)
+	var i := mini(int(floor(p)), 2)
+	return lerpf(table[i], table[i + 1], p - i)
 
 
 ## Re-sort `order` by score, only swapping neighbours when the lower one is

@@ -3,8 +3,9 @@ extends RefCounted
 
 # --- Arena -------------------------------------------------------------------
 const TILE := 48.0
-const COLS := 15
-const ROWS := 13
+const COLS := 17          # one extra outer ring (zoomed out: see ARENA_SCALE)
+const ROWS := 15
+const ARENA_SCALE := 0.8667   # the 17x15 grid drawn at this scale fills the same screen area as the old 15x13
 const BLOCK_DENSITY := 0.72
 const POWERUP_CHANCE := 0.34
 
@@ -103,7 +104,7 @@ const INSTANT_WIN_CHOICES := [0.0, 200.0, 250.0, 300.0, 350.0]
 const DOOM_ENABLED := true
 const DOOM_START := 0.60                   # fraction of the round when the first ring starts warning
 const DOOM_END := 0.97                     # fraction by which the last tile has shut (tiles close one by one in between)
-const DOOM_RINGS := 4                      # rings closed, outermost playable ring first
+const DOOM_RINGS := 5                      # rings closed, outermost playable ring first
 const DOOM_WARN := 3.0                     # max seconds each tile flashes before it shuts (3% of the round, at least 1.8 s)
 const DOOM_STUN := 1.6                     # stun for a bear shoved inward by a closing ring
 

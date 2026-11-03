@@ -8,7 +8,7 @@ var now_playing: Label
 
 
 func _ready() -> void:
-	size = Vector2(440, 530)
+	size = Vector2(440, 570)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	add_child(v)
@@ -56,6 +56,13 @@ func _ready() -> void:
 		Settings.bear_outlines = on
 		Settings.save())
 	v.add_child(outl)
+	var dis := CheckBox.new()
+	dis.text = "Diseases (Reverse Controls, Bomb Diarrhea)"
+	dis.button_pressed = Settings.diseases
+	dis.toggled.connect(func(on):
+		Settings.diseases = on
+		Settings.save())
+	v.add_child(dis)
 	var iw := HBoxContainer.new()
 	iw.add_theme_constant_override("separation", 12)
 	var iwl := UiStyle.label("Instant win at", 18)

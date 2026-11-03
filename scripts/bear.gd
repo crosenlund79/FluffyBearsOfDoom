@@ -334,8 +334,13 @@ const KNOCK_SPEED := 560.0
 
 ## Blown along `dir` by a blast: slide down the corridor until the next tile is
 ## a wall, block, closed tile or bomb.
+var knock_delay := 0.0
+const KNOCK_DELAY := 0.18   # a beat between the bang and the bear being blown away
+
+
 func knock_back(dir: Vector2i) -> void:
 	knock_dir = dir
+	knock_delay = KNOCK_DELAY
 	velocity = Vector2.ZERO
 	stealing = false
 	steal_target = null
@@ -349,6 +354,10 @@ func knock_back(dir: Vector2i) -> void:
 func _knock(delta: float) -> bool:
 	if knock_dir == Vector2i.ZERO:
 		return false
+	if knock_delay > 0.0:   # dazed for a split second, then launched
+		knock_delay -= delta
+		visual.kick(0.05)
+		return true
 	var c := cell()
 	var dv := Vector2(knock_dir)
 	var step := KNOCK_SPEED * delta
@@ -395,6 +404,14 @@ func _update_steal(delta: float) -> void:
 			if _steal_sfx_t <= 0.0:
 				_steal_sfx_t = 0.12
 				Sfx.play("steal", randf_range(0.9, 1.4) / sqrt(maxf(fluff_ratio(), 0.3)), -8.0)
+				# the violent part: the victim gets yanked and shaken, the thief tugs
+				if target.has_method("is_stunned") and "visual" in target:
+					target.visual.kick(0.35)
+					target.visual.bump(0, 260.0, signf(target.position.x - position.x))
+				visual.kick(0.15)
+				if randf() < 0.35:
+					Sfx.play("rip", randf_range(0.8, 1.2), -6.0)
+					game.arena.add_shake(1.5)
 			return
 	stealing = false
 	steal_target = null

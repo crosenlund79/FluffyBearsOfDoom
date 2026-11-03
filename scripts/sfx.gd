@@ -63,6 +63,7 @@ func _ready() -> void:
 	_streams["clown_burst"] = _concat([_samples(0.05, 1200.0, 300.0, 0.5, 0.0, 0.6), _samples(0.35, 180.0, 720.0, 0.45, 22.0, 0.0)])
 	_streams["clown_laugh"] = _wav(_cackle())
 	_streams["clown_hammer"] = _concat([_bonk(), _samples(0.04, 0.0, 0.0, 0.0, 0.0, 0.0), _samples(0.3, 140.0, 60.0, 0.6, 0.0, 0.55)])
+	_streams["rip"] = _tone(0.16, 900.0, 300.0, 0.4, 40.0, 0.85)   # fabric tearing
 	_streams["growl"] = _concat([_samples(0.12, 95.0, 120.0, 0.45, 26.0, 0.55), _samples(0.45, 120.0, 85.0, 0.5, 22.0, 0.6)])
 	_streams["taunt"] = _concat([_samples(0.07, 700.0, 1100.0, 0.35, 0.0, 0.0), _samples(0.07, 900.0, 1300.0, 0.35, 0.0, 0.0), _samples(0.12, 800.0, 1500.0, 0.35, 12.0, 0.0)])
 	_streams["mode"] = _concat([_samples(0.08, 784.0, 784.0, 0.35, 0.0, 0.0), _samples(0.08, 988.0, 988.0, 0.35, 0.0, 0.0), _samples(0.2, 1175.0, 1175.0, 0.3, 6.0, 0.0)])

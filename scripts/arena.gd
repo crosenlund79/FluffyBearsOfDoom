@@ -7,7 +7,8 @@ const Mode = preload("res://scripts/mode_theme.gd")
 
 enum { EMPTY, WALL, BORDER, BLOCK, CLOSED }   # CLOSED: shut by the Time of Doom (permanent)
 
-const SPAWNS := [Vector2i(1, 1), Vector2i(13, 11), Vector2i(13, 1), Vector2i(1, 11)]
+## The four starting corners: top-left, bottom-right, top-right, bottom-left.
+const SPAWNS := [Vector2i(1, 1), Vector2i(Tuning.COLS - 2, Tuning.ROWS - 2), Vector2i(Tuning.COLS - 2, 1), Vector2i(1, Tuning.ROWS - 2)]
 
 var cols := Tuning.COLS
 var rows := Tuning.ROWS
@@ -208,8 +209,8 @@ func _draw() -> void:
 			var t := terrain[i]
 			var p := Terrain.props(t)
 			var idx: int = p["tile"]
-			if t == Terrain.NORMAL and (x + y) % 2 == 1:
-				idx = 1
+			if t == Terrain.NORMAL and (x + y) % 2 == 1 and not Mode.horror():
+				idx = 1   # (Horror keeps the floor calm: no checkerboard)
 			if Terrain.is_conveyor(t):
 				draw_set_transform(r.get_center(), Terrain.conveyor_rotation(t), Vector2.ONE)
 				draw_texture_rect_region(tiles_tex, Rect2(-T * 0.5, -T * 0.5, T, T), _tile(idx))
@@ -257,6 +258,110 @@ func _draw() -> void:
 				var squish := 1.0 + 0.02 * sin(anim_t * 2.0 + x * 1.3 + y * 0.7)
 				var h := (T + 4) * squish
 				draw_texture_rect_region(tiles_tex, Rect2(Vector2(r.position.x, r.end.y - h), Vector2(T, h)), _tile(7))
+
+	_draw_sunken_shadow()
+	if Mode.horror():
+		_draw_horror_decor()
+
+
+## The arena sits a step below the raised rim around it: the rim casts a soft
+## shadow onto the top and left edges, and a faint highlight catches the far side.
+func _draw_sunken_shadow() -> void:
+	var w := cols * T
+	var h := rows * T
+	for i in 6:
+		var a := 0.22 * (1.0 - i / 6.0)
+		draw_rect(Rect2(0, i * 4.0, w, 4.0), Color(0.05, 0.02, 0.02, a))
+		draw_rect(Rect2(i * 4.0, 0, 4.0, h), Color(0.05, 0.02, 0.02, a * 0.8))
+	draw_rect(Rect2(0, h - 3.0, w, 3.0), Color(1, 1, 1, 0.08))
+	draw_rect(Rect2(w - 3.0, 0, 3.0, h), Color(1, 1, 1, 0.06))
+
+
+## Horror dressing, purely visual (no collision): pumpkins, skulls, spiders,
+## bats and webs on the outer wall, and faint cobwebs in corridor corners.
+func _draw_horror_decor() -> void:
+	for y in rows:
+		for x in cols:
+			var c := Vector2i(x, y)
+			var h := (x * 73856093) ^ (y * 19349663)
+			var r := Rect2(x * T, y * T, T, T)
+			var ct := cells[y * cols + x]
+			if ct == BORDER:
+				var corner := (x == 0 or x == cols - 1) and (y == 0 or y == rows - 1)
+				if corner:
+					_web(r.position + Vector2(T if x > 0 else 0.0, T if y > 0 else 0.0), T * 1.1, Vector2(-1 if x > 0 else 1, -1 if y > 0 else 1), 0.55)
+					continue
+				match absi(h) % 7:
+					0: _pumpkin(r.get_center() + Vector2(0, 4))
+					1: _skull(r.get_center() + Vector2(0, 6), 0.9)
+					2: _spider(r.get_center() + Vector2(0, -4))
+					3: _bat(r.get_center() + Vector2(0, -6))
+			elif ct == EMPTY and absi(h) % 9 == 0:
+				# a cobweb tucked into the corner of a corridor tile, faint and small
+				var k := absi(h / 9) % 4
+				var corner_pt := r.position + Vector2(T if k % 2 == 1 else 0.0, T if k >= 2 else 0.0)
+				_web(corner_pt, T * 0.45, Vector2(-1 if k % 2 == 1 else 1, -1 if k >= 2 else 1), 0.22)
+
+
+func _web(origin: Vector2, size: float, dir: Vector2, a: float) -> void:
+	var col := Color(0.85, 0.85, 0.85, a)
+	var ends := []
+	for i in 5:
+		var ang := (i / 4.0) * PI * 0.5
+		var e := origin + Vector2(cos(ang) * dir.x, sin(ang) * dir.y) * size
+		ends.append(e)
+		draw_line(origin, e, col, 1.0)
+	for ring in [0.35, 0.62, 0.9]:
+		for i in 4:
+			draw_line(origin.lerp(ends[i], ring), origin.lerp(ends[i + 1], ring), col, 1.0)
+
+
+func _pumpkin(p: Vector2) -> void:
+	for dx in [-7.0, 7.0, 0.0]:
+		draw_set_transform(p + Vector2(dx, 0), 0.0, Vector2(0.75, 1.0))
+		draw_circle(Vector2.ZERO, 11.0, Color(0.85, 0.42, 0.08) if dx == 0.0 else Color(0.72, 0.33, 0.06))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	draw_line(p + Vector2(0, -10), p + Vector2(3, -16), Color(0.25, 0.3, 0.1), 3.0)
+	var glow := Color(1.0, 0.85, 0.3)
+	draw_colored_polygon(PackedVector2Array([p + Vector2(-8, -3), p + Vector2(-3, -3), p + Vector2(-5.5, -7)]), glow)
+	draw_colored_polygon(PackedVector2Array([p + Vector2(3, -3), p + Vector2(8, -3), p + Vector2(5.5, -7)]), glow)
+	draw_colored_polygon(PackedVector2Array([p + Vector2(-8, 3), p + Vector2(8, 3), p + Vector2(5, 7), p + Vector2(0, 5), p + Vector2(-5, 7)]), glow)
+
+
+func _skull(p: Vector2, s: float) -> void:
+	var bone := Color(0.9, 0.87, 0.78)
+	draw_circle(p + Vector2(0, -3) * s, 9.0 * s, bone)
+	draw_rect(Rect2(p + Vector2(-5, 2) * s, Vector2(10, 6) * s), bone)
+	draw_circle(p + Vector2(-3.5, -3) * s, 2.6 * s, Color(0.1, 0.05, 0.05))
+	draw_circle(p + Vector2(3.5, -3) * s, 2.6 * s, Color(0.1, 0.05, 0.05))
+	draw_colored_polygon(PackedVector2Array([p + Vector2(0, 0) * s, p + Vector2(-1.5, 3) * s, p + Vector2(1.5, 3) * s]), Color(0.1, 0.05, 0.05))
+	for i in 3:
+		draw_line(p + Vector2(-3 + i * 3, 5) * s, p + Vector2(-3 + i * 3, 8) * s, Color(0.3, 0.25, 0.2), 1.0)
+
+
+func _spider(p: Vector2) -> void:
+	var c := Color(0.08, 0.05, 0.06)
+	draw_line(p + Vector2(0, -14), p, Color(0.8, 0.8, 0.8, 0.5), 1.0)   # its thread
+	for sx in [-1.0, 1.0]:
+		for i in 4:
+			var a := -0.6 + i * 0.4
+			var knee := p + Vector2(sx * 7, -3 + i * 2.5)
+			draw_line(p, knee, c, 1.5)
+			draw_line(knee, knee + Vector2(sx * 4, 4 + a * 2), c, 1.5)
+	draw_circle(p + Vector2(0, 2), 5.0, c)
+	draw_circle(p + Vector2(0, -3), 3.2, c)
+	draw_circle(p + Vector2(-1.2, -3.5), 0.9, Color(0.9, 0.1, 0.1))
+	draw_circle(p + Vector2(1.2, -3.5), 0.9, Color(0.9, 0.1, 0.1))
+
+
+func _bat(p: Vector2) -> void:
+	var c := Color(0.1, 0.06, 0.08)
+	for sx in [-1.0, 1.0]:
+		draw_colored_polygon(PackedVector2Array([p, p + Vector2(sx * 6, -6), p + Vector2(sx * 15, -3),
+			p + Vector2(sx * 12, 2), p + Vector2(sx * 9, 0), p + Vector2(sx * 6, 3)]), c)
+	draw_circle(p, 4.0, c)
+	draw_circle(p + Vector2(-1.5, -1), 0.8, Color(0.95, 0.2, 0.2))
+	draw_circle(p + Vector2(1.5, -1), 0.8, Color(0.95, 0.2, 0.2))
 
 
 ## A closed cell: a border tile dropped in, laced shut with heavy stitches.

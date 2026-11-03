@@ -11,7 +11,7 @@ const COUNT := 8
 const PROPS := [
 	{"name": "Rug", "accel": 1.0, "brake": 1.0, "speed": 1.0, "bounce": 0.15, "push": Vector2(0, 0), "brake_min": 0.0, "tile": 0, "color": Color(0.94, 0.9, 0.82)},
 	{"name": "Ice", "accel": 0.5, "brake": 0.22, "speed": 1.08, "bounce": 0.3, "push": Vector2(0, 0), "brake_min": 110.0, "tile": 2, "color": Color(0.75, 0.9, 0.97)},
-	{"name": "Honey", "accel": 0.75, "brake": 2.6, "speed": 0.45, "bounce": 0.0, "push": Vector2(0, 0), "brake_min": 0.0, "tile": 3, "color": Color(0.93, 0.72, 0.3)},
+	{"name": "Honey", "accel": 0.82, "brake": 2.3, "speed": 0.55, "bounce": 0.0, "push": Vector2(0, 0), "brake_min": 0.0, "tile": 3, "color": Color(0.93, 0.72, 0.3)},
 	{"name": "Bouncy", "accel": 1.0, "brake": 0.8, "speed": 1.05, "bounce": 0.95, "push": Vector2(0, 0), "brake_min": 0.0, "tile": 4, "color": Color(0.95, 0.68, 0.76)},
 	{"name": "Conveyor", "accel": 1.0, "brake": 1.0, "speed": 1.0, "bounce": 0.15, "push": Vector2(75, 0), "brake_min": 0.0, "tile": 5, "color": Color(0.67, 0.71, 0.75)},
 	{"name": "Conveyor", "accel": 1.0, "brake": 1.0, "speed": 1.0, "bounce": 0.15, "push": Vector2(0, 75), "brake_min": 0.0, "tile": 5, "color": Color(0.67, 0.71, 0.75)},

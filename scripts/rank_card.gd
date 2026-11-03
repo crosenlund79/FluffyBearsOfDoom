@@ -34,11 +34,65 @@ func _process(delta: float) -> void:
 	var sc: float = hud.CARD_SCALE * (1.0 + 0.05 * moving)
 	# position is the unscaled rect; scaling pivots on the centre
 	position = hud.slot_top_left(side, st["pos"]) + Vector2(lateral, 0) - SIZE * (1.0 - hud.CARD_SCALE) * 0.5
-	# a wobble while sliding, settling as it arrives
-	rotation = sin(t * 24.0 + bear.slot) * 0.075 * moving + sin(t * 9.0) * 0.02 * st["glow"]
+	# each slot has its own slight tilt (a messy pile of playing cards), plus a
+	# wobble while sliding that settles as the card arrives
+	rotation = hud.slot_rotation(side, st["pos"]) + sin(t * 24.0 + bear.slot) * 0.075 * moving + sin(t * 9.0) * 0.02 * st["glow"]
 	scale = Vector2.ONE * sc
-	z_index = 3 if (moving > 0.02 and st["dir"] < 0) else (2 if moving > 0.02 else 1)
+	# cards higher in the ranking lie on top of the ones below; moving cards above all
+	z_index = 20 if (moving > 0.02 and st["dir"] < 0) else (15 if moving > 0.02 else 10 - int(round(st["pos"])))
 	queue_redraw()
+
+
+## Rank skulls, drawn in code. 4th: small and weak; 3rd: bigger, mean slanted
+## eyes; 2nd: heavy brow, fangs, red glints; 1st: huge muscular jaw and brow,
+## cheekbones, fangs and glowing eyes.
+static func draw_skull(ci: CanvasItem, c: Vector2, rank: int, t: float) -> void:
+	var lvl := 4 - rank                      # 0 (weak) .. 3 (brutal)
+	var s := 0.75 + 0.17 * lvl
+	var bone := Color(0.93, 0.9, 0.82).lerp(Color(0.86, 0.8, 0.68), lvl / 3.0)
+	var dark := Color(0.12, 0.06, 0.06)
+	var line := Color(0.3, 0.22, 0.18)
+	# jaw: grows wider than the cranium as the rank rises
+	var jw := (7.0 + 3.5 * lvl) * s
+	var jaw := PackedVector2Array([c + Vector2(-jw, 3 * s), c + Vector2(jw, 3 * s), c + Vector2(jw * 0.75, (12 + lvl) * s), c + Vector2(-jw * 0.75, (12 + lvl) * s)])
+	ci.draw_colored_polygon(jaw, bone)
+	ci.draw_polyline(jaw + PackedVector2Array([jaw[0]]), line, 1.2)
+	# cranium (1st: broad and lumpy, like a clenched muscle)
+	ci.draw_circle(c + Vector2(0, -3 * s), 10.0 * s, bone)
+	if lvl >= 3:
+		ci.draw_circle(c + Vector2(-7, -5) * s, 6.5 * s, bone)
+		ci.draw_circle(c + Vector2(7, -5) * s, 6.5 * s, bone)
+		for sx in [-1.0, 1.0]:   # cheekbones
+			ci.draw_circle(c + Vector2(sx * 9.5, 2) * s, 3.4 * s, bone)
+	ci.draw_arc(c + Vector2(0, -3 * s), 10.0 * s, PI * 1.05, PI * 1.95, 12, line, 1.2)
+	# eyes: round and sad -> slanted -> furious, glowing
+	var glow := 0.6 + 0.4 * sin(t * 6.0)
+	for sx in [-1.0, 1.0]:
+		var e := c + Vector2(sx * 4.0, -2.5) * s
+		if lvl == 0:
+			ci.draw_circle(e, 2.6 * s, dark)
+		else:
+			var slant := 1.0 + lvl * 0.8
+			ci.draw_colored_polygon(PackedVector2Array([e + Vector2(-sx * 3.4, -slant) * s, e + Vector2(sx * 3.2, slant * 0.7) * s,
+				e + Vector2(sx * 0.5, 3.0) * s, e + Vector2(-sx * 2.8, 2.4) * s]), dark)
+			if lvl >= 2:
+				ci.draw_circle(e + Vector2(0, 0.8) * s, (0.9 + 0.4 * lvl) * s, Color(1.0, 0.15, 0.1, glow))
+	# brow ridge: from none to a heavy, angry shelf
+	if lvl >= 1:
+		for sx in [-1.0, 1.0]:
+			ci.draw_line(c + Vector2(sx * 8.0, -5.0 - lvl * 1.2) * s, c + Vector2(sx * 1.0, -2.5) * s, line if lvl < 3 else dark, (1.2 + lvl * 0.9) * s)
+	# nose and teeth (fangs from 2nd up)
+	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, 1) * s, c + Vector2(-1.6, 4) * s, c + Vector2(1.6, 4) * s]), dark)
+	var n := 3 + lvl
+	for i in n:
+		var x := lerpf(-jw * 0.6, jw * 0.6, (i + 0.5) / n)
+		ci.draw_line(c + Vector2(x, 6 * s), c + Vector2(x, (9 + lvl) * s), line, 1.0)
+	if lvl >= 2:
+		for sx in [-1.0, 1.0]:
+			var f := c + Vector2(sx * jw * 0.45, 5.5 * s)
+			ci.draw_colored_polygon(PackedVector2Array([f + Vector2(-1.6, 0), f + Vector2(1.6, 0), f + Vector2(0, (4 + lvl) * s)]), Color(1, 0.98, 0.9))
+	if lvl == 0:   # a crack: this one's had a hard life
+		ci.draw_line(c + Vector2(2, -12) * s, c + Vector2(4, -6) * s, line, 1.0)
 
 
 func being_robbed() -> bool:
@@ -80,17 +134,10 @@ func _draw() -> void:
 	if glow > 0.0:
 		draw_rect(r, Color(gold.r, gold.g, gold.b, 0.18 * glow))
 		draw_rect(r.grow(-1), Color(gold.r, gold.g, gold.b, glow), false, 2.5)
-	# rank badge (1st gold with a crown, 2nd silver, 3rd bronze)
-	var medal: Array = [gold.darkened(0.15), Color(0.72, 0.72, 0.76), Color(0.78, 0.52, 0.32), UiStyle.BAR]
-	var bc := Vector2(19, 22)
-	draw_circle(bc, 13.0, medal[clampi(rank - 1, 0, 3)])
-	draw_arc(bc, 13.0, 0.0, TAU, 20, Color(UiStyle.INK, 0.35), 1.2)
-	draw_string(font, bc + Vector2(-13, 7), "%d" % rank, HORIZONTAL_ALIGNMENT_CENTER, 26, 19,
-		Color(0.2, 0.12, 0.08) if rank <= 3 else UiStyle.INK)
-	if rank == 1:
-		var cr := bc + Vector2(0, -15)
-		draw_colored_polygon(PackedVector2Array([cr + Vector2(-7, 3), cr + Vector2(-7, -3), cr + Vector2(-3, 0),
-			cr + Vector2(0, -5), cr + Vector2(3, 0), cr + Vector2(7, -3), cr + Vector2(7, 3)]), gold)
+	# rank skull: the higher the rank, the bigger and nastier the skull
+	var bc := Vector2(19, 24)
+	draw_skull(self, bc, clampi(rank, 1, 4), t)
+	draw_string(font, bc + Vector2(6, 21), "%d" % rank, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, UiStyle.INK)
 	# name
 	draw_string(font, Vector2(34, 28), bear.bear_name, HORIZONTAL_ALIGNMENT_CENTER, SIZE.x - 38, 19, UiStyle.INK)
 	# portrait (fitted to its box: tall ears and crowns stay on the card)
