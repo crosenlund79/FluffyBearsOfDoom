@@ -1,0 +1,3 @@
+A number of footsteps folder exists - they are prefixed with the material. Use the one that fits the best.
+
+Files in the Named folder has a filename that explains use
