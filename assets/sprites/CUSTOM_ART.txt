@@ -1,0 +1,22 @@
+Custom mode art
+===============
+Put your own sheets in the "custom" folder next to each template, using the
+name without "template_". Anything you don't supply falls back to the HORROR
+art (Horror is Custom's template), so copy the Horror template's size and cell
+layout. Your files are never modified or overwritten.
+
+Your file (in custom/)            Template it replaces (same layout)
+bears/custom/bear.png             bears/horror/template_bear.png       Elk Bear (Player)
+bears/custom/bunny.png            bears/horror/template_bunny.png      Bunny (Oswald)
+bears/custom/dino.png             bears/horror/template_dino.png       Zombie Bear (Harald)
+bears/custom/princess.png         bears/horror/template_princess.png   Skeleton Bear (Theodor, and the Princess Hunt)
+tiles/custom/tiles.png            tiles/horror/template_tiles.png
+objects/custom/bomb.png           objects/template_bomb.png            (no Horror version: shared)
+objects/custom/fluff.png          objects/template_fluff.png           (shared)
+objects/custom/duck.png           objects/template_duck.png            (shared)
+objects/custom/chair.png          objects/horror/template_chair.png
+objects/custom/clown.png          objects/horror/template_clown.png    (the clown only appears in Horror rounds)
+powerups/custom/powerups.png      powerups/horror/template_powerups.png
+effects/custom/effects.png        effects/horror/template_effects.png
+
+Layouts (cell counts, sizes) are listed in README.md under "Replacing the art".

@@ -136,7 +136,8 @@ Spawn timing, countdown, speed and reach are the `DUCK_*` values in `scripts/tun
 In Horror the bears become creatures: Player is an **Elk Bear** (antlers, a long dark snout), Oswald
 a much nastier **Bunny** (shredded ears, glowing eyes, a mouth full of needle teeth), Harald a
 **Zombie Bear** (rotting patches, a dangling eye, bone spikes), and Theodor a **Skeleton Bear**
-(ribcage, bones, a grinning skull, a rag tutu and a rusty crown). Normal and Custom are unchanged.
+(ribcage, bones, a grinning skull, a rag tutu and a rusty crown). Normal art is unchanged; Custom
+mode uses these Horror sheets for anything you haven't replaced.
 The outer wall is dressed with jack-o'-lanterns, skulls, spiders, bats and corner cobwebs, and
 faint webs hang in some corridor corners. The floor drops its checkerboard for a calmer grid.
 Cartoon remains (headless bodies, severed heads, bones, blood) lie on the rim outside the
@@ -156,9 +157,11 @@ Gameplay is identical in all modes; only the presentation changes.
 - **Custom:** your own art. For every sprite the game first looks for
   `assets/sprites/<folder>/custom/<name>.png` (same file names as the templates, e.g.
   `bears/custom/bunny.png`, `tiles/custom/tiles.png`, `powerups/custom/powerups.png`). Anything
-  you haven't supplied is shown exactly as in Normal. Custom files are never read in Normal or
-  Horror, and the placeholder generator never writes into `custom/`. Custom mode plays, sounds
-  and looks (menus, music, taunts) like Normal; only the sprites change.
+  you haven't supplied is shown exactly as in **Horror** (Horror art is Custom's template), so
+  `custom/` holds the same file names and layouts as the Horror sheets. Custom files are never read
+  in Normal or Horror, and the placeholder generator never writes into `custom/`. Only sprites come
+  from Horror: Custom mode plays, sounds and looks otherwise (menus, music, taunts, colours, arena
+  dressing) like Normal. `assets/sprites/CUSTOM_ART.txt` lists every file name you can supply.
 
 **Taunts:** a bear gloats when its bomb stuns someone, mocks bombers who stun themselves,
 crows when it starts stealing, and complains when it wakes up robbed. Each taunt is a short
@@ -215,7 +218,7 @@ the game uses the first file that exists:
 3. `<folder>/<mode>/template_<name>.png`: the built-in mode placeholder
 4. `<folder>/template_<name>.png`: the built-in placeholder
 
-Custom mode reads only `<folder>/custom/<name>.png` and otherwise uses the Normal lookup above
+Custom mode reads only `<folder>/custom/<name>.png` and otherwise uses the Horror lookup above
 (see *Normal, Horror & Custom mode*). Horror placeholders exist for `bears` (all four characters), `tiles`, `effects`,
 `powerups` and `objects/chair`. Everything else is shared and
 tinted darker in code. The
