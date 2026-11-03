@@ -1,6 +1,8 @@
 ## Sound effects. Each is a tiny procedural placeholder. To replace one, drop
 ## a file with the same name (ogg / wav / mp3) into res://assets/audio/sfx/
-## (both modes) or res://assets/audio/sfx/horror/ (Horror only).
+## (both modes) or res://assets/audio/sfx/horror/ (Horror only), or a FOLDER
+## with that name holding several takes (one is picked at random each time).
+## Supplied recordings live in such folders (explosion/, impact/, footsteps/wood/ ...).
 ## Lookup in Horror: sfx/horror/<name> -> sfx/<name> -> built-in horror
 ## placeholder -> built-in normal placeholder (played lower and slower).
 extends Node
@@ -11,11 +13,13 @@ var _streams := {}
 var _horror := {}       # built-in horror variants
 var _over := {}         # "normal" / "horror" -> {name: replacement}
 var _players: Array[AudioStreamPlayer] = []
+var _started := {}      # player -> time it started (the oldest one is reused when all are busy)
+const EXTS := ["ogg", "wav", "mp3"]
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	for i in 16:
+	for i in 28:
 		var p := AudioStreamPlayer.new()
 		p.bus = "SFX"
 		add_child(p)
@@ -59,18 +63,59 @@ func _ready() -> void:
 	_streams["clown_burst"] = _concat([_samples(0.05, 1200.0, 300.0, 0.5, 0.0, 0.6), _samples(0.35, 180.0, 720.0, 0.45, 22.0, 0.0)])
 	_streams["clown_laugh"] = _wav(_cackle())
 	_streams["clown_hammer"] = _concat([_bonk(), _samples(0.04, 0.0, 0.0, 0.0, 0.0, 0.0), _samples(0.3, 140.0, 60.0, 0.6, 0.0, 0.55)])
+	_streams["growl"] = _concat([_samples(0.12, 95.0, 120.0, 0.45, 26.0, 0.55), _samples(0.45, 120.0, 85.0, 0.5, 22.0, 0.6)])
 	_streams["taunt"] = _concat([_samples(0.07, 700.0, 1100.0, 0.35, 0.0, 0.0), _samples(0.07, 900.0, 1300.0, 0.35, 0.0, 0.0), _samples(0.12, 800.0, 1500.0, 0.35, 12.0, 0.0)])
 	_streams["mode"] = _concat([_samples(0.08, 784.0, 784.0, 0.35, 0.0, 0.0), _samples(0.08, 988.0, 988.0, 0.35, 0.0, 0.0), _samples(0.2, 1175.0, 1175.0, 0.3, 6.0, 0.0)])
 	_build_horror()
-	_over = {"normal": {}, "horror": {}}
-	for n in _streams.keys():
-		for ext in ["ogg", "wav", "mp3"]:
-			var shared: String = SFX_DIR + n + "." + ext
-			var horror: String = SFX_DIR + "horror/" + n + "." + ext
-			if not _over["normal"].has(n) and ResourceLoader.exists(shared):
-				_over["normal"][n] = load(shared)
-			if not _over["horror"].has(n) and ResourceLoader.exists(horror):
-				_over["horror"][n] = load(horror)
+	_over = {"normal": _scan(SFX_DIR), "horror": _scan(SFX_DIR + "horror/")}
+
+
+## Replacements in `dir`: name -> [streams]. "<name>.ogg" files and "<name>/"
+## folders of takes (nested folders give names like "footsteps/wood").
+func _scan(dir: String, prefix := "") -> Dictionary:
+	var out := {}
+	var d := DirAccess.open(dir)
+	if d == null:
+		return out
+	var seen := {}
+	for f in (d.get_files() if prefix == "" else PackedStringArray()):   # sub-folders are take-sets
+		# exported games list imported files as "x.wav.import" / ".remap"
+		var file := f.trim_suffix(".import").trim_suffix(".remap")
+		if not file.get_extension().to_lower() in EXTS or seen.has(file):
+			continue
+		seen[file] = true
+		var s = _load(dir + file)
+		if s != null:
+			var key := prefix + file.get_basename()
+			out[key] = (out.get(key, []) as Array) + [s]
+	for sub in d.get_directories():
+		if prefix == "" and sub == "horror":
+			continue
+		var takes := []
+		var sd := DirAccess.open(dir + sub)
+		var names := sd.get_files()
+		names.sort()
+		for f in names:
+			var file := f.trim_suffix(".import").trim_suffix(".remap")
+			if file.get_extension().to_lower() in EXTS and not takes.any(func(t): return t.resource_path == dir + sub + "/" + file):
+				var s = _load(dir + sub + "/" + file)
+				if s != null:
+					takes.append(s)
+		if not takes.is_empty():
+			out[prefix + sub] = takes
+		out.merge(_scan(dir + sub + "/", prefix + sub + "/"))
+	return out
+
+
+func _load(path: String):
+	if ResourceLoader.exists(path):
+		return load(path)
+	return null
+
+
+## True if a recording (not just a placeholder) exists for `sound`.
+func has_recording(sound: String) -> bool:
+	return _over["normal"].has(sound) or (Settings.mode == "horror" and _over["horror"].has(sound))
 
 
 ## Darker built-in variants for Horror mode.
@@ -83,6 +128,7 @@ func _build_horror() -> void:
 	_horror["victory"] = _concat([_samples(0.25, 440.0, 440.0, 0.4, 0.0, 0.0), _samples(0.25, 415.0, 415.0, 0.4, 0.0, 0.0), _samples(0.25, 392.0, 392.0, 0.4, 0.0, 0.0), _samples(0.6, 370.0, 370.0, 0.4, 5.0, 0.0)])
 	_horror["mode"] = _concat([_samples(0.5, 110.0, 70.0, 0.5, 3.0, 0.2), _samples(0.4, 233.0, 220.0, 0.25, 8.0, 0.3)])
 	_horror["steal"] = _wav(_splat(0.08))
+	_horror["growl"] = _concat([_samples(0.15, 70.0, 85.0, 0.5, 30.0, 0.65), _samples(0.6, 85.0, 50.0, 0.55, 25.0, 0.7)])
 
 
 ## A frantic, wobbling "HA-HA-HA-HA-HEE": rising, out-of-tune, breathy.
@@ -134,15 +180,25 @@ func play(sound: String, pitch := 1.0, volume_db := 0.0) -> void:
 			pitch *= 0.8  # borrowed cheerful placeholder, slowed into something worse
 	else:
 		s = _over["normal"].get(sound, _streams.get(sound))
+	if s is Array:
+		s = s[randi() % s.size()]
 	if s == null:
 		return
+	var use: AudioStreamPlayer = null
 	for p in _players:
 		if not p.playing:
-			p.stream = s
-			p.pitch_scale = clampf(pitch, 0.3, 3.0)
-			p.volume_db = volume_db
-			p.play()
-			return
+			use = p
+			break
+	if use == null:   # all busy: cut the oldest (usually a long explosion tail)
+		use = _players[0]
+		for p in _players:
+			if _started.get(p, 0) < _started.get(use, 0):
+				use = p
+	use.stream = s
+	use.pitch_scale = clampf(pitch, 0.3, 3.0)
+	use.volume_db = volume_db
+	use.play()
+	_started[use] = Time.get_ticks_msec()
 
 
 func _samples(dur: float, f0: float, f1: float, vol: float, vibrato: float, noise: float) -> PackedFloat32Array:

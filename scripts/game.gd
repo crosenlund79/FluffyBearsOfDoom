@@ -29,6 +29,7 @@ const CraneScript = preload("res://scripts/crane_event.gd")
 const PickupFx = preload("res://scripts/pickup_fx.gd")
 const DoomRings = preload("res://scripts/doom_rings.gd")
 const JackInTheBox = preload("res://scripts/jack_in_the_box.gd")
+const PrincessHunt = preload("res://scripts/princess_hunt.gd")
 
 enum State { COUNTDOWN, PLAYING, ENDED }
 
@@ -52,6 +53,7 @@ var bears: Array = []
 var bombs: Array = []
 var flames := {}      # Vector2i -> seconds left
 var flame_owner := {} # Vector2i -> bear whose bomb made it (for taunts)
+var flame_origin := {} # Vector2i -> the bomb cell that blast came from (knockback direction)
 var decal_layer: Node2D
 var footprints
 var bloody := {}       # Vector2i -> game clock until which a blood splat lies there
@@ -60,7 +62,6 @@ var world_tint: CanvasModulate
 var _flicker := 0.0
 var powerups := {}    # Vector2i -> power-up node
 var pickups: Array = []
-var shuffle_events: Array = []
 var fx_tex: Texture2D
 var fluff_tex: Texture2D
 var _steal_fx_t := 0.0
@@ -74,6 +75,8 @@ var crane_layer: Node2D
 var duck_timer := 0.0
 var doom = null           # Time of Doom ring closer
 var clown = null          # (Horror) the jack-in-the-box in progress
+var princess = null       # the Princess Hunt in progress
+var princess_used := false   # she comes at most once per round
 var clown_timer := 0.0
 var clown_layer: Node2D
 var round_duration := 150.0
@@ -91,6 +94,11 @@ func _ready() -> void:
 	arena.position = ARENA_ORIGIN
 	add_child(arena)
 	arena.setup(Maps.MAPS[Settings.arena_index], rng, PowerupScript.WEIGHTS)
+	# rarely, one block hides the Princess Hunt trap (never more than one)
+	if rng.randf() < Tuning.PRINCESS_CHANCE and not arena.hidden_powerups.is_empty():
+		var spots: Array = arena.hidden_powerups.keys().filter(func(c): return arena.hidden_powerups[c] != PowerupScript.SHUFFLE)
+		if not spots.is_empty():
+			arena.hidden_powerups[spots[rng.randi() % spots.size()]] = PowerupScript.PRINCESS
 
 	decal_layer = _layer(1)
 	footprints = FootprintsScript.new()
@@ -255,7 +263,7 @@ func line_cells(bear) -> Array:
 			break
 		var occupied := false
 		for b in bears:
-			if b != bear and b.cell() == c:
+			if b != bear and b.cell() == c and not b.eliminated:
 				occupied = true
 		if occupied:
 			break
@@ -333,6 +341,7 @@ func explode(bomb) -> void:
 	for c in hit:
 		flames[c] = Tuning.FLAME_TIME
 		flame_owner[c] = bomb.owner_bear
+		flame_origin[c] = origin
 	_destroy_powerups(hit)
 	_blast_chair(hit)
 	_break_blocks(broken)
@@ -343,7 +352,8 @@ func _finish_bomb(bomb, origin: Vector2i, hit: Array, segs: Array, chain: Array)
 	bomb.queue_free()
 	_apply_blast(origin, hit, segs, chain, 14)
 	arena.add_shake(4.0)
-	Sfx.play("confetti", randf_range(0.85, 1.15))
+	Sfx.play("explosion", randf_range(0.92, 1.08), -4.0)   # supplied recording
+	Sfx.play("confetti", randf_range(0.85, 1.15), -6.0)   # plus the paper crackle
 
 
 ## Power-ups lying in a blast are destroyed (ones revealed by this blast survive).
@@ -384,6 +394,8 @@ func is_bloody(c: Vector2i) -> bool:
 func _break_blocks(broken: Array) -> void:
 	for c in broken:
 		var kind: int = arena.destroy_block(c)
+		if kind == PowerupScript.PRINCESS and princess_used:
+			kind = PowerupScript.BOMB   # she's already been
 		spawn_dust(arena.cell_center(c), 4)
 		_burst(arena.cell_center(c), fluff_tex, Rect2(Vector2.ZERO, fluff_tex.get_size()), 3, 12.0, Color(0.95, 0.85, 0.85))
 		if kind >= 0:
@@ -419,6 +431,7 @@ func _update_flames(delta: float) -> void:
 		if flames[c] <= 0.0:
 			flames.erase(c)
 			flame_owner.erase(c)
+			flame_origin.erase(c)
 	_check_flame_hits(Vector2i(-1, -1))
 
 
@@ -427,7 +440,39 @@ func _check_flame_hits(origin: Vector2i) -> void:
 		if flames.has(b.cell()) and not b.is_stunned() and b.immune_t <= 0.0:
 			var src: Vector2 = arena.cell_center(origin) if origin.x >= 0 else b.position - b.velocity.normalized() * 10.0
 			b.last_hit_by = flame_owner.get(b.cell())
+			var from: Vector2i = flame_origin.get(b.cell(), Vector2i(-1, -1))
 			b.stun(src)
+			if b.is_stunned() and from.x >= 0:
+				_knock_back(b, from)
+				if b.last_hit_by != null and b.last_hit_by != b:
+					b.last_hit_by.growl()   # the bomber snarls in triumph
+
+
+## A bear stunned by a bomb is blown along the blast direction.
+func _knock_back(b, origin: Vector2i) -> void:
+	var c: Vector2i = b.cell()
+	var d := c - origin
+	var dir := Vector2i.ZERO
+	if d != Vector2i.ZERO:
+		dir = Vector2i(signi(d.x), 0) if absi(d.x) >= absi(d.y) else Vector2i(0, signi(d.y))
+	else:
+		# sitting on the bomb itself: thrown backwards (or any open way)
+		var back := Vector2i(-int(signf(b.facing.x)), -int(signf(b.facing.y)))
+		var tries := [back] + DIRS
+		for t in tries:
+			if t != Vector2i.ZERO and not arena.is_solid(c + t) and not arena.bombs.has(c + t):
+				dir = t
+				break
+	if dir != Vector2i.ZERO:
+		b.knock_back(dir)
+
+
+## Power-up on `c`, collected by `b` whether it wants it or not (knockback).
+func collect_powerup_at(b, c: Vector2i) -> void:
+	if powerups.has(c):
+		_apply_powerup(b, powerups[c])
+		powerups[c].queue_free()
+		powerups.erase(c)
 
 
 # --- Doom Duck Parade ------------------------------------------------------------
@@ -524,6 +569,7 @@ func start_clown() -> void:
 func clown_hit(bear, at: Vector2) -> void:
 	arena.add_shake(10.0)
 	Sfx.play("clown_hammer")
+	Sfx.play("impact", randf_range(0.9, 1.0), -1.0)
 	_burst(at, fx_tex, Assets.region(fx_tex, Assets.EFFECT_CELLS, 3), 6, 16.0, Color.WHITE, 220.0)
 	_splat(bear.position + Vector2(0, 10), 40.0)
 	var was_stunned: bool = bear.is_stunned()
@@ -532,6 +578,74 @@ func clown_hit(bear, at: Vector2) -> void:
 	if bear.is_stunned() and not was_stunned:
 		bear.stun_t = Tuning.CLOWN_STUN
 	bear.visual.kick(0.6)
+
+
+# --- Princess Hunt -----------------------------------------------------------------------
+
+func start_princess() -> void:
+	if princess_used or princess != null or state != State.PLAYING:
+		hud.toast("The princess is busy elsewhere.", Color(0.7, 0.4, 0.55))
+		return
+	princess_used = true
+	princess = PrincessHunt.new()
+	bear_layer.add_child(princess)   # y-sorted with the bears
+	princess.setup(self)
+
+
+## Her one shot. A blank against an immortal/immune bear; otherwise a long
+## stun, a big puff of stuffing and a shove away from her.
+func on_princess_shot(p, b, blank: bool) -> void:
+	if blank:
+		Sfx.play("pop", 1.6, -2.0)
+		hud.toast("Click! A blank: %s is untouchable." % b.bear_name, b.color)
+		return
+	Sfx.play("shotgun_hit")
+	Sfx.play("impact", 0.85, -2.0)
+	var was: bool = b.is_stunned()
+	b.last_hit_by = null
+	b.stun(p.position)
+	if b.is_stunned() and not was:
+		b.stun_t = Tuning.PRINCESS_STUN
+	spill_fluff(b, b.fluff * Tuning.PRINCESS_SPILL)
+	_splat(b.position + Vector2(0, 10), 60.0)
+	_burst(b.position + Vector2(0, -16), fx_tex, Assets.region(fx_tex, Assets.EFFECT_CELLS, 3), 6, 16.0, Color.WHITE, 220.0)
+	var d: Vector2 = b.position - p.position
+	var dir := Vector2i(int(signf(d.x)), 0) if absf(d.x) >= absf(d.y) else Vector2i(0, int(signf(d.y)))
+	if dir != Vector2i.ZERO and not arena.is_solid(b.cell() + dir) and not b.eliminated:
+		b.knock_back(dir)
+	hud.toast("The princess blasted %s!" % b.bear_name, b.color)
+
+
+func on_princess_defeated(p) -> void:
+	Sfx.play("concussion", 0.8)
+	_burst(p.position + Vector2(0, -20), fx_tex, Assets.region(fx_tex, Assets.EFFECT_CELLS, 3), 6, 14.0, Color.WHITE)
+	hud.banner("The princess was blown away!", 1.6)
+
+
+## Blow `amount` of `b`'s stuffing out as pickups on open tiles nearby.
+func spill_fluff(b, amount: float) -> void:
+	amount = minf(amount, b.fluff)
+	if amount < 1.0:
+		return
+	b.fluff -= amount
+	var c: Vector2i = b.cell()
+	var spots := []
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			var n := c + Vector2i(dx, dy)
+			if arena.is_walkable(n) and absi(dx) + absi(dy) <= 2:
+				spots.append(n)
+	var n_p := clampi(ceili(amount / 10.0), 1, 4)
+	for i in n_p:
+		var dest: Vector2i = spots[rng.randi() % spots.size()] if not spots.is_empty() else c
+		var pk = PickupScript.new()
+		pk.game = self
+		pk.amount = amount / n_p
+		pk.from = b.position
+		pk.to = arena.cell_center(dest) + Vector2(rng.randf_range(-6, 6), rng.randf_range(-6, 6))
+		pk.cell = dest
+		powerup_layer.add_child(pk)
+		pickups.append(pk)
 
 
 # --- Time of Doom ---------------------------------------------------------------------
@@ -587,6 +701,7 @@ func doom_close(cells: Array) -> void:
 					break
 			continue
 		var from: Vector2 = b.position
+		b.knock_dir = Vector2i.ZERO
 		var dest := nearest_open_cell(b.cell())
 		b.position = arena.cell_center(dest)
 		b.velocity = Vector2.ZERO
@@ -604,8 +719,8 @@ func doom_close(cells: Array) -> void:
 		crane.target = nearest_open_cell(crane.target)
 	if clown != null and is_instance_valid(clown):
 		clown.on_cells_closed(shut)
-	arena.add_shake(7.0)
-	Sfx.play("doom_slam")
+	arena.add_shake(2.5)
+	Sfx.play("doom_slam", randf_range(0.9, 1.1), -9.0)
 	for c in shut:
 		if rng.randf() < 0.35:
 			spawn_dust(arena.cell_center(c), 2)
@@ -739,6 +854,7 @@ func duck_explode(p) -> void:
 	for c in hit:
 		flames[c] = Tuning.FLAME_TIME
 		flame_owner.erase(c)  # nobody to gloat: the duck did it
+		flame_origin.erase(c)  # (and no knockback: it isn't a bomb)
 		if arena.cell_type(c) == ArenaScript.BLOCK:
 			broken.append(c)
 		if arena.bombs.has(c):
@@ -752,6 +868,7 @@ func duck_explode(p) -> void:
 		_confetti(arena.cell_center(c), 2)
 	arena.add_shake(8.0)
 	Sfx.play("duck_confetti")
+	Sfx.play("explosion", 0.8, -2.0)
 	parade = null
 	duck_timer = rng.randf_range(Tuning.DUCK_INTERVAL[0], Tuning.DUCK_INTERVAL[1])
 
@@ -810,6 +927,14 @@ func find_steal_target(thief):
 			best_d = d
 			best = b
 	return best
+
+
+func on_bear_eliminated(bear) -> void:
+	_splat(bear.position + Vector2(0, 10), 54.0)
+	spawn_dust(bear.position, 6)
+	_burst(bear.position + Vector2(0, -10), fluff_tex, Rect2(Vector2.ZERO, fluff_tex.get_size()), 6, 10.0, Mode.stuffing_color())
+	hud.banner("%s is out of stuffing!" % bear.bear_name if not Mode.horror() else "%s is empty." % bear.bear_name, 1.8)
+	arena.add_shake(4.0)
 
 
 func on_bear_stunned(bear) -> void:
@@ -926,6 +1051,8 @@ func _apply_powerup(b, p) -> void:
 			infect(b)
 		PowerupScript.DIARRHEA:
 			b.diarrhea_t = Tuning.DIARRHEA_TIME
+		PowerupScript.PRINCESS:
+			start_princess()
 	var bad: bool = p.kind in PowerupScript.BAD
 	var fxn = PickupFx.new()
 	fxn.kind = p.kind
@@ -953,7 +1080,7 @@ func _update_contagion() -> void:
 		if a.reverse_t <= 0.0 or a.infect_cd > 0.0:
 			continue
 		for b in bears:
-			if b == a or b.reverse_t > 0.0 or b.reinfect_immune > 0.0:
+			if b == a or b.eliminated or b.reverse_t > 0.0 or b.reinfect_immune > 0.0:
 				continue
 			if a.position.distance_to(b.position) < reach:
 				infect(b)
@@ -1024,64 +1151,75 @@ func _burst(pos: Vector2, tex: Texture2D, region: Rect2, n: int, size: float, co
 
 # --- Biome Shuffle -----------------------------------------------------------------
 
+const SHUFFLE_BIOMES := [
+	[Terrain.ICE, "Ice Rink!"], [Terrain.HONEY, "Honey Flood!"], [Terrain.BOUNCY, "Bouncy Castle!"],
+	[-1, "Conveyor Chaos!"],
+]
+var shuffle_snapshot = null    # terrain before the shuffle (restored afterwards)
+var shuffle_biome := -1
+var shuffle_phase := ""        # "", "warn" (tiles show what's coming), "active"
+var shuffle_t := 0.0
+
+
+## Biome Shuffle: after a short warning the WHOLE playable floor becomes one
+## random biome (ice, honey, bouncy or a conveyor belt in one direction) with
+## its physics, then goes back to exactly what it was. Walls, blocks, bombs
+## and power-ups are untouched.
 func biome_shuffle() -> void:
 	Sfx.play("shuffle")
-	hud.banner("Biome Shuffle!", 1.6)
-	# "cycle" turns rug -> ice -> honey -> rug; others paint the whole patch.
-	var choices := [-2, -2, -2, Terrain.ICE, Terrain.BOUNCY, Terrain.BOUNCY, -1]
-	var cycle := {Terrain.NORMAL: Terrain.ICE, Terrain.ICE: Terrain.HONEY, Terrain.HONEY: Terrain.NORMAL}
-	var used := {}
-	for i in Tuning.SHUFFLE_REGIONS:
-		var w := rng.randi_range(3, 5)
-		var h := rng.randi_range(3, 4)
-		var x0 := rng.randi_range(1, Tuning.COLS - 1 - w)
-		var y0 := rng.randi_range(1, Tuning.ROWS - 1 - h)
-		var t: int = choices[rng.randi() % choices.size()]
-		if t == -1:
-			t = Terrain.CONVEYOR_R + rng.randi() % 4
-		var region := {}
-		for y in range(y0, y0 + h):
-			for x in range(x0, x0 + w):
-				var c := Vector2i(x, y)
-				if used.has(c) or arena.cell_type(c) == ArenaScript.BORDER:
-					continue
-				var cur: int = arena.terrain_at(c)
-				var nt := t
-				if t == -2:
-					nt = cycle.get(cur, Terrain.NORMAL)
-				elif cur == t:
-					nt = Terrain.NORMAL
-				used[c] = true
-				region[c] = nt
-		shuffle_events.append({"t": Tuning.SHUFFLE_WARN, "cells": region, "revert": false})
-	for e in shuffle_events:
-		for c in e["cells"]:
-			arena.warn[c] = e["cells"][c]
+	var pick: Array = SHUFFLE_BIOMES[rng.randi() % SHUFFLE_BIOMES.size()]
+	var biome: int = pick[0]
+	if biome == -1:
+		biome = Terrain.CONVEYOR_R + rng.randi() % 4
+	if shuffle_snapshot == null:
+		shuffle_snapshot = arena.terrain.duplicate()   # a shuffle during a shuffle still restores the original
+	shuffle_biome = biome
+	hud.banner("Biome Shuffle: " + pick[1], 1.8)
+	shuffle_phase = "warn"
+	shuffle_t = Tuning.SHUFFLE_WARN
+	arena.warn.clear()
+	for c in _floor_cells():
+		arena.warn[c] = biome
 	arena.warn_t = 0.0
 
 
+## Every cell that has a floor (not the border, not shut by the Time of Doom).
+func _floor_cells() -> Array:
+	var out := []
+	for y in arena.rows:
+		for x in arena.cols:
+			var c := Vector2i(x, y)
+			var ct: int = arena.cell_type(c)
+			if ct != ArenaScript.BORDER and ct != ArenaScript.CLOSED:
+				out.append(c)
+	return out
+
+
 func _update_shuffles(delta: float) -> void:
-	for e in shuffle_events.duplicate():
-		e["t"] -= delta
-		if e["t"] > 0.0:
-			# warn shortly before a temporary shuffle wears off
-			if e["revert"] and e["t"] < Tuning.SHUFFLE_WARN and not e.get("warned", false):
-				e["warned"] = true
-				for c in e["cells"]:
-					if arena.terrain_at(c) == e["set"][c]:
-						arena.warn[c] = arena.base_terrain[c.y * arena.cols + c.x]
-			continue
-		shuffle_events.erase(e)
-		if not e["revert"]:
-			for c in e["cells"]:
-				arena.set_terrain(c, e["cells"][c])
-				arena.warn.erase(c)
-			shuffle_events.append({"t": Tuning.SHUFFLE_DURATION, "cells": e["cells"], "set": e["cells"], "revert": true})
-		else:
-			for c in e["cells"]:
-				arena.warn.erase(c)
-				if arena.terrain_at(c) == e["set"][c]:
-					arena.set_terrain(c, arena.base_terrain[c.y * arena.cols + c.x])
+	if shuffle_phase == "":
+		return
+	shuffle_t -= delta
+	if shuffle_phase == "warn":
+		if shuffle_t <= 0.0:
+			arena.warn.clear()
+			for c in _floor_cells():
+				arena.set_terrain(c, shuffle_biome)
+			shuffle_phase = "active"
+			shuffle_t = Tuning.SHUFFLE_DURATION
+		return
+	# active: show the way back shortly before it wears off
+	if shuffle_t < Tuning.SHUFFLE_WARN and arena.warn.is_empty():
+		for c in _floor_cells():
+			arena.warn[c] = shuffle_snapshot[c.y * arena.cols + c.x]
+		arena.warn_t = 0.0
+	if shuffle_t <= 0.0:
+		arena.warn.clear()
+		for y in arena.rows:
+			for x in arena.cols:
+				arena.set_terrain(Vector2i(x, y), shuffle_snapshot[y * arena.cols + x])
+		shuffle_snapshot = null
+		shuffle_phase = ""
+		hud.toast("The floor settles back.", Color(0.5, 0.45, 0.6))
 
 
 # --- end of round ---------------------------------------------------------------------
@@ -1115,7 +1253,12 @@ func _end_match(instant_winner = null) -> void:
 	if instant_winner != null:   # the bear that hit the threshold is the winner, full stop
 		ranking.erase(instant_winner)
 		ranking.push_front(instant_winner)
-	Sfx.play("victory")
+	# a human who didn't win hears one of the supplied "you lost" stings instead
+	var humans := bears.filter(func(b): return b.is_human)
+	if not humans.is_empty() and not ranking[0].is_human and Sfx.has_recording("defeat"):
+		Sfx.play("defeat")
+	else:
+		Sfx.play("victory")
 	hud.show_results(ranking, instant_winner)
 
 

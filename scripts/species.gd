@@ -7,18 +7,18 @@ extends RefCounted
 
 const SPECIES := {
 	"bear": {"label": "Teddy Bear", "sheet": "bears/bear", "cells": 10,
-		"ear_pos": Vector2(36, -38), "ear_offset": -0.06, "ear_scale": 1.0, "ear_flop": 1.0,
+		"ear_pos": Vector2(38, -40), "ear_offset": -0.06, "ear_scale": 1.35, "ear_flop": 1.0,
 		"tail": "", "skirt": false, "topper": ""},
 	"bunny": {"label": "Teddy Bunny", "sheet": "bears/bunny", "cells": 12,
-		"ear_pos": Vector2(20, -34), "ear_offset": -0.3, "ear_scale": 1.0, "ear_flop": 2.2,
+		"ear_pos": Vector2(21, -36), "ear_offset": -0.3, "ear_scale": 1.2, "ear_flop": 2.2,
 		"tail": "puff", "tail_tint": false, "skirt": false,
 		"topper": "front", "topper_pos": Vector2(32, -40), "topper_rot": 0.35, "topper_scale": 0.42, "topper_tint": false},
 	"dino": {"label": "Small Dino", "sheet": "bears/dino", "cells": 12,
-		"ear_pos": Vector2(30, -40), "ear_offset": -0.06, "ear_scale": 0.85, "ear_flop": 0.35,
+		"ear_pos": Vector2(32, -42), "ear_offset": -0.06, "ear_scale": 1.15, "ear_flop": 0.35,
 		"tail": "long", "tail_tint": true, "skirt": false,
 		"topper": "back", "topper_pos": Vector2(0, -42), "topper_rot": 0.0, "topper_scale": 0.85, "topper_tint": true},
 	"princess": {"label": "Teddy Bear Princess", "sheet": "bears/princess", "cells": 12,
-		"ear_pos": Vector2(36, -38), "ear_offset": -0.06, "ear_scale": 1.0, "ear_flop": 1.0,
+		"ear_pos": Vector2(38, -40), "ear_offset": -0.06, "ear_scale": 1.35, "ear_flop": 1.0,
 		"tail": "", "skirt": true,
 		"topper": "front", "topper_pos": Vector2(0, -50), "topper_rot": 0.0, "topper_scale": 0.55, "topper_tint": false},
 }

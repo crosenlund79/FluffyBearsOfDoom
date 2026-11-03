@@ -1,21 +1,23 @@
 ## A collectible power-up badge on a grid cell.
 extends Node2D
 
-enum { BOMB, FIRE, SPEED, SHUFFLE, KICK, LINE, RUBBER, IMMORTAL, REVERSE, DIARRHEA, REMOTE }
+enum { BOMB, FIRE, SPEED, SHUFFLE, KICK, LINE, RUBBER, IMMORTAL, REVERSE, DIARRHEA, REMOTE, PRINCESS }
 const NAMES := ["Extra Bomb", "Bigger Blast", "Springy Stitching", "Biome Shuffle", "Bomb Kick",
-	"Line Bomb", "Rubber Bombs", "Immortality", "Reverse Controls!", "Bomb Diarrhea!", "Remote Detonator"]
+	"Line Bomb", "Rubber Bombs", "Immortality", "Reverse Controls!", "Bomb Diarrhea!", "Remote Detonator",
+	"Princess Hunt!"]
 # Every bear can kick now, so Bomb Kick no longer drops (its sheet cell is kept for compatibility).
-const WEIGHTS := [22.0, 20.0, 9.0, 6.0, 0.0, 7.0, 5.0, 4.0, 9.0, 7.0, 7.0]
+# Princess Hunt never drops by weight: at most one is hidden per round (Tuning.PRINCESS_CHANCE).
+const WEIGHTS := [22.0, 20.0, 9.0, 6.0, 0.0, 7.0, 5.0, 4.0, 9.0, 7.0, 7.0, 0.0]
 ## Sheet cell for each kind. The Remote Detonator reuses the bomb badge plus a drawn
 ## antenna, so existing 10-cell replacement sheets keep working.
-const CELL := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
-const BAD := [REVERSE, DIARRHEA]
+const CELL := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 7]   # Princess Hunt is drawn in code (crown badge)
+const BAD := [REVERSE, DIARRHEA, PRINCESS]
 ## What each power-up does (menu overview).
 const DESC := [
 	"Carry one more bomb at a time (up to 8).",
 	"Your confetti reaches one tile further (up to 8).",
 	"Run faster and get going quicker.",
-	"Reshuffles patches of floor (ice, honey, bouncy...) after a short warning.",
+	"After a short warning the whole floor turns into one biome (ice, honey, bouncy or conveyor) for a while.",
 	"Every bear already kicks bombs by walking into them, so this one no longer drops.",
 	"Special key with no remote bombs out: lay all your free bombs in a line ahead.",
 	"Kicked bombs bounce off walls instead of stopping.",
@@ -23,12 +25,13 @@ const DESC := [
 	"Curse! 12 s of flipped steering, and it spreads to bears you touch.",
 	"Curse! For 10 s your bombs drop all by themselves.",
 	"Your bombs wait until you press the special key (backup fuse 10 s).",
+	"Trap! The princess leaps over the wall and hunts the nearest bear. Bombs can drive her off. Once per round.",
 ]
 ## Order for the menu overview (droppable ones first, the retired Kick last).
-const OVERVIEW := [BOMB, FIRE, SPEED, REMOTE, LINE, RUBBER, IMMORTAL, SHUFFLE, REVERSE, DIARRHEA, KICK]
+const OVERVIEW := [BOMB, FIRE, SPEED, REMOTE, LINE, RUBBER, IMMORTAL, SHUFFLE, REVERSE, DIARRHEA, PRINCESS, KICK]
 ## Short pickup labels for the floating text.
 const SHORT := ["+1 Bomb", "+Blast", "Speed!", "Shuffle!", "Kick", "Line Bomb", "Rubber!",
-	"Immortal!", "Reversed!", "Diarrhea!", "Remote!"]
+	"Immortal!", "Reversed!", "Diarrhea!", "Remote!", "Princess!"]
 ## Kinds that get orbiting sparkles (the rare, exciting ones).
 const SPECIAL := [SHUFFLE, LINE, RUBBER, IMMORTAL, REMOTE]
 
@@ -105,6 +108,11 @@ func _draw() -> void:
 		if fmod(t, 1.7) < 0.12:
 			off = Vector2(randf_range(-2, 2), randf_range(-2, 2))
 	var rect := Rect2(-s * 0.5, -s * 0.5, s, s)
+	if kind == PRINCESS:
+		draw_set_transform(c + off, wob, Vector2.ONE)
+		draw_princess_badge(self, Vector2.ZERO, s, t, appear)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
 	var region := Assets.region(tex, Assets.POWERUP_CELLS, CELL[kind])
 	# chunky silhouette: the badge drawn dark and slightly bigger behind itself
 	var outline := Color(0.12, 0.02, 0.02, 0.85 * appear) if horror else Color(0.3, 0.18, 0.12, 0.6 * appear)
@@ -134,6 +142,42 @@ func _draw() -> void:
 			var sc := Color(1, 0.95, 0.8) if not horror else Color(1.0, 0.4, 0.3)
 			draw_line(p - Vector2(r, 0), p + Vector2(r, 0), sc, 1.6)
 			draw_line(p - Vector2(0, r), p + Vector2(0, r), sc, 1.6)
+
+
+## Any badge in a `size` square at `center` (sheet art, or the drawn crown for Princess Hunt).
+static func draw_badge(ci: CanvasItem, center: Vector2, size: float, kind: int, t: float, alpha := 1.0) -> void:
+	if kind == PRINCESS:
+		draw_princess_badge(ci, center, size, t, alpha)
+		return
+	var tex: Texture2D = Assets.tex("powerups/powerups")
+	ci.draw_texture_rect_region(tex, Rect2(center - Vector2(size, size) * 0.5, Vector2(size, size)),
+		Assets.region(tex, Assets.POWERUP_CELLS, CELL[kind]), Color(1, 1, 1, alpha))
+	if kind == REMOTE:
+		draw_remote_antenna(ci, center + Vector2(size * 0.18, -size * 0.2), size / 38.0, t)
+
+
+## The Princess Hunt badge: a crown on a rose (Horror: crimson) disc, drawn in code
+## so the 10-cell power-up sheets (and replacements) stay as they are.
+static func draw_princess_badge(ci: CanvasItem, c: Vector2, size: float, t: float, alpha := 1.0) -> void:
+	var horror := Settings.mode == "horror"
+	var r := size * 0.46
+	ci.draw_circle(c + Vector2(0, 2), r, Color(0, 0, 0, 0.35 * alpha))
+	ci.draw_circle(c, r, Color(0.35, 0.05, 0.1, alpha) if horror else Color(0.95, 0.6, 0.75, alpha))
+	ci.draw_arc(c, r, 0.0, TAU, 28, Color(0.15, 0.02, 0.04, alpha) if horror else Color(0.72, 0.3, 0.45, alpha), size * 0.08)
+	ci.draw_arc(c, r * 0.8, 0.0, TAU, 24, Color(1, 1, 1, 0.35 * alpha), 1.2)
+	var w := r * 1.15
+	var base := c + Vector2(0, r * 0.42)
+	var crown := PackedVector2Array([base + Vector2(-w * 0.5, 0), base + Vector2(-w * 0.5, -r * 0.85),
+		base + Vector2(-w * 0.25, -r * 0.45), base + Vector2(0, -r * 1.05), base + Vector2(w * 0.25, -r * 0.45),
+		base + Vector2(w * 0.5, -r * 0.85), base + Vector2(w * 0.5, 0)])
+	ci.draw_colored_polygon(crown, Color(0.95, 0.78, 0.25, alpha))
+	ci.draw_polyline(crown + PackedVector2Array([crown[0]]), Color(0.45, 0.3, 0.05, alpha), 1.5)
+	for k in 3:
+		var gem := base + Vector2((k - 1) * w * 0.3, -r * 0.2)
+		var on := fmod(t * 2.0 + k * 0.33, 1.0) < 0.6
+		ci.draw_circle(gem, r * 0.1, (Color(0.75, 0.05, 0.1, alpha) if horror else Color(0.55, 0.2, 0.75, alpha)) if on else Color(1, 1, 1, alpha))
+	if horror:   # a drip off the crown
+		ci.draw_line(base + Vector2(w * 0.3, 0), base + Vector2(w * 0.3, r * 0.4), Color(0.6, 0.02, 0.05, alpha), 2.0)
 
 
 ## A little radio antenna with a blinking tip and signal arcs (remote bombs and their badge).

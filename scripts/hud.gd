@@ -15,9 +15,9 @@ const RankCard = preload("res://scripts/rank_card.gd")
 
 # Layout (1280x720 design area): arena frame at x 270..1010, a card stack centred in each side column.
 const ARENA_RECT := Rect2(280, 52, 720, 624)
-const STACK_TOP := 30.0
-const STACK_GAP := 8.0
-const STACK_X := [65.0, 1075.0]       # left, right
+const CARD_SCALE := 0.8               # cards are drawn at 80% of RankCard.SIZE
+const STACK_GAP := 10.0
+const STACK_CENTRE_X := [135.0, 1145.0]   # left, right column centres
 const SLIDE_K := 140.0                # card slide spring stiffness (critically damped)
 const GLOW_TIME := 0.9                # gold promotion glow
 const SPLAT_TIME := 1.0               # demotion splatter
@@ -29,8 +29,6 @@ var doom_label: Label
 var cards: Array = []           # 8 cards: one per player per side
 var banner_label: Label
 var toast_box: VBoxContainer
-var controls_box: Control
-var controls_hint: Label
 var pause_panel: Control
 var results_panel: Control
 var ranking: Array = []         # the one ranking both stacks show: bears, 1st first
@@ -97,23 +95,6 @@ func setup(g) -> void:
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	root.add_child(title)
 
-	# controls: their own strip under the arena, hideable with H
-	controls_box = Control.new()
-	controls_box.position = Vector2(ARENA_RECT.position.x - 10, 688)
-	controls_box.size = Vector2(ARENA_RECT.size.x + 20, 32)
-	controls_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(controls_box)
-	var help := UiStyle.label(_controls_text(), 12, UiStyle.INK_SOFT)
-	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	help.set_anchors_preset(Control.PRESET_FULL_RECT)
-	help.add_theme_constant_override("line_spacing", -3)
-	controls_box.add_child(help)
-	controls_hint = UiStyle.label("H: show controls", 12, Color(UiStyle.INK_SOFT, 0.7))
-	controls_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	controls_hint.position = controls_box.position + Vector2(0, 8)
-	controls_hint.size = controls_box.size
-	root.add_child(controls_hint)
-	_apply_controls_visibility()
 
 	banner_label = UiStyle.label("", 60, UiStyle.ROSE_DARK)
 	banner_label.add_theme_color_override("font_outline_color", UiStyle.PAPER)
@@ -133,27 +114,6 @@ func setup(g) -> void:
 	toast_box.alignment = BoxContainer.ALIGNMENT_END
 	toast_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(toast_box)
-
-
-func _controls_text() -> String:
-	var p1 := "P1: WASD / Space (bomb) / Left Shift (steal) / E (special)"
-	var p2 := "P2: Arrows / Enter (bomb) / Right Ctrl (steal) / R (special)"
-	if Settings.human_count == 1:   # a lone player can use either layout
-		return "%s   ·   Esc pause   ·   N next song\n%s   ·   both work for you   ·   H hide" % [p1, p2]
-	return "%s   ·   Esc pause   ·   N next song\n%s   ·   H hide" % [p1, p2]
-
-
-func _apply_controls_visibility() -> void:
-	controls_box.visible = Settings.show_controls
-	controls_hint.visible = not Settings.show_controls
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("toggle_controls"):
-		Settings.show_controls = not Settings.show_controls
-		Settings.save()
-		_apply_controls_visibility()
-		get_viewport().set_input_as_handled()
 
 
 func _process(delta: float) -> void:
@@ -187,9 +147,20 @@ func rank_of(bear) -> int:
 	return r
 
 
-## Where a stack's top card sits (side -1 = left, +1 = right).
-func stack_origin(side: float) -> Vector2:
-	return Vector2(STACK_X[0] if side < 0.0 else STACK_X[1], STACK_TOP)
+## On-screen size of a card and the distance between slots.
+func card_size() -> Vector2:
+	return RankCard.SIZE * CARD_SCALE
+
+
+func slot_step() -> float:
+	return card_size().y + STACK_GAP
+
+
+## Top-left corner (on screen) of slot `pos` (0 = 1st; fractional while sliding).
+func slot_top_left(side: float, pos: float) -> Vector2:
+	var total: float = 4.0 * card_size().y + 3.0 * STACK_GAP
+	var x: float = (STACK_CENTRE_X[0] if side < 0.0 else STACK_CENTRE_X[1]) - card_size().x * 0.5
+	return Vector2(x, 360.0 - total * 0.5 + pos * slot_step())
 
 
 ## Re-sort `order` by score, only swapping neighbours when the lower one is

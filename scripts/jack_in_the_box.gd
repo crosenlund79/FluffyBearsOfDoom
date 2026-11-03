@@ -127,6 +127,8 @@ func _pick_target():
 	var best_d := INF
 	for pass_i in 2:
 		for b in game.bears:
+			if b.eliminated:
+				continue
 			if pass_i == 0 and (b.is_stunned() or b.immortal_t > 0.0):
 				continue
 			var d: float = b.position.distance_to(arena.cell_center(pillar))

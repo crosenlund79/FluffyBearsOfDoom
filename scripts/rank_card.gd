@@ -27,15 +27,16 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	t += delta
 	var st: Dictionary = hud.anim[bear]
-	var base: Vector2 = hud.stack_origin(side)
 	var moving: float = clampf(absf(st["pos"] - st["target"]), 0.0, 1.0)
 	# promoted cards swing outward and demoted ones tuck in, so passing cards don't collide
 	# (separate lanes: about half of each passing card stays visible, names included)
-	var lateral: float = side * moving * (36.0 if st["dir"] < 0 else -32.0)
-	position = base + Vector2(lateral, st["pos"] * (SIZE.y + hud.STACK_GAP))
+	var lateral: float = side * moving * (30.0 if st["dir"] < 0 else -26.0)
+	var sc: float = hud.CARD_SCALE * (1.0 + 0.05 * moving)
+	# position is the unscaled rect; scaling pivots on the centre
+	position = hud.slot_top_left(side, st["pos"]) + Vector2(lateral, 0) - SIZE * (1.0 - hud.CARD_SCALE) * 0.5
 	# a wobble while sliding, settling as it arrives
 	rotation = sin(t * 24.0 + bear.slot) * 0.075 * moving + sin(t * 9.0) * 0.02 * st["glow"]
-	scale = Vector2.ONE * (1.0 + 0.05 * moving)
+	scale = Vector2.ONE * sc
 	z_index = 3 if (moving > 0.02 and st["dir"] < 0) else (2 if moving > 0.02 else 1)
 	queue_redraw()
 
@@ -60,9 +61,20 @@ func _draw() -> void:
 			var g := 3.0 + i * 4.0
 			draw_rect(r.grow(g), Color(gold.r, gold.g, gold.b, 0.22 * glow * (1.0 - i * 0.22)), false, 4.0)
 	# the card
+	var out: bool = bear.eliminated
 	draw_rect(Rect2(r.position + Vector2(3, 4), r.size), Color(0, 0, 0, 0.18))   # drop shadow
-	draw_rect(r, UiStyle.PAPER)
+	draw_rect(r, UiStyle.PAPER if not out else UiStyle.PAPER.darkened(0.25))
 	draw_rect(Rect2(0, 0, SIZE.x, 5), bear.color)
+	# the human player's cards: a thick frame in their colour and a "YOU" tab
+	# (on the card itself, so it rides along with every slide and effect)
+	if bear.is_human:
+		var hc: Color = bear.color.darkened(0.15)
+		draw_rect(r.grow(2.0), hc, false, 5.0)
+		var tag: String = "YOU" if Settings.human_count <= 1 else ("P1" if bear.bear_name.ends_with("1") else "P2")
+		var tw := 44.0
+		var tab := Rect2(SIZE.x * 0.5 - tw * 0.5, -13, tw, 16)
+		draw_rect(tab, hc)
+		draw_string(font, Vector2(tab.position.x, tab.end.y - 3), tag, HORIZONTAL_ALIGNMENT_CENTER, tw, 13, UiStyle.PAPER)
 	var edge: Color = bear.color.darkened(0.2).lerp(gold, glow)
 	UiStyle.stitch_rect(self, r.grow(-4), Color(edge, 0.8), 1.3, 4.0)
 	if glow > 0.0:
@@ -73,37 +85,51 @@ func _draw() -> void:
 	var bc := Vector2(19, 22)
 	draw_circle(bc, 13.0, medal[clampi(rank - 1, 0, 3)])
 	draw_arc(bc, 13.0, 0.0, TAU, 20, Color(UiStyle.INK, 0.35), 1.2)
-	draw_string(font, bc + Vector2(-13, 6), "%d" % rank, HORIZONTAL_ALIGNMENT_CENTER, 26, 17,
+	draw_string(font, bc + Vector2(-13, 7), "%d" % rank, HORIZONTAL_ALIGNMENT_CENTER, 26, 19,
 		Color(0.2, 0.12, 0.08) if rank <= 3 else UiStyle.INK)
 	if rank == 1:
 		var cr := bc + Vector2(0, -15)
 		draw_colored_polygon(PackedVector2Array([cr + Vector2(-7, 3), cr + Vector2(-7, -3), cr + Vector2(-3, 0),
 			cr + Vector2(0, -5), cr + Vector2(3, 0), cr + Vector2(7, -3), cr + Vector2(7, 3)]), gold)
 	# name
-	draw_string(font, Vector2(34, 27), bear.bear_name, HORIZONTAL_ALIGNMENT_CENTER, SIZE.x - 40, 16, UiStyle.INK)
+	draw_string(font, Vector2(34, 28), bear.bear_name, HORIZONTAL_ALIGNMENT_CENTER, SIZE.x - 38, 19, UiStyle.INK)
 	# portrait (fitted to its box: tall ears and crowns stay on the card)
 	var robbed := being_robbed()
 	var face_i := 3 if bear.is_stunned() else (1 if bear.stealing else (2 if robbed or bear.robbed_t > 0.0 else 0))
-	if splat > 0.4:
-		face_i = 2   # indignant while being knocked down the table
+	if splat > 0.4 or bear.growl_t > 0.0:
+		face_i = 2   # indignant while knocked down the table, or snarling
+	if out:
+		face_i = 3
 	var wob := Vector2(sin(t * 40.0), 0) * 1.5 if robbed else Vector2.ZERO
+	if bear.growl_t > 0.0:
+		wob = Vector2(sin(t * 55.0), cos(t * 47.0)) * 2.5
 	var fit := BearVisual.fit_portrait(bear.species, Rect2(14, 34, SIZE.x - 28, 60), 30.0)
-	BearVisual.draw_portrait(self, fit[1] + wob, fit[0], bear.species, bear.color, face_i)
+	BearVisual.draw_portrait(self, fit[1] + wob, fit[0], bear.species, bear.color.darkened(0.45) if out else bear.color, face_i)
+	if bear.growl_t > 0.0 and not out:
+		var ga := clampf(bear.growl_t * 3.0, 0.0, 1.0)
+		var gc := Color(0.55, 0.05, 0.06, ga) if Mode.horror() else Color(0.75, 0.25, 0.15, ga)
+		draw_set_transform(Vector2(SIZE.x - 50, 52), -0.2, Vector2.ONE)
+		draw_string(font, Vector2(1, 1), "GRRR!", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 0.97, 0.9, ga))
+		draw_string(font, Vector2.ZERO, "GRRR!", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, gc)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# score (blinks while someone is pulling the stuffing out)
 	var blink := robbed and fmod(t * 6.0, 1.0) < 0.5
 	var score: int = hud.score_of(bear)
-	draw_string(font, Vector2(0, 124), str(score), HORIZONTAL_ALIGNMENT_CENTER, SIZE.x, 30,
+	draw_string(font, Vector2(0, 126), str(score), HORIZONTAL_ALIGNMENT_CENTER, SIZE.x, 34,
 		UiStyle.ROSE_DARK if blink else UiStyle.INK)
 	# small fluff bar, towards the instant-win line when that's on
 	var goal: float = Settings.instant_win if Settings.instant_win > 0.0 else Tuning.START_FLUFF * 4.0
-	var bar := Rect2(14, 131, SIZE.x - 28, 7)
+	var bar := Rect2(14, 133, SIZE.x - 28, 8)
 	draw_rect(bar, UiStyle.BAR)
 	draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(bear.fluff / goal, 0.0, 1.0), bar.size.y)), bear.color.darkened(0.08))
 	draw_rect(bar, Color(UiStyle.INK, 0.3), false, 1.0)
 	# one-word status
 	var status := ""
 	var scol := UiStyle.INK_SOFT
-	if bear.is_stunned():
+	if out:
+		status = "OUT"
+		scol = UiStyle.ROSE_DARK
+	elif bear.is_stunned():
 		status = "stunned"
 		scol = UiStyle.ROSE_DARK
 	elif robbed:
@@ -113,7 +139,12 @@ func _draw() -> void:
 		status = "stealing"
 		scol = UiStyle.GOOD
 	if status != "":
-		draw_string(font, Vector2(0, 151), status, HORIZONTAL_ALIGNMENT_CENTER, SIZE.x, 11, scol)
+		draw_string(font, Vector2(0, 151), status, HORIZONTAL_ALIGNMENT_CENTER, SIZE.x, 13, scol)
+	if out:   # a stamp across the card (not over the score)
+		draw_set_transform(Vector2(SIZE.x * 0.5, 66), -0.3, Vector2.ONE)
+		draw_rect(Rect2(-58, -15, 116, 30), Color(UiStyle.ROSE_DARK, 0.85), false, 3.0)
+		draw_string(font, Vector2(-58, 8), "DEFLATED", HORIZONTAL_ALIGNMENT_CENTER, 116, 15, Color(UiStyle.ROSE_DARK, 0.9))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# arrows: which way it just moved
 	if glow > 0.05:
 		_arrow(Vector2(SIZE.x - 14, 46), -1.0, Color(gold.darkened(0.2), glow))

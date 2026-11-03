@@ -16,14 +16,14 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--mode="):
 			Settings.set_mode(a.get_slice("=", 1))  # dev/test override, not saved
-		if a == "--hide-controls":
-			Settings.show_controls = false   # dev/test override, not saved
 		if a.begins_with("--win="):
 			Settings.instant_win = float(a.get_slice("=", 1))  # dev/test override, not saved
 		if a.begins_with("--menu-shot="):
 			show_menu()
 			if "--powerups" in OS.get_cmdline_user_args():
 				current._show_powerups()   # screenshot the power-up overview
+			if "--controls" in OS.get_cmdline_user_args():
+				current._show_controls()   # screenshot the key remapping panel
 			await get_tree().create_timer(1.5).timeout
 			get_viewport().get_texture().get_image().save_png(a.get_slice("=", 1))
 			get_tree().quit()
@@ -40,6 +40,15 @@ func _ready() -> void:
 		var tester = load("res://tools/rank_test.gd").new()
 		add_child(tester)
 		tester.run.call_deferred(current, shot_dir)
+		return
+	# `godot -- --feature-test` checks knockback, shuffle, elimination, princess, doom order, rebinding.
+	if "--feature-test" in OS.get_cmdline_user_args():
+		Settings.human_count = 0
+		Settings.round_time_index = 2
+		start_game()
+		var ft = load("res://tools/feature_test.gd").new()
+		add_child(ft)
+		ft.run.call_deferred(current)
 		return
 	# `godot -- --autotest` runs an all-AI match and prints the result (for CI / smoke tests).
 	if "--autotest" in OS.get_cmdline_user_args():
@@ -74,6 +83,8 @@ func _ready() -> void:
 			current.bears[0].immortal_t = 20.0
 		if "--duck" in OS.get_cmdline_user_args():
 			current.duck_timer = 3.0
+		if "--princess" in OS.get_cmdline_user_args():
+			get_tree().create_timer(5.0).timeout.connect(func(): current.start_princess())
 		if "--clown" in OS.get_cmdline_user_args():
 			current.clown_timer = 1.0
 		if "--crane" in OS.get_cmdline_user_args():
@@ -91,14 +102,15 @@ func _autotest() -> void:
 		var line := "t=%5.1f " % g.time_left
 		for b in g.bears:
 			line += "%s:%d%s[%s %s] " % [b.bear_name, roundi(b.fluff), "(z)" if b.is_stunned() else "", b.controller.goal, b.cell()]
+		if g.princess != null and is_instance_valid(g.princess):
+			line += "princess=%d tgt=%s " % [g.princess.phase, g.princess.target.bear_name if g.princess.target != null else "-"]
+		var out: int = g.bears.filter(func(x): return x.eliminated).size()
+		if out > 0:
+			line += "out=%d " % out
 		if g.clown != null:
 			line += "clown=%d tgt=%s " % [g.clown.phase, g.clown.target.bear_name if g.clown.target != null else "-"]
 		if g.doom != null:
-			var closed := 0
-			for st in g.doom.stages:
-				if st["state"] == 2:
-					closed += 1
-			line += "rings=%d%s " % [closed, "!" if g.doom.warning_active() else ""]
+			line += "doom=%d/%d%s " % [g.doom.closed_count(), g.doom.order.size(), "!" if g.doom.warning_active() else ""]
 		if g.crane != null:
 			line += "crane=%d " % g.crane.phase
 		if g.chair != null and is_instance_valid(g.chair):
@@ -119,11 +131,15 @@ func _autotest() -> void:
 		if g.arena.is_solid(b.cell()):
 			bad += 1
 	print("bears inside solid cells: %d" % bad)
-	var hk := []
-	for ev in InputMap.action_get_events("toggle_controls"):
-		if ev is InputEventKey:
-			hk.append(OS.get_keycode_string(ev.physical_keycode))
-	print("toggle_controls keys: ", hk)
+	var binds := []
+	for a in ["p1_special", "p2_special", "pause"]:
+		binds.append("%s=%s" % [a, "/".join(Settings.keys_for(a).map(func(k): return Settings.key_name(k)))])
+	print("bindings: ", ", ".join(binds))
+	var recs := []
+	for k in Sfx._over["normal"]:
+		recs.append("%s:%d" % [k, Sfx._over["normal"][k].size()])
+	recs.sort()
+	print("sfx recordings: ", ", ".join(recs))
 	for b in g.bears:
 		print("%s fluff=%d stole=%d stunned=%d bombs=%d range=%d speed=%d" % [b.bear_name, roundi(b.fluff), roundi(b.stolen_total), b.times_stunned, b.bombs_max, b.bomb_range, b.speed_level])
 	get_tree().quit()

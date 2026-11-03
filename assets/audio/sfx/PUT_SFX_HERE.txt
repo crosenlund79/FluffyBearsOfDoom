@@ -1,3 +1,9 @@
-Drop replacement sound effects here (ogg/wav/mp3), named like:
-place fuse confetti concussion steal pickup curse squeak bump kick boing pop menu tick go shuffle immortal victory
+Drop replacement sound effects here (ogg/wav/mp3), named like the sound, or a FOLDER with that
+name holding several takes (one is picked at random each time). sfx/horror/ overrides Horror only.
+
+Built-in names: place fuse confetti concussion steal pickup curse squeak bump kick boing pop menu
+tick go shuffle immortal victory taunt mode growl overtake doom_warn doom_slam clown_rattle
+clown_burst clown_laugh clown_hammer
 Doom Duck Parade: portal clock_tick quack duckling_quack duck_warning duck_confetti
+Supplied recordings (folders): explosion impact kick eliminated defeat princess_laugh shotgun
+shotgun_hit shell_drop footsteps/<concrete|glass|gravel|ice|mud|snow|stone|wood>

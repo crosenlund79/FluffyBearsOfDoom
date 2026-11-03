@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://bn0bbprw5mkar"
+path="res://.godot/imported/Gravel Footstep 8.wav-9961088262a19e020125221747ac20ec.sample"
+
+[deps]
+
+source_file="res://assets/audio/sfx/footsteps/gravel/Gravel Footstep 8.wav"
+dest_files=["res://.godot/imported/Gravel Footstep 8.wav-9961088262a19e020125221747ac20ec.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=0

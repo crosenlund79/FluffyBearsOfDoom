@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://cxsta4e353v2b"
+path="res://.godot/imported/Princess laught when jumping over wall and when she sees a bear and catches up to fire.wav-77536a54f23794189f3d458ad055fd73.sample"
+
+[deps]
+
+source_file="res://assets/audio/sfx/princess_laugh/Princess laught when jumping over wall and when she sees a bear and catches up to fire.wav"
+dest_files=["res://.godot/imported/Princess laught when jumping over wall and when she sees a bear and catches up to fire.wav-77536a54f23794189f3d458ad055fd73.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=0

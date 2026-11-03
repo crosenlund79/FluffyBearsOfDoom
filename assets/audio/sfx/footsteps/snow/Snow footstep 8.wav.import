@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://cifi6fx7e8jsr"
+path="res://.godot/imported/Snow footstep 8.wav-756b3043ed64a0a5c2bde304579bf7fc.sample"
+
+[deps]
+
+source_file="res://assets/audio/sfx/footsteps/snow/Snow footstep 8.wav"
+dest_files=["res://.godot/imported/Snow footstep 8.wav-756b3043ed64a0a5c2bde304579bf7fc.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=0

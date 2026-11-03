@@ -22,7 +22,7 @@ var muted := false
 var shuffle_music := true
 var bear_outlines := true  # dark outline around bears for visibility
 var instant_win: float = preload("res://scripts/tuning.gd").INSTANT_WIN_FLUFF   # fluff that ends a round at once (0 = off)
-var show_controls := true  # the in-match controls strip (H toggles it; player stats always stay)
+var key_overrides := {}   # action -> [[physical keycode, location], ...] chosen in Settings > Controls
 const MODES := ["normal", "horror", "custom"]
 var mode := "normal"  # "normal", "horror" or "custom": same gameplay, different look (and sound)
 
@@ -33,6 +33,12 @@ const KEYS := [
 	{"up": [KEY_UP], "down": [KEY_DOWN], "left": [KEY_LEFT], "right": [KEY_RIGHT], "bomb": [KEY_ENTER, KEY_KP_ENTER], "steal": [KEY_CTRL], "special": [KEY_R, KEY_SHIFT]},
 ]
 const MODIFIERS := [KEY_SHIFT, KEY_CTRL, KEY_ALT]
+## Global (not per-player) actions that can be remapped too.
+const GLOBAL_KEYS := {"pause": [KEY_ESCAPE, KEY_P], "next_track": [KEY_N]}
+const GLOBAL_PADS := {"pause": JOY_BUTTON_START, "next_track": JOY_BUTTON_BACK}
+## Every remappable action, in the order the Controls panel lists them.
+const REMAPPABLE := ["p1_up", "p1_down", "p1_left", "p1_right", "p1_bomb", "p1_steal", "p1_special",
+	"p2_up", "p2_down", "p2_left", "p2_right", "p2_bomb", "p2_steal", "p2_special", "pause", "next_track"]
 
 
 func _ready() -> void:
@@ -41,19 +47,74 @@ func _ready() -> void:
 	set_mode(mode)
 	_ensure_buses()
 	apply_audio()
-	for a in [["pause", [KEY_ESCAPE, KEY_P], JOY_BUTTON_START], ["next_track", [KEY_N], JOY_BUTTON_BACK], ["toggle_controls", [KEY_H], JOY_BUTTON_RIGHT_STICK]]:
-		if InputMap.has_action(a[0]):
-			continue
-		InputMap.add_action(a[0])
-		for k in a[1]:
-			var ev := InputEventKey.new()
-			ev.physical_keycode = k
-			InputMap.action_add_event(a[0], ev)
-		var jb := InputEventJoypadButton.new()
-		jb.button_index = a[2]
-		jb.device = -1
-		InputMap.action_add_event(a[0], jb)
 	apply_input_bindings()
+
+
+## Default keys of an action as [[keycode, location], ...].
+func default_keys(action: String) -> Array:
+	var raw: Array = GLOBAL_KEYS[action] if GLOBAL_KEYS.has(action) else KEYS[int(action[1]) - 1][action.substr(3)]
+	var out := []
+	for k in raw:
+		var loc := KEY_LOCATION_UNSPECIFIED
+		if absi(k) in MODIFIERS:
+			loc = KEY_LOCATION_LEFT if k < 0 else KEY_LOCATION_RIGHT
+		out.append([absi(k), loc])
+	return out
+
+
+## The keys an action uses now (the player's choice, or the default).
+func keys_for(action: String) -> Array:
+	return key_overrides.get(action, default_keys(action))
+
+
+static func key_name(k: Array) -> String:
+	var n := OS.get_keycode_string(k[0])
+	if k[1] == KEY_LOCATION_LEFT:
+		n = "Left " + n
+	elif k[1] == KEY_LOCATION_RIGHT:
+		n = "Right " + n
+	return n
+
+
+## Bind `key` to `action` (replacing its keys). Another action that used the
+## same key gets this action's old key instead (a swap), so nothing is left
+## unbound. Returns the name of the action it was swapped with ("" if none).
+func rebind(action: String, key: Array) -> String:
+	var old: Array = keys_for(action)
+	var swapped := ""
+	for other in REMAPPABLE:
+		if other == action:
+			continue
+		var theirs: Array = keys_for(other).duplicate(true)
+		var hit := -1
+		for i in theirs.size():
+			if theirs[i][0] == key[0] and (theirs[i][1] == key[1] or theirs[i][1] == KEY_LOCATION_UNSPECIFIED or key[1] == KEY_LOCATION_UNSPECIFIED):
+				hit = i
+		if hit < 0:
+			continue
+		theirs.remove_at(hit)
+		if theirs.is_empty() and not old.is_empty():
+			theirs.append(old[0])
+			swapped = other
+		key_overrides[other] = theirs
+	key_overrides[action] = [key]
+	apply_input_bindings()
+	save()
+	return swapped
+
+
+func reset_bindings() -> void:
+	key_overrides.clear()
+	apply_input_bindings()
+	save()
+
+
+func _bind_keys(action: String) -> void:
+	for k in keys_for(action):
+		var ev := InputEventKey.new()
+		ev.physical_keycode = k[0]
+		ev.location = k[1]
+		InputMap.action_add_event(action, ev)
 
 
 ## The four bears of the next match: [{name, color, controller, schemes}].
@@ -74,6 +135,15 @@ func roster() -> Array:
 
 
 func apply_input_bindings() -> void:
+	for a in GLOBAL_KEYS:
+		if InputMap.has_action(a):
+			InputMap.erase_action(a)
+		InputMap.add_action(a)
+		_bind_keys(a)
+		var jb := InputEventJoypadButton.new()
+		jb.button_index = GLOBAL_PADS[a]
+		jb.device = -1
+		InputMap.action_add_event(a, jb)
 	var solo := human_count <= 1
 	for p in 2:
 		for a in ACTIONS:
@@ -81,12 +151,7 @@ func apply_input_bindings() -> void:
 			if InputMap.has_action(action):
 				InputMap.erase_action(action)
 			InputMap.add_action(action, 0.4)
-			for k in KEYS[p][a]:
-				var ev := InputEventKey.new()
-				ev.physical_keycode = absi(k)
-				if absi(k) in MODIFIERS:
-					ev.location = KEY_LOCATION_LEFT if k < 0 else KEY_LOCATION_RIGHT
-				InputMap.action_add_event(action, ev)
+			_bind_keys(action)
 			if solo and p > 0:
 				continue  # a lone player's pad (any device) is bound once, via p1
 			_add_pad(action, a, -1 if solo else p)
@@ -149,7 +214,7 @@ func _set_bus(bus: String, v: float) -> void:
 func save() -> void:
 	var cf := ConfigFile.new()
 	for k in ["master_volume", "music_volume", "sfx_volume", "muted", "shuffle_music", "human_count",
-			"ai_levels", "sitting_out", "arena_index", "round_time_index", "mode", "bear_outlines", "show_controls", "instant_win"]:
+			"ai_levels", "sitting_out", "arena_index", "round_time_index", "mode", "bear_outlines", "instant_win", "key_overrides"]:
 		cf.set_value("settings", k, get(k))
 	cf.save(SAVE_PATH)
 

@@ -16,6 +16,8 @@ enum Face { NORMAL, SMUG, INDIGNANT, STUNNED }
 
 const PART_SCALE := 0.36   # world px per px of a 128px sheet cell
 const BASE_CELL := 128.0
+const ARM_LENGTH := 0.7    # limb length vs the sprite (shorter, cuter); width unchanged
+const LEG_LENGTH := 0.68
 
 var source
 var species := "bear"
@@ -257,6 +259,21 @@ func play_taunt(kind: String) -> void:
 	squash_v += 4.0
 
 
+## Growl: puff up, bare the teeth (angry face) and shake the head.
+var growl_t := 0.0
+
+
+func play_growl() -> void:
+	growl_t = 1.1
+	squash_v -= 6.0
+	ear_wob_v += 14.0
+
+
+func on_eliminated() -> void:
+	flop_v += flop_dir * 4.0
+	squash_v += 14.0
+
+
 func on_recover() -> void:
 	squash_v -= 8.0
 	flop_v -= flop_dir * 3.0
@@ -324,7 +341,8 @@ func _process(delta: float) -> void:
 	ear_wob_v = ew.y
 
 	# Stun flop: falls over with an overshooting wobble, pops back up after.
-	var fl := _spring(flop, flop_v, flop_dir * 1.45 if stunned else 0.0, 90.0, 0.22, delta)
+	var dead: bool = not (source is Puppet) and source.eliminated
+	var fl := _spring(flop, flop_v, flop_dir * (1.57 if dead else 1.45) if stunned else 0.0, 90.0, 0.22, delta)
 	flop = fl.x
 	flop_v = fl.y
 
@@ -363,7 +381,7 @@ func _process(delta: float) -> void:
 	body.scale = Vector2(sx, sy) * unit
 	var body_hw := 46.0 * PART_SCALE * sx
 	var body_hh := 50.0 * PART_SCALE * sy
-	var leg_h := 7.0
+	var leg_h := 5.0   # stubby legs: the body sits lower
 	var body_y := -leg_h - body_hh * 0.9 + bob
 	body.position = Vector2(body_off.x * 0.6, body_y + body_off.y * 0.4)
 	body.rotation = sway * 0.5
@@ -408,7 +426,7 @@ func _process(delta: float) -> void:
 		elif stunned:
 			rot = -side * (1.2 + sin(t * 3.0 + i) * 0.1)
 		arms[i].rotation = rot
-		arms[i].scale = Vector2.ONE * unit * (0.85 + 0.1 * minf(g, 4.0))
+		arms[i].scale = Vector2(1.0, ARM_LENGTH) * unit * (0.85 + 0.1 * minf(g, 4.0))   # short, stubby arms
 
 	# Taunt reactions: purely visual, layered on top of the normal animation.
 	var taunt_rot := 0.0
@@ -456,7 +474,15 @@ func _process(delta: float) -> void:
 		var lift := maxf(0.0, sin(phase + PI * i)) * 3.5 * moving
 		legs[i].position = Vector2(side * (5.5 + 1.8 * minf(g, 4.0)) + body_off.x * 0.15, -lift + 1.0)
 		legs[i].rotation = sin(phase + PI * i) * 0.35 * moving + (side * 0.6 if stunned else 0.0)
-		legs[i].scale = Vector2.ONE * unit * (0.82 + 0.05 * minf(g, 3.0))
+		legs[i].scale = Vector2(1.0, LEG_LENGTH) * unit * (0.82 + 0.05 * minf(g, 3.0))   # short, stubby legs
+
+	# Growl: head shakes hard, the whole bear puffs up a little
+	if growl_t > 0.0:
+		growl_t = maxf(0.0, growl_t - delta)
+		if not stunned:
+			var gk := growl_t / 1.1
+			head.rotation += sin(t * 55.0) * 0.18 * gk
+			head.scale *= 1.0 + 0.08 * gk
 
 	# Expression
 	var f := Face.NORMAL
@@ -464,7 +490,7 @@ func _process(delta: float) -> void:
 		f = Face.STUNNED
 	elif source.stealing or (source is Puppet and source.smug):
 		f = Face.SMUG
-	elif source.robbed_t > 0.0:
+	elif source.robbed_t > 0.0 or growl_t > 0.0:
 		f = Face.INDIGNANT
 	if f != face_idx:
 		face_idx = f
@@ -479,6 +505,9 @@ func _process(delta: float) -> void:
 	position = Vector2(-flop * 10.0, 14.0 - hop) + taunt_off
 	shadow_w = body_hw * 1.15 + 4.0
 	modulate.a = 1.0
+	if dead:   # empty, flat and faded: unmistakably out
+		modulate = Color(0.72, 0.7, 0.7, 0.85)
+		scale = Vector2(1.15, 0.55)
 	if source.immune_t > 0.0 and not stunned:
 		modulate.a = 0.55 if fmod(t * 12.0, 1.0) < 0.5 else 1.0
 

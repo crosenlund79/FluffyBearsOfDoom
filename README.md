@@ -18,40 +18,56 @@ Open the folder in Godot 4.3 and press **Play**.
 | Special (remote detonate / Line Bomb) | E | R (Right Shift also works) |
 
 A lone player can use either layout. Gamepads: stick/d-pad, A bomb, X/B/RT steal, Y/LB special.
-Esc/P pauses, N skips to the next music track, H hides or shows the controls strip under the arena.
+Esc/P pauses, N skips to the next music track. **Every key can be remapped** in Menu → Controls
+(or Settings → Controls, also from the pause menu): click a key, press the new one. If that key was
+already used by another action, the two swap, so nothing is ever left unbound. Bindings are saved
+with the settings, and "Reset to defaults" restores the table above. There is no on-screen key
+overview during a match any more.
 
 ## The match screen
 The arena sits in the middle, uncovered. On **both** sides of it is the same ranked stack of four
 small playing-card panels, 1st at the top and 4th at the bottom: rank (gold, silver and bronze;
 the leader has a crown; tied players share a rank), name, portrait, fluff score (it blinks while
 someone is stealing that player's stuffing) and a small fluff bar running to the instant-win line.
-Both stacks show one shared ranking and always move together.
+The human player's cards have a thick frame in their colour and a **YOU** (or P1/P2) tab, which
+travels with the card through every animation. Both stacks show one shared ranking and always
+move together.
 
 When places change, the cards physically **slide** to their new slots, wobbling on the way. Cards
 moving up get a brief **gold glow** (▲) and pass on an outer lane. Cards moving down get a
 **splatter of blood** (▼) and pass on an inner lane, so every card stays visible. The effects fade
 as the cards settle, and the splatter never covers the score. The ranking updates as soon as a
-whole-number score changes. Equal scores keep their current order, so ties never flicker, and
-score changes that don't affect places don't animate anything. Overtakes are also announced
-("Harald overtakes Oswald (#2)").
+whole-number score changes; equal scores keep their current order, so ties never flicker.
 
-**Time of Doom** counts down above the arena. The controls strip under the arena can be hidden with
-H; the player cards always stay. Which power-ups a bear has picked up is not shown: **Power-ups** in
-the main menu lists every badge with its name and effect. The layout is designed for 1280x720 and
-stays centred on any window shape; ultrawide and 4:3 screens just get more wallpaper.
+A bear whose bomb stuns someone **growls**: an angry face, a head shake and a "GRRR!" in the arena,
+and the same snarl on its two cards. An eliminated bear's cards are greyed and stamped DEFLATED.
 
-## Winning
+**Time of Doom** counts down above the arena. Which power-ups a bear has picked up is not shown:
+**Power-ups** in the main menu lists every badge with its name and effect. The layout is designed
+for 1280x720 and stays centred on any window shape; ultrawide and 4:3 screens get more wallpaper.
+
+## Winning, knockback and elimination
+**Bomb knockback:** a bear stunned by a bomb is blown along the blast direction, sliding down the
+corridor until the next tile is a wall, a cushion block, a closed Time of Doom tile or a bomb. It
+picks up every power-up it slides over, curses included, and always ends centred on an open tile.
+
+**Zero fluff:** a bear that loses all its stuffing collapses into a flat, limp, faded plush and is
+out for the rest of the round. It can't move, bomb, steal or be targeted, and its cards are greyed
+and stamped DEFLATED.
+
 The round ends when the timer runs out (most fluff wins), or **instantly** when a bear's fluff
 reaches the instant-win threshold (default 300; Settings → *Instant win at*, or `INSTANT_WIN_FLUFF`
 in `scripts/tuning.gd`; *Off* plays to the timer).
 
 ## Time of Doom: the closing arena
-From 60% of the round the arena closes in from the edge: four tile rings, evenly staged up to 95%.
-Each ring first flashes (faster and faster, with ticking and inward arrows), then slams shut and
-becomes permanently solid. Bombs there vanish (their owners get them back), power-ups and cushion
-blocks are cleared, loose stuffing hops inward, and a bear caught on a closing tile is shoved to the
-nearest open cell and stunned, never eliminated. The middle of the arena always stays open. The AI
-treats flashing rings as danger. Timing is `DOOM_*` in `scripts/tuning.gd`.
+From 60% of the round the arena closes in **one tile at a time**, walking clockwise around the
+outermost playable ring, then the next ring in: four rings (128 tiles), the last one shut at 97% of
+the round. Each tile flashes before it shuts (faster as its moment comes, with an inward arrow and
+ticking), so the closing edge is always visible. A shut tile is permanently solid. Bombs there
+vanish (their owners get them back), power-ups and cushion blocks are cleared, loose stuffing hops
+inward, and a bear caught on a closing tile is shoved to the nearest open cell and stunned, never
+eliminated. The middle 5x3 tiles always stay open. The AI treats flashing tiles as danger. Timing is
+`DOOM_*` in `scripts/tuning.gd`.
 
 ## Horror: the jack-in-the-box
 Horror only. Every so often a wooden pillar rattles and flashes red, faster and faster. Then a clown
@@ -67,9 +83,22 @@ A ring in the owner's colour on the floor shows whose bomb it is.
 Extra Bomb · Bigger Blast · Springy Stitching (speed) ·
 **Remote Detonator** (your bombs wait, with an antenna in your colour, until you press the special key; a backup fuse sets them off after 10 s) ·
 Line Bomb (special key when you have no remote bombs out: lays all free bombs in a line) · Rubber Bombs (kicked bombs bounce) ·
-Immortality (20 s, can't be stunned or robbed) · Biome Shuffle (reshuffles floor terrain after a warning) ·
+Immortality (20 s, can't be stunned or robbed) · Biome Shuffle (after a warning the **whole floor**
+becomes one biome, ice, honey, bouncy or a one-way conveyor, with its physics; after
+`SHUFFLE_DURATION` seconds it goes back exactly as it was; walls, blocks, bombs and power-ups stay) ·
 **curses:** Reverse Controls (12 s, contagious on contact) · Bomb Diarrhea (10 s, bombs drop by themselves).
 Power-ups lying in a blast are destroyed; ones uncovered by that same blast survive.
+
+## Princess Hunt (a one-time trap)
+Some rounds (45%) hide one **Princess Hunt** badge (a crown) under a cushion block, never more than
+one. Whoever picks it up springs the trap: her crown peeks over the outer wall with a warning, then
+the princess leaps in laughing and hunts the **nearest active bear** along the corridors,
+switching to another bear when it gets clearly closer (by 2+ tiles, so she never dithers between
+two). If no corridor leads to her target, or a chase drags on past 10 s, she simply leaps over. When she reaches it she laughs, takes aim (a red laser line) and fires one shotgun blast:
+a long stun, a quarter of the victim's stuffing blown out and a shove away. Against an immortal or
+just-recovered bear it's a harmless **blank**. Then she leaps back out over the wall. A bomb blast
+on her tile drives her off early. She uses the princess character sheet, so Horror and Custom art
+apply to her, and she is always gone within 30 s. Timing is `PRINCESS_*` in `scripts/tuning.gd`.
 
 ## Crane chair delivery
 Rarely (first after 40–65 s, then every 60–90 s) a crane hook swings in from the top of the
@@ -126,6 +155,21 @@ lines and per-bear quips in `scripts/taunts.gd`. Mode palettes and tints are in
   slower). The names are `place fuse confetti concussion steal pickup curse squeak bump kick boing
   pop menu tick go shuffle immortal victory taunt mode`, plus the duck parade sounds `portal
   clock_tick quack duckling_quack duck_warning duck_confetti`.
+- **Supplied recordings** (from the audio handover, original file names kept) live in folders
+  under `assets/audio/sfx/`; a folder holds several takes and one is picked at random each time:
+
+  | Folder | Used for |
+  |---|---|
+  | `explosion/` (5) | every bomb, and the duck parade burst (the confetti crackle plays on top) |
+  | `impact/` (10 punches) | knockback slamming into a wall, the clown's hammer, the princess's shot |
+  | `kick/` | shoving a bomb |
+  | `eliminated/` | a bear running out of stuffing |
+  | `defeat/` (4) | the results screen when a human player didn't win (otherwise the victory jingle) |
+  | `princess_laugh/`, `shotgun/`, `shotgun_hit/`, `shell_drop/` | the Princess Hunt |
+  | `footsteps/<material>/` | footsteps by floor: Normal and Custom use rug = wood, ice = ice, honey = mud, bouncy = snow, conveyor = concrete; Horror uses gravel, glass, mud, snow and stone |
+
+  Add or swap takes by dropping files into those folders (or a `sfx/horror/<name>/` folder for
+  Horror only). The original handover note is kept as `assets/audio/sfx/HANDOVER_original.txt`.
 - Volumes, mute, shuffle and **Bear outlines** (a dark outline for visibility) are set from
   Menu → Settings (also in the pause menu) and saved to `user://settings.cfg`. N skips to the
   next track. A small "Now playing" note appears briefly whenever a track starts.
@@ -145,7 +189,9 @@ Custom mode reads only `<folder>/custom/<name>.png` and otherwise uses the Norma
 tinted darker in code. The
 generator (`tools/generate_placeholders.py`) only ever writes `template_` files. Sheets are a
 single row, and the cell size is `image width / cell count`, so you can use any resolution.
-Draw each part centred in its cell.
+Draw each part centred in its cell. The rig draws arms and legs at about 70% of their sprite
+length and ears 15–35% larger (per character, in `scripts/species.gd`). This is done in code, so the
+sheets keep their layout and your replacement art (Normal, Horror or Custom) is never altered.
 
 **Resolution:** the built-in templates are drawn at **4×** the layout sizes below (a bear cell is
 512 px, a tile 256 px) and scaled down in game to the same on-screen size as before, using
@@ -166,7 +212,11 @@ and positions on screen don't change, only the detail.
 | `effects/template_effects.png` | 512×64 | 8 cells: blast centre, blast arm (horizontal), blast end (pointing right), star, dust, sparkle, cartoon bird (facing right), floor splat decal. In Horror: blood bursts, a skull, a crow and a blood splatter. |
 
 ## Tests
-- `godot --headless -- --autotest [--mode=horror|custom] [--arena=N] [--crane] [--clown] [--duck] [--win=N]`
+- `godot --headless -- --feature-test` checks the supplied recordings load, bomb knockback (slide
+  distance, power-up pickup, ending centred), the bomber's growl, the whole-floor Biome Shuffle and
+  its exact restore, zero-fluff elimination, the princess (blank vs immortal, real shot, once per
+  round, bomb defeat, leaving), Time of Doom tile order and timing, and key rebinding with swaps.
+- `godot --headless -- --autotest [--mode=horror|custom] [--arena=N] [--crane] [--clown] [--duck] [--princess] [--win=N]`
   plays an all-AI match and prints standings (`--shots=DIR` with a display saves screenshots).
 - `godot --headless -- --rank-test` drives the HUD ranking through ties, a single overtake, a full
   simultaneous reversal, rapid consecutive changes and gradual stealing, and checks that both card

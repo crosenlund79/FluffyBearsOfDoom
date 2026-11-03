@@ -47,8 +47,8 @@ const ROBBED_GRUMPY := 2.2       # seconds a robbed bear looks indignant
 
 # --- Biome Shuffle --------------------------------------------------------------
 const SHUFFLE_WARN := 1.8
-const SHUFFLE_DURATION := 22.0
-const SHUFFLE_REGIONS := 4
+const SHUFFLE_DURATION := 15.0          # seconds the whole floor stays the shuffled biome before it reverts
+
 
 # --- Bomb abilities -------------------------------------------------------------
 const KICK_SPEED := 330.0        # px/s of a kicked bomb
@@ -102,9 +102,9 @@ const INSTANT_WIN_CHOICES := [0.0, 200.0, 250.0, 300.0, 350.0]
 # Time of Doom: the arena closes in ring by ring near the end of the round.
 const DOOM_ENABLED := true
 const DOOM_START := 0.60                   # fraction of the round when the first ring starts warning
-const DOOM_LAST := 0.95                    # fraction when the fourth ring starts warning
+const DOOM_END := 0.97                     # fraction by which the last tile has shut (tiles close one by one in between)
 const DOOM_RINGS := 4                      # rings closed, outermost playable ring first
-const DOOM_WARN := 4.0                     # seconds of flashing before a ring closes (capped at 4% of the round)
+const DOOM_WARN := 3.0                     # max seconds each tile flashes before it shuts (3% of the round, at least 1.8 s)
 const DOOM_STUN := 1.6                     # stun for a bear shoved inward by a closing ring
 
 # Horror jack-in-the-box: a pillar rattles, a clown bursts out and hammers the nearest bear.
@@ -113,3 +113,11 @@ const CLOWN_FIRST_DELAY := [25.0, 40.0]
 const CLOWN_INTERVAL := [28.0, 45.0]
 const CLOWN_WARN := 3.0                    # seconds of accelerating flashing before it bursts out
 const CLOWN_STUN := 2.2
+
+# Princess Hunt (a rare trap power-up; at most one princess per round)
+const PRINCESS_CHANCE := 0.45          # chance a round hides one Princess Hunt badge under a block
+const PRINCESS_SPEED := 175.0          # px/s along the corridors (a touch faster than a bear)
+const PRINCESS_STUN := 4.0             # her shotgun blast: a long stun...
+const PRINCESS_SPILL := 0.25           # ...and this share of the victim's stuffing blown out
+const PRINCESS_WARN := 2.0             # seconds her crown peeks over the wall before she leaps in
+const PRINCESS_MAX_TIME := 30.0        # she always leaves after this long, attack or not

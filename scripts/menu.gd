@@ -13,6 +13,7 @@ const Mode = preload("res://scripts/mode_theme.gd")
 const NowPlaying = preload("res://scripts/now_playing.gd")
 const Species = preload("res://scripts/species.gd")
 const Powerup = preload("res://scripts/powerup.gd")
+const ControlsPanel = preload("res://scripts/controls_panel.gd")
 
 var puppets: Array = []
 var holders: Array = []
@@ -258,31 +259,12 @@ func _show_audio() -> void:
 func _show_controls() -> void:
 	_close_overlay()
 	Sfx.play("menu")
-	var p := StitchPanel.new()
-	p.position = Vector2(250, 120)
-	p.size = Vector2(780, 470)
+	var p = ControlsPanel.new()
+	p.position = Vector2(290, 80)
 	add_child(p)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	p.add_child(v)
-	v.add_child(UiStyle.label("Controls", 30, UiStyle.ROSE_DARK))
-	var grid := GridContainer.new()
-	grid.columns = 3
-	grid.add_theme_constant_override("h_separation", 40)
-	grid.add_theme_constant_override("v_separation", 6)
-	for row in [["", "Player 1", "Player 2"], ["Move", "W A S D", "Arrow keys"], ["Place bomb", "Space", "Enter"],
-			["Steal fluff (hold)", "Left Shift", "Right Ctrl"], ["Special (remote / Line Bomb)", "E", "R"],
-			["Gamepad", "stick/d-pad, A, X/B/RT, Y/LB", "second pad"]]:
-		for cell in row:
-			grid.add_child(UiStyle.label(cell, 18, UiStyle.ROSE_DARK if row[0] == "" else UiStyle.INK))
-	v.add_child(grid)
-	var notes := UiStyle.label("Playing alone? Both keyboard layouts work for you.\nKick: every bear kicks bombs by walking into them.  Rubber Bombs bounce off walls.\nRemote Detonator: the special key (E / R) sets off your remote bombs.\nPause: Esc / P    Next music track: N    Show/hide in-game controls: H\n\nCurses: Reverse Controls flips your steering and spreads to bears you touch.\nBomb Diarrhea drops bombs on its own. Immortality: no stuns, no theft for 20 s.", 16, UiStyle.INK_SOFT)
-	v.add_child(notes)
-	var close := Button.new()
-	close.text = "Done"
-	close.pressed.connect(_close_overlay)
-	v.add_child(close)
-	close.grab_focus()
+	p.closed.connect(func():
+		overlay = null
+		start_button.grab_focus())
 	overlay = p
 
 
@@ -341,14 +323,10 @@ class PowerupIcon extends Control:
 		queue_redraw()
 
 	func _draw() -> void:
-		var tex := Assets.tex("powerups/powerups")
 		var c := size * 0.5
 		var col: Color = Powerup.glow_color(kind)
 		draw_circle(c, 22.0, Color(col.r, col.g, col.b, 0.18))
-		draw_texture_rect_region(tex, Rect2(c - Vector2(20, 20), Vector2(40, 40)),
-			Assets.region(tex, Assets.POWERUP_CELLS, Powerup.CELL[kind]))
-		if kind == Powerup.REMOTE:
-			Powerup.draw_remote_antenna(self, c + Vector2(7, -8), 1.05, t)
+		Powerup.draw_badge(self, c, 40.0, kind, t)
 
 
 func _process(delta: float) -> void:

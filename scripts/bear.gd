@@ -65,6 +65,9 @@ var _rng := RandomNumberGenerator.new()
 
 # State
 var stun_t := 0.0
+var growl_t := 0.0     # snarling after its bomb stunned someone (arena + ranking cards)
+var eliminated := false   # out of stuffing: a limp, empty plush for the rest of the round
+const GROWL_TIME := 1.1
 var immune_t := 0.0
 var robbed_t := 0.0
 var stealing := false
@@ -117,6 +120,10 @@ class Overlay extends Node2D:
 			draw_set_transform(above + Vector2(0, 4), 0.0, Vector2(1.0, 0.3))
 			draw_arc(Vector2.ZERO, 12.0, 0.0, TAU, 20, Color(0.95, 0.78, 0.35, 0.95), 3.0)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		if bear.eliminated:
+			return   # nothing circles an empty plush
+		if bear.growl_t > 0.0 and not bear.is_stunned():
+			_draw_growl(head, v.head_r, t)
 		if bear.is_stunned():
 			# old-cartoon concussion: birds and stars circling above the head
 			var star := Assets.region(tex, Assets.EFFECT_CELLS, 3)
@@ -151,6 +158,22 @@ class Overlay extends Node2D:
 			draw_colored_polygon(PackedVector2Array([Vector2(above.x - 6, y - 8), Vector2(above.x + 6, y - 8), Vector2(above.x, y)]), c)
 			if bear.bear_name.begins_with("Player "):
 				draw_string(font, Vector2(above.x - 20, y - 11), bear.bear_name.substr(7).insert(0, "P"), HORIZONTAL_ALIGNMENT_CENTER, 40, 13, c)
+
+	## "GRRR!" in jagged letters beside the head, with anger ticks.
+	func _draw_growl(head: Vector2, head_r: float, t: float) -> void:
+		var k: float = bear.growl_t / bear.GROWL_TIME
+		var a := clampf(k * 3.0, 0.0, 1.0)
+		var col := Color(0.55, 0.05, 0.06, a) if Mode.horror() else Color(0.75, 0.25, 0.15, a)
+		var p := head + Vector2(head_r + 6.0, -head_r * 0.6) + Vector2(sin(t * 60.0), cos(t * 47.0)) * 1.5
+		draw_set_transform(p, -0.15, Vector2.ONE * (1.0 + 0.25 * (1.0 - k)))
+		for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
+			draw_string(font, o * 1.5, "GRRR!", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 0.97, 0.9, a * 0.9))
+		draw_string(font, Vector2.ZERO, "GRRR!", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, col)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var m := head + Vector2(-head_r * 0.8, -head_r * 0.9)   # cartoon anger "vein" mark
+		for i in 4:
+			var ang := i * PI * 0.5 + 0.785
+			draw_line(m + Vector2.from_angle(ang) * 3.0, m + Vector2.from_angle(ang) * 8.0, col, 2.5)
 
 	## A small, short-lived speech bubble that never blocks much of the arena.
 	func _draw_bubble(anchor: Vector2) -> void:
@@ -224,8 +247,10 @@ func cell() -> Vector2i:
 	return arena.world_to_cell(position)
 
 
+## Eliminated bears count as stunned forever: they can't act, be robbed
+## (they have no fluff), be targeted or pick anything up.
 func is_stunned() -> bool:
-	return stun_t > 0.0
+	return stun_t > 0.0 or eliminated
 
 
 func can_act() -> bool:
@@ -246,6 +271,17 @@ func overlaps_cell(c: Vector2i) -> bool:
 # --- per-frame ------------------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
+	if eliminated:
+		input_dir = Vector2.ZERO
+		want_bomb = false
+		want_steal = false
+		want_special = false
+		velocity = Vector2.ZERO
+		queue_redraw()
+		return
+	if fluff <= 0.05 and game.state == game.State.PLAYING:
+		eliminate()
+		return
 	if controller and can_act():
 		controller.update(delta)
 	else:
@@ -261,6 +297,7 @@ func _physics_process(delta: float) -> void:
 	robbed_t = maxf(0.0, robbed_t - delta)
 	immortal_t = maxf(0.0, immortal_t - delta)
 	bubble_t = maxf(0.0, bubble_t - delta)
+	growl_t = maxf(0.0, growl_t - delta)
 	taunt_cd = maxf(0.0, taunt_cd - delta)
 	infect_cd = maxf(0.0, infect_cd - delta)
 	reinfect_immune = maxf(0.0, reinfect_immune - delta)
@@ -284,8 +321,55 @@ func _physics_process(delta: float) -> void:
 		want_bomb = false
 		game.try_place_bomb(self)
 	_update_steal(delta)
-	_move(delta)
+	if not _knock(delta):
+		_move(delta)
 	queue_redraw()
+
+
+# --- bomb knockback ---------------------------------------------------------------------
+
+var knock_dir := Vector2i.ZERO
+const KNOCK_SPEED := 560.0
+
+
+## Blown along `dir` by a blast: slide down the corridor until the next tile is
+## a wall, block, closed tile or bomb.
+func knock_back(dir: Vector2i) -> void:
+	knock_dir = dir
+	velocity = Vector2.ZERO
+	stealing = false
+	steal_target = null
+	var cc: Vector2 = arena.cell_center(cell())
+	if dir.x != 0:
+		position.y = cc.y   # onto the corridor's centre line: nothing to clip on
+	else:
+		position.x = cc.x
+
+
+func _knock(delta: float) -> bool:
+	if knock_dir == Vector2i.ZERO:
+		return false
+	var c := cell()
+	var dv := Vector2(knock_dir)
+	var step := KNOCK_SPEED * delta
+	var nxt: Vector2i = c + knock_dir
+	if arena.is_solid(nxt) or arena.bombs.has(nxt):
+		# glide to the middle of this tile and stop there
+		var to: float = (arena.cell_center(c) - position).dot(dv)
+		if to <= step:
+			position += dv * maxf(to, 0.0)
+			knock_dir = Vector2i.ZERO
+			velocity = Vector2.ZERO
+			visual.bump(0 if dv.x != 0.0 else 1, 420.0, dv.x if dv.x != 0.0 else dv.y)
+			Sfx.play("impact", randf_range(0.95, 1.1), -6.0)
+			arena.add_shake(2.5)
+		else:
+			position += dv * step
+		return true
+	position += dv * step
+	if cell() != c:
+		game.collect_powerup_at(self, cell())   # whatever lies in the way gets picked up, curses too
+	return true
 
 
 func _update_steal(delta: float) -> void:
@@ -356,9 +440,33 @@ func _move(delta: float) -> void:
 	if _sweep(1, motion.y):
 		_on_wall(1, restitution)
 	_footprints(position - before)
+	_footsteps(position - before)
 
 
 ## Horror mode: bloody feet leave a fading trail of footprints.
+## Footstep sounds from the supplied recordings, by floor material. Plush feet
+## are soft, so they sit low in the mix; heavier bears step lower and slower.
+const STEP_MATERIAL := {   # terrain -> footsteps/<material> (Normal / Custom, then Horror)
+	"normal": ["wood", "ice", "mud", "snow", "concrete", "concrete", "concrete", "concrete"],
+	"horror": ["gravel", "glass", "mud", "snow", "stone", "stone", "stone", "stone"],
+}
+var _step_dist := 0.0
+
+
+func _footsteps(moved: Vector2) -> void:
+	if is_stunned() or moved.length() < 0.05:
+		return
+	_step_dist += moved.length()
+	var stride := 26.0 + 6.0 * minf(fluff_ratio(), 3.0)
+	if _step_dist < stride:
+		return
+	_step_dist = 0.0
+	var mats: Array = STEP_MATERIAL["horror" if Mode.horror() else "normal"]
+	var heavy := minf(fluff_ratio(), 3.0)
+	Sfx.play("footsteps/" + mats[clampi(terrain_id, 0, mats.size() - 1)],
+		randf_range(0.95, 1.08) / (0.85 + 0.15 * heavy), -17.0 + 2.0 * heavy)
+
+
 func _footprints(moved: Vector2) -> void:
 	if not Mode.horror():
 		return
@@ -505,6 +613,34 @@ func stun(from_pos: Vector2) -> void:
 	visual.on_stunned(signf(away.x) if absf(away.x) > 1.0 else 0.0)
 	Sfx.play("concussion", randf_range(0.95, 1.08) / pow(maxf(fluff_ratio(), 0.35), 0.25))
 	game.on_bear_stunned(self)
+
+
+## Zero stuffing: collapses into a deflated, lifeless plush and is out of the round.
+func eliminate() -> void:
+	eliminated = true
+	fluff = 0.0
+	stun_t = 0.0
+	velocity = Vector2.ZERO
+	knock_dir = Vector2i.ZERO
+	stealing = false
+	steal_target = null
+	reverse_t = 0.0
+	diarrhea_t = 0.0
+	immortal_t = 0.0
+	growl_t = 0.0
+	bubble_t = 0.0
+	visual.on_eliminated()
+	Sfx.play("eliminated")
+	game.on_bear_eliminated(self)
+
+
+## Our bomb just stunned someone: a visible, audible growl.
+func growl() -> void:
+	if is_stunned() or growl_t > 0.3:
+		return
+	growl_t = GROWL_TIME
+	visual.play_growl()
+	Sfx.play("growl", randf_range(0.9, 1.05) / pow(maxf(fluff_ratio(), 0.4), 0.2), -2.0)
 
 
 func _recover() -> void:

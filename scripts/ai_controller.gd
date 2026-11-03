@@ -347,7 +347,7 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 			var kind: int = game.powerups[c].kind
 			var value := 35.0
 			match kind:
-				PowerupScript.REVERSE, PowerupScript.DIARRHEA:
+				PowerupScript.REVERSE, PowerupScript.DIARRHEA, PowerupScript.PRINCESS:
 					if level != EASY:
 						continue  # Easy doesn't read the labels
 				PowerupScript.IMMORTAL:

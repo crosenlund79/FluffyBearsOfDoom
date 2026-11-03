@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://c7w66ygk8c5h4"
+path="res://.godot/imported/Mud footstep 6.wav-636fa971feb418f1b515d05dcf223449.sample"
+
+[deps]
+
+source_file="res://assets/audio/sfx/footsteps/mud/Mud footstep 6.wav"
+dest_files=["res://.godot/imported/Mud footstep 6.wav-636fa971feb418f1b515d05dcf223449.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=0

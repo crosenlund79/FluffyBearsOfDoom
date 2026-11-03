@@ -8,7 +8,7 @@ var now_playing: Label
 
 
 func _ready() -> void:
-	size = Vector2(440, 490)
+	size = Vector2(440, 530)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	add_child(v)
@@ -71,6 +71,14 @@ func _ready() -> void:
 		Settings.save())
 	iw.add_child(iwo)
 	v.add_child(iw)
+	var keys := Button.new()
+	keys.text = "Controls (remap keys)..."
+	keys.pressed.connect(func():
+		Sfx.play("menu")
+		var cp = preload("res://scripts/controls_panel.gd").new()
+		cp.position = position + Vector2(-130, -40)
+		get_parent().add_child(cp))
+	v.add_child(keys)
 	var h2 := HBoxContainer.new()
 	h2.add_theme_constant_override("separation", 12)
 	var nxt := Button.new()

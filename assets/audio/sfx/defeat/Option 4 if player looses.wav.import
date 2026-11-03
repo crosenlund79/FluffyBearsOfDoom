@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://cpq36xxv0fnbb"
+path="res://.godot/imported/Option 4 if player looses.wav-f4f445e735543e9d2eb4c1b667557cd5.sample"
+
+[deps]
+
+source_file="res://assets/audio/sfx/defeat/Option 4 if player looses.wav"
+dest_files=["res://.godot/imported/Option 4 if player looses.wav-f4f445e735543e9d2eb4c1b667557cd5.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=0

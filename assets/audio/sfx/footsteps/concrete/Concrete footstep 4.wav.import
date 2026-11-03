@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://bf4nsn5a8rrgm"
+path="res://.godot/imported/Concrete footstep 4.wav-b34b247c0d3b90230333f56e9e5cfa3b.sample"
+
+[deps]
+
+source_file="res://assets/audio/sfx/footsteps/concrete/Concrete footstep 4.wav"
+dest_files=["res://.godot/imported/Concrete footstep 4.wav-b34b247c0d3b90230333f56e9e5cfa3b.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=0

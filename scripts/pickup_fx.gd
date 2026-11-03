@@ -26,12 +26,10 @@ func _draw() -> void:
 	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, Color(col.r, col.g, col.b, 0.9 * (1.0 - k)), 5.0 * (1.0 - k) + 1.0)
 	draw_arc(Vector2.ZERO, r * 0.7, 0.0, TAU, 24, Color(1, 1, 1, 0.5 * (1.0 - k)), 2.0)
 	# badge pops up and floats away
-	var tex: Texture2D = Assets.tex("powerups/powerups")
 	var up := -34.0 * (1.0 - pow(1.0 - k, 3.0))
 	var s := 38.0 * (1.0 + 0.6 * sin(minf(k * 3.0, 1.0) * PI * 0.5)) * (1.0 - 0.5 * k)
 	var a := 1.0 - clampf((k - 0.5) / 0.5, 0.0, 1.0)
-	draw_texture_rect_region(tex, Rect2(Vector2(-s * 0.5, up - s * 0.5), Vector2(s, s)),
-		Assets.region(tex, Assets.POWERUP_CELLS, Powerup.CELL[kind]), Color(1, 1, 1, a))
+	Powerup.draw_badge(self, Vector2(0, up), s, kind, age, a)
 	# floating label
 	var font := UiStyle.font()
 	var label: String = Powerup.SHORT[kind]

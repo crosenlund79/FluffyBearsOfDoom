@@ -123,10 +123,10 @@ func _check(what: String, expected: Array) -> void:
 		if order != expected:
 			ok = false
 		for i in col.size():
-			var want: float = hud.stack_origin(side).y + i * (col[i].size.y + hud.STACK_GAP)
-			if absf(col[i].position.y - want) > 0.5 or absf(col[i].rotation) > 0.01:
+			var want: Vector2 = hud.slot_top_left(side, i) - col[i].size * (1.0 - hud.CARD_SCALE) * 0.5
+			if col[i].position.distance_to(want) > 0.5 or absf(col[i].rotation) > 0.01 or absf(col[i].scale.x - hud.CARD_SCALE) > 0.001:
 				ok = false
-			if i > 0 and col[i].position.y < col[i - 1].position.y + col[i - 1].size.y:
+			if i > 0 and col[i].position.y < col[i - 1].position.y + hud.card_size().y:
 				ok = false
 	if not ok:
 		for c in hud.cards:

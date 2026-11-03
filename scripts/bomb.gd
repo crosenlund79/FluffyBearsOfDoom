@@ -83,7 +83,7 @@ func _free(c: Vector2i) -> bool:
 	if arena.is_solid(c) or arena.bombs.has(c):
 		return false
 	for b in game.bears:
-		if b.cell() == c and not pass_through.has(b):
+		if b.cell() == c and not pass_through.has(b) and not b.eliminated:
 			return false
 	return true
 

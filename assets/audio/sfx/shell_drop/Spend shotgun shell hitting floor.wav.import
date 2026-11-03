@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://1s42yy3r8pgo"
+path="res://.godot/imported/Spend shotgun shell hitting floor.wav-e60c9ca1a2b0612e14cfe1969d0c44ed.sample"
+
+[deps]
+
+source_file="res://assets/audio/sfx/shell_drop/Spend shotgun shell hitting floor.wav"
+dest_files=["res://.godot/imported/Spend shotgun shell hitting floor.wav-e60c9ca1a2b0612e14cfe1969d0c44ed.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=0
