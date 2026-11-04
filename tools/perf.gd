@@ -56,8 +56,13 @@ func run(m) -> void:
 		frames.append((now - last) / 1000.0)
 		last = now
 		proc.append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
-		phys.append(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)
+		var pm := Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+		if pm > 50.0 and (phys.is_empty() or phys[-1] != pm):
+			print("PERF physics spike %.0f ms at %.2f s (frame %d)" % [pm, (now - t0) / 1e6, frames.size()])
+		phys.append(pm)
 		draws.append(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+		if frames.size() % 600 == 0:
+			print("PERF sample t=%.0fs mem=%.1fMB objects=%d nodes=%d" % [(now - t0) / 1e6, Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0, Performance.get_monitor(Performance.OBJECT_COUNT), Performance.get_monitor(Performance.OBJECT_NODE_COUNT)])
 		if frames.size() % 30 == 0:
 			mem.append(Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0)
 			objs.append(Performance.get_monitor(Performance.OBJECT_COUNT))

@@ -23,6 +23,11 @@ var warn_t := 0.0
 var map_name := ""
 var tiles_tex: Texture2D
 var anim_t := 0.0
+# The arena's static picture (floor, walls, blocks, decor) is cached by Godot and
+# only redrawn when something changes; animated belts live on their own layer
+# (behind the walls) so they don't force the whole arena to redraw every frame.
+var under_layer: Node2D   # the soft drop shadow under the arena
+var belt_layer: Node2D    # conveyor tiles and their moving chevrons
 var has_conveyors := false
 var shake := 0.0
 var _origin := Vector2.ZERO
@@ -31,6 +36,7 @@ const SLAM_TIME := 0.32
 
 
 func setup(map: Dictionary, rng: RandomNumberGenerator) -> void:
+	_make_layers()
 	tiles_tex = Assets.tex("tiles/tiles")
 	map_name = map["name"]
 	_origin = position
@@ -129,7 +135,46 @@ func set_terrain(c: Vector2i, t: int) -> void:
 		terrain[c.y * cols + c.x] = t
 		if Terrain.is_conveyor(t):
 			has_conveyors = true
-		queue_redraw()
+		redraw_all()
+
+
+func _make_layers() -> void:
+	if under_layer != null:
+		return
+	under_layer = Node2D.new()
+	under_layer.show_behind_parent = true
+	under_layer.draw.connect(func(): under_layer.draw_rect(Rect2(Vector2(6, 10), Vector2(cols, rows) * T), Color(0.35, 0.25, 0.2, 0.18)))
+	add_child(under_layer)
+	belt_layer = Node2D.new()
+	belt_layer.show_behind_parent = true
+	belt_layer.draw.connect(_draw_belts)
+	add_child(belt_layer)
+
+
+func _draw_belts() -> void:
+	for y in rows:
+		for x in cols:
+			var i := y * cols + x
+			var t := terrain[i]
+			if not Terrain.is_conveyor(t) or cells[i] == BORDER or (cells[i] == CLOSED and not closing.has(Vector2i(x, y))):
+				continue
+			var r := Rect2(x * T, y * T, T, T)
+			belt_layer.draw_set_transform(r.get_center(), Terrain.conveyor_rotation(t), Vector2.ONE)
+			belt_layer.draw_texture_rect_region(tiles_tex, Rect2(-T * 0.5, -T * 0.5, T, T), _tile(Terrain.props(t)["tile"]))
+			# moving chevrons
+			var off := fmod(anim_t * 40.0, T / 3.0)
+			for k in 3:
+				var cx := -T * 0.5 + off + k * T / 3.0
+				if cx > T * 0.5 - 4:
+					continue
+				belt_layer.draw_polyline(PackedVector2Array([Vector2(cx - 4, -7), Vector2(cx + 3, 0), Vector2(cx - 4, 7)]), Color(1, 1, 1, 0.55), 2.5)
+	belt_layer.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func redraw_all() -> void:
+	queue_redraw()
+	if belt_layer != null:
+		belt_layer.queue_redraw()
 
 
 ## Every cell holding a cushion block (row by row).
@@ -217,8 +262,10 @@ func _process(delta: float) -> void:
 			closing[c] += delta
 			if closing[c] >= SLAM_TIME:
 				closing.erase(c)
-	if has_conveyors or warn.size() > 0 or not closing.is_empty():
-		queue_redraw()
+	if has_conveyors and belt_layer != null:
+		belt_layer.queue_redraw()   # only the belts animate every frame
+	if warn.size() > 0 or not closing.is_empty():
+		redraw_all()
 
 
 func _tile(index: int) -> Rect2:
@@ -226,8 +273,7 @@ func _tile(index: int) -> Rect2:
 
 
 func _draw() -> void:
-	# soft drop shadow under the whole arena
-	draw_rect(Rect2(Vector2(6, 10), Vector2(cols, rows) * T), Color(0.35, 0.25, 0.2, 0.18))
+	# (the drop shadow under the arena: under_layer)
 	# floors
 	for y in rows:
 		for x in cols:
@@ -241,18 +287,8 @@ func _draw() -> void:
 			if t == Terrain.NORMAL and (x + y) % 2 == 1 and not Mode.horror_dressing():
 				idx = 1   # (Horror keeps the floor calm: no checkerboard)
 			if Terrain.is_conveyor(t):
-				draw_set_transform(r.get_center(), Terrain.conveyor_rotation(t), Vector2.ONE)
-				draw_texture_rect_region(tiles_tex, Rect2(-T * 0.5, -T * 0.5, T, T), _tile(idx))
-				# moving chevrons
-				var off := fmod(anim_t * 40.0, T / 3.0)
-				for k in 3:
-					var cx := -T * 0.5 + off + k * T / 3.0
-					if cx > T * 0.5 - 4:
-						continue
-					draw_polyline(PackedVector2Array([Vector2(cx - 4, -7), Vector2(cx + 3, 0), Vector2(cx - 4, 7)]), Color(1, 1, 1, 0.55), 2.5)
-				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-			else:
-				draw_texture_rect_region(tiles_tex, r, _tile(idx))
+				continue   # drawn (animated) on belt_layer, behind this one
+			draw_texture_rect_region(tiles_tex, r, _tile(idx))
 	# shadows cast by walls and blocks
 	for y in rows:
 		for x in cols:
@@ -330,19 +366,32 @@ func _draw_horror_decor() -> void:
 				var k := absi(h / 9) % 4
 				var corner_pt := r.position + Vector2(T if k % 2 == 1 else 0.0, T if k >= 2 else 0.0)
 				_web(corner_pt, T * 0.45, Vector2(-1 if k % 2 == 1 else 1, -1 if k >= 2 else 1), 0.22)
+	_flush_webs()
 
+
+## Web strands are collected and drawn in one batch per opacity (see _draw_horror_decor).
+var _web_lines := {}   # alpha -> PackedVector2Array of segment end points
 
 func _web(origin: Vector2, size: float, dir: Vector2, a: float) -> void:
-	var col := Color(0.85, 0.85, 0.85, a)
+	var seg: PackedVector2Array = _web_lines.get(a, PackedVector2Array())
 	var ends := []
 	for i in 5:
 		var ang := (i / 4.0) * PI * 0.5
 		var e := origin + Vector2(cos(ang) * dir.x, sin(ang) * dir.y) * size
 		ends.append(e)
-		draw_line(origin, e, col, 1.0)
+		seg.append(origin)
+		seg.append(e)
 	for ring in [0.35, 0.62, 0.9]:
 		for i in 4:
-			draw_line(origin.lerp(ends[i], ring), origin.lerp(ends[i + 1], ring), col, 1.0)
+			seg.append(origin.lerp(ends[i], ring))
+			seg.append(origin.lerp(ends[i + 1], ring))
+	_web_lines[a] = seg
+
+
+func _flush_webs() -> void:
+	for a in _web_lines:
+		draw_multiline(_web_lines[a], Color(0.85, 0.85, 0.85, a), 1.0)
+	_web_lines.clear()
 
 
 func _pumpkin(p: Vector2) -> void:
