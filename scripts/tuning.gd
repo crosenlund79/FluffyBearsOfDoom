@@ -156,8 +156,9 @@ const PRINCESS_MAX_TIME := 30.0        # she always leaves after this long, atta
 # --- AI decision-making (per level: [Easy, Normal, Hard]) ---------------------
 # Same rules and inputs for everyone; levels differ only in how they decide.
 const AI_THINK_TIME := [0.5, 0.26, 0.2]       # seconds between decisions (Hard ~ a quick human)
-const AI_NOTICE_DANGER := [0.7, 0.93, 1.0]    # chance a decision notices it stands in a blast line
+const AI_NOTICE_DANGER := [0.8, 0.93, 1.0]    # chance a decision notices it stands in a blast line
 const AI_CARELESS_BOMB := [0.08, 0.0, 0.0]    # chance to drop a bomb with no way out
-const AI_STEAL_SKIP := [0.3, 0.0, 0.0]        # chance to ignore a robbable stunned bear
-const AI_STEAL_BUDGET_EASY := [0.5, 2.5]      # Easy steals for this many seconds, then wanders off
-const AI_ROB_GREED := [0.0, 0.0, 0.4]         # extra goal score per fluff of a stunned bear (Hard)
+const AI_STEAL_SKIP := [0.15, 0.0, 0.0]        # chance to ignore a robbable stunned bear
+const AI_STEAL_BUDGET_EASY := [1.0, 3.0]      # Easy steals for this many seconds, then wanders off
+const AI_DANGER_MARGIN := [0.2, 0.5, 0.7]    # seconds of slack kept before a blast when choosing a path
+const AI_ROB_GREED := [0.0, 0.0, 0.15]         # extra goal score per fluff of a stunned bear (Hard)

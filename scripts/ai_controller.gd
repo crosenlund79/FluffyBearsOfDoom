@@ -448,12 +448,10 @@ func _unsafe(c: Vector2i, arrival: float, danger: Dictionary) -> bool:
 		return false
 	var t: float = danger[c]
 	match level:
-		EASY:
-			return t < 0.4
-		NORMAL:
-			return t < arrival + 0.5
+		EASY, NORMAL:
+			return t < arrival + Tuning.AI_DANGER_MARGIN[level]
 		_:
-			return t < arrival + 0.7 and t > arrival - 0.6 - Tuning.FLAME_TIME
+			return t < arrival + Tuning.AI_DANGER_MARGIN[level] and t > arrival - 0.6 - Tuning.FLAME_TIME
 	return false
 
 
