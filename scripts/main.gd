@@ -78,7 +78,7 @@ func _ready() -> void:
 				b.has_line = true
 				b.bombs_max = 4
 			current.bears[1].has_rubber = true
-			current.bears[2].has_remote = true
+			current.bears[2].prox_charges = 3
 			current.infect(current.bears[2])
 			current.bears[3].diarrhea_t = 10.0
 			current.bears[0].immortal_t = 20.0

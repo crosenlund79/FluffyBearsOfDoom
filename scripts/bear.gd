@@ -36,8 +36,11 @@ var bombs_max := Tuning.START_BOMBS
 var bomb_range := Tuning.START_RANGE
 var speed_level := 0
 var active_bombs := 0
-var can_kick := true    # every bear can kick bombs
-var has_remote := false  # Remote Detonator power-up
+var can_kick := false   # the Bomb Kick power-up (every round starts without it)
+var bomb_hits := 0      # stats: other bears stunned by our bombs
+var self_hits := 0      # stats: times we stunned ourselves
+var bombs_placed := 0   # stats
+var prox_charges := 0     # proximity bombs left (Proximity Bombs power-up)
 var has_line := false
 var has_rubber := false
 
@@ -314,8 +317,10 @@ func _physics_process(delta: float) -> void:
 	if want_special:
 		want_special = false
 		if game.controls_enabled() and not is_stunned():
-			# special: detonate your remote bombs first, otherwise lay a Line Bomb
-			if not game.detonate_remote(self) and has_line:
+			# special: a proximity bomb if we have any, otherwise lay a Line Bomb
+			if prox_charges > 0:
+				game.place_proximity(self)
+			elif has_line:
 				game.place_line(self)
 	if want_bomb:
 		want_bomb = false

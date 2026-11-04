@@ -6,7 +6,7 @@ extends "res://scripts/stitch_panel.gd"
 signal closed
 
 const LABELS := {"up": "Up", "down": "Down", "left": "Left", "right": "Right", "bomb": "Place bomb",
-	"steal": "Steal fluff (hold)", "special": "Special (remote / Line Bomb)"}
+	"steal": "Steal fluff (hold)", "special": "Special (proximity / Line Bomb)"}
 
 var _buttons := {}        # action -> Button
 var _waiting := ""        # action waiting for a key

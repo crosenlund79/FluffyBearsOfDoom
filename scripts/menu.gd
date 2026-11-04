@@ -293,7 +293,7 @@ func _show_powerups() -> void:
 		var txt := VBoxContainer.new()
 		txt.add_theme_constant_override("separation", 0)
 		var bad: bool = k in Powerup.BAD
-		txt.add_child(UiStyle.label(Powerup.NAMES[k] + ("  (built in)" if k == Powerup.KICK else ""), 18,
+		txt.add_child(UiStyle.label(Powerup.NAMES[k], 18,
 			UiStyle.CURSE if bad else UiStyle.INK))
 		var d := UiStyle.label(Powerup.DESC[k], 14, UiStyle.INK_SOFT)
 		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

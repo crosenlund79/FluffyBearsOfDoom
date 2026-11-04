@@ -71,9 +71,7 @@ func _run_checks() -> void:
 	pu.position = arena.cell_center(pu.cell)
 	game.powerup_layer.add_child(pu)
 	game.powerups[pu.cell] = pu
-	game.flames[Vector2i(3, 3)] = 0.5
-	game.flame_origin[Vector2i(3, 3)] = Vector2i(2, 3)
-	game.flame_owner[Vector2i(3, 3)] = b
+	game._hit_bears([Vector2i(3, 3)], Vector2i(2, 3), b, true)   # b's bomb went off next to a
 	await _wait(0.12)
 	await _shot("knockback_growl")
 	await _wait(0.18)
@@ -85,6 +83,69 @@ func _run_checks() -> void:
 	_expect(growled, "the bomber growls when its bomb stuns someone")
 	a.stun_t = 0.0
 	a.reverse_t = 0.0
+
+	# --- bomb damage happens only at the instant of detonation, once per bear
+	_expect(not a.can_kick and not b.can_kick, "kick is not built in: bears start without it")
+	a.position = arena.cell_center(Vector2i(3, 3))
+	b.position = arena.cell_center(Vector2i(1, game.arena.rows - 2))
+	a.immune_t = 0.0
+	a.stun_t = 0.0
+	b.bombs_max = 3
+	b.bomb_range = 2
+	game._spawn_bomb(b, Vector2i(7, 3))
+	var bomb1 = arena.bombs[Vector2i(7, 3)]
+	bomb1.fuse = 0.05
+	await _wait(0.12)
+	_expect(a.stun_t <= 0.0 and game.flames.has(Vector2i(6, 3)), "a bear outside the blast at detonation isn't hit")
+	a.position = arena.cell_center(Vector2i(6, 3))   # walk into the lingering flames
+	await _wait(0.25)
+	_expect(not a.is_stunned(), "lingering flames are harmless: damage only at detonation")
+	# two bombs going off together (a chain) still hit a bear just once
+	game._spawn_bomb(b, Vector2i(3, 3))
+	game._spawn_bomb(b, Vector2i(5, 3))
+	var hits_before: int = b.bomb_hits
+	a.position = arena.cell_center(Vector2i(4, 3))
+	arena.bombs[Vector2i(3, 3)].fuse = 0.02
+	await _wait(0.15)
+	_expect(a.is_stunned() and b.bomb_hits - hits_before == 1, "a chain blast hits the bear once (%d hits)" % (b.bomb_hits - hits_before))
+	a.stun_t = 0.0
+	a.immune_t = 0.0
+	await _wait(0.6)
+
+	# --- proximity bombs: 3-2-1 arming, owner-proof, a rival sets them off
+	a.position = arena.cell_center(Vector2i(3, 3))
+	b.position = arena.cell_center(Vector2i(1, game.arena.rows - 2))
+	a.prox_charges = 3
+	a.bombs_max = 3
+	a.active_bombs = 0
+	var placed: bool = game.place_proximity(a)
+	var pb = arena.bombs.get(Vector2i(3, 3))
+	_expect(placed and pb != null and pb.proximity and a.prox_charges == 2, "special key lays a proximity bomb (charges 3 -> %d)" % a.prox_charges)
+	await _wait(0.3)
+	await _shot("prox_countdown")
+	_expect(is_instance_valid(pb) and not pb.armed() and pb.arm_left > 2.0 and ceili(pb.arm_left) == 3, "it counts down 3-2-1 while arming (%.1f)" % (pb.arm_left if is_instance_valid(pb) else -1.0))
+	b.position = arena.cell_center(Vector2i(4, 3))   # a rival right next to it before it's armed
+	await _wait(0.4)
+	_expect(is_instance_valid(pb) and not pb.triggered, "an unarmed proximity bomb ignores rivals")
+	b.position = arena.cell_center(Vector2i(1, game.arena.rows - 2))
+	await _wait(2.5)
+	_expect(is_instance_valid(pb) and pb.armed(), "armed after 3 s")
+	await _shot("prox_armed")
+	_expect(game.trap_cells(b).has(Vector2i(4, 3)) and not game.trap_cells(a).has(Vector2i(4, 3)), "AI sees the trap zone (rivals only)")
+	await _wait(0.5)
+	_expect(is_instance_valid(pb) and not pb.triggered, "its owner standing on it can't set it off")
+	a.position = arena.cell_center(Vector2i(game.arena.cols - 2, 3))
+	b.immune_t = 0.0
+	b.stun_t = 0.0
+	b.position = arena.cell_center(Vector2i(4, 3))   # the rival steps next to it
+	await _wait(0.4)
+	_expect(not is_instance_valid(pb) or pb.exploded, "a rival stepping close sets it off")
+	_expect(b.is_stunned() and b.last_hit_by == a, "the blast belongs to its owner")
+	b.stun_t = 0.0
+	b.immune_t = 0.0
+	b.position = arena.cell_center(Vector2i(1, game.arena.rows - 2))
+	a.prox_charges = 0
+	await _wait(0.6)
 
 	# --- biome shuffle: the whole floor turns into one biome, then exactly back
 	var before: PackedInt32Array = arena.terrain.duplicate()
@@ -174,7 +235,7 @@ func _run_checks() -> void:
 		await get_tree().physics_frame
 		guard += 1
 	if is_instance_valid(p):
-		game.flames[p.cell()] = 0.5   # a blast right where she landed
+		game._hit_bears([p.cell()], p.cell(), null, true)   # a blast right where she landed
 	await _wait(0.2)
 	_expect(is_instance_valid(p) == false or p.defeated, "a bomb blast drives the princess off")
 

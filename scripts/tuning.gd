@@ -79,8 +79,13 @@ const CENTER_ASSIST_SPEED := 90.0        # px/s a bear is nudged toward an open 
 const TURN_LOOKAHEAD := 1.15             # tiles ahead along the motion to look for the corridor you pressed toward
 
 # --- Remote Detonator -------------------------------------------------------------
-const REMOTE_BACKUP_FUSE := 10.0         # a remote bomb still goes off on its own after this long
-const REMOTE_THREAT_TIME := 1.5          # how soon other AIs assume someone else's remote bomb may blow
+# Proximity bombs (the special key, from the Proximity Bombs power-up)
+const PROX_CHARGES := 3                  # proximity bombs per power-up
+const PROX_MAX_CHARGES := 6
+const PROX_ARM_TIME := 3.0               # seconds before it is live (3 -> 2 -> 1 shown on the bomb)
+const PROX_RANGE := 1.05                 # tiles: an opponent this close to an armed one sets it off
+const PROX_TRIGGER_DELAY := 0.12         # alarm beep between being tripped and going off
+const PROX_LIFETIME := 30.0              # an untripped proximity bomb goes off on its own after this long
 
 # --- Horror footprints ------------------------------------------------------------
 const FOOTPRINT_STRIDE := 13.0           # px between footprints

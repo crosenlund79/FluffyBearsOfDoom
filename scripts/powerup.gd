@@ -1,9 +1,9 @@
 ## A collectible power-up badge on a grid cell.
 extends Node2D
 
-enum { BOMB, FIRE, SPEED, SHUFFLE, KICK, LINE, RUBBER, IMMORTAL, REVERSE, DIARRHEA, REMOTE, PRINCESS }
+enum { BOMB, FIRE, SPEED, SHUFFLE, KICK, LINE, RUBBER, IMMORTAL, REVERSE, DIARRHEA, PROXIMITY, PRINCESS }
 const NAMES := ["Extra Bomb", "Bigger Blast", "Springy Stitching", "Biome Shuffle", "Bomb Kick",
-	"Line Bomb", "Rubber Bombs", "Immortality", "Reverse Controls!", "Bomb Diarrhea!", "Remote Detonator",
+	"Line Bomb", "Rubber Bombs", "Immortality", "Reverse Controls!", "Bomb Diarrhea!", "Proximity Bombs",
 	"Princess Hunt!"]
 # Every bear can kick now, so Bomb Kick no longer drops (its sheet cell is kept for compatibility).
 # Princess Hunt never drops by weight: at most one is hidden per round (Tuning.PRINCESS_CHANCE).
@@ -18,22 +18,22 @@ const DESC := [
 	"Your confetti reaches one tile further (up to 8).",
 	"Run faster and get going quicker.",
 	"After a short warning the whole floor turns into one biome (ice, honey, bouncy or conveyor) for a while.",
-	"Every bear already kicks bombs by walking into them, so this one no longer drops.",
-	"Special key with no remote bombs out: lay all your free bombs in a line ahead.",
+	"Walk into a bomb to kick it: it slides until something stops it. Lasts the round.",
+	"Special key (when you have no proximity bombs): lay all your free bombs in a line ahead.",
 	"Kicked bombs bounce off walls instead of stopping.",
 	"20 s of no stuns and no stuffing theft.",
 	"Curse! 12 s of flipped steering, and it spreads to bears you touch.",
 	"Curse! For 10 s your bombs drop all by themselves.",
-	"Your bombs wait until you press the special key (backup fuse 10 s).",
+	"3 proximity bombs for the special key: they arm in 3 s, then go off when a rival comes close. Yours can't trip them.",
 	"Trap! The princess leaps over the wall and hunts the nearest bear. Bombs can drive her off. Once per round.",
 ]
 ## Order for the menu overview (droppable ones first, the retired Kick last).
-const OVERVIEW := [BOMB, FIRE, SPEED, REMOTE, LINE, RUBBER, IMMORTAL, SHUFFLE, REVERSE, DIARRHEA, PRINCESS, KICK]
+const OVERVIEW := [BOMB, FIRE, SPEED, PROXIMITY, LINE, RUBBER, IMMORTAL, SHUFFLE, REVERSE, DIARRHEA, PRINCESS, KICK]
 ## Short pickup labels for the floating text.
 const SHORT := ["+1 Bomb", "+Blast", "Speed!", "Shuffle!", "Kick", "Line Bomb", "Rubber!",
-	"Immortal!", "Reversed!", "Diarrhea!", "Remote!", "Princess!"]
+	"Immortal!", "Reversed!", "Diarrhea!", "Proximity!", "Princess!"]
 ## Kinds that get orbiting sparkles (the rare, exciting ones).
-const SPECIAL := [SHUFFLE, LINE, RUBBER, IMMORTAL, REMOTE]
+const SPECIAL := [SHUFFLE, LINE, RUBBER, IMMORTAL, PROXIMITY]
 
 var kind := BOMB
 var cell := Vector2i.ZERO
@@ -49,14 +49,14 @@ static func glow_color(k: int) -> Color:
 	if horror:
 		match k:
 			IMMORTAL: return Color(0.95, 0.85, 0.55)
-			SHUFFLE, REMOTE: return Color(0.75, 0.35, 0.95)
+			SHUFFLE, PROXIMITY: return Color(0.75, 0.35, 0.95)
 			_: return Color(0.92, 0.18, 0.15)
 	match k:
 		BOMB, FIRE: return Color(1.0, 0.72, 0.3)
 		SPEED: return Color(0.45, 0.85, 1.0)
 		SHUFFLE: return Color(0.75, 0.55, 1.0)
 		IMMORTAL: return Color(1.0, 0.92, 0.45)
-		REMOTE: return Color(1.0, 0.45, 0.5)
+		PROXIMITY: return Color(1.0, 0.45, 0.5)
 		_: return Color(1.0, 0.85, 0.45)
 
 
@@ -120,7 +120,7 @@ func _draw() -> void:
 	draw_texture_rect_region(tex, rect, region, outline)
 	draw_set_transform(c + off, wob, Vector2.ONE)
 	draw_texture_rect_region(tex, rect, region, Color(1, 1, 1, appear))
-	if kind == REMOTE:
+	if kind == PROXIMITY:
 		draw_remote_antenna(self, Vector2(s * 0.18, -s * 0.2), s / 38.0, t)
 	# a glint sweeping across the badge every couple of seconds
 	var g := fmod(t * 0.55 + float(cell.x + cell.y) * 0.13, 1.0)
@@ -152,7 +152,7 @@ static func draw_badge(ci: CanvasItem, center: Vector2, size: float, kind: int, 
 	var tex: Texture2D = Assets.tex("powerups/powerups")
 	ci.draw_texture_rect_region(tex, Rect2(center - Vector2(size, size) * 0.5, Vector2(size, size)),
 		Assets.region(tex, Assets.POWERUP_CELLS, CELL[kind]), Color(1, 1, 1, alpha))
-	if kind == REMOTE:
+	if kind == PROXIMITY:
 		draw_remote_antenna(ci, center + Vector2(size * 0.18, -size * 0.2), size / 38.0, t)
 
 

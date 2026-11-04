@@ -44,6 +44,7 @@ var clock := 0.0
 var curse_t := 0.0
 var compensating := false
 var hesitate_t := 0.0
+var traps := {}      # Vector2i -> seconds until a rival's proximity bomb covering it is armed
 var bad_spots := {}  # Vector2i -> clock time until which bombing there is pointless
 
 
@@ -81,13 +82,11 @@ func update(delta: float) -> void:
 func _think() -> void:
 	var me: Vector2i = bear.cell()
 	var danger: Dictionary = game.compute_danger(level, bear)
+	traps = game.trap_cells(bear)
 	var fearless: bool = level > EASY and bear.immortal_t > 2.5
 	if fearless:
 		danger = {}  # can't be stunned: ignore blasts entirely
-
-	# 0a. Set off our remote bombs when a rival is in a blast and we're clear of all of them.
-	if bear.has_remote and _try_detonate(me):
-		return
+		traps = {}
 
 	# 0. Kick a nearby bomb at a rival.
 	if bear.can_kick and level > EASY and _try_kick(me):
@@ -129,8 +128,12 @@ func _think() -> void:
 				bad_spots[me] = clock + 8.0  # nowhere to hide from here; pick another spot
 				goal = "idle"
 
+	# 3b. Set a proximity trap where rivals will pass.
+	if bear.prox_charges > 0 and bear.can_place_bomb() and _try_proximity(me, danger, fearless):
+		return
+
 	# 4. Lay a line of bombs toward a rival.
-	if bear.has_line and level > EASY and bear.bombs_max - bear.active_bombs >= 2 and _try_line(me, danger, fearless):
+	if bear.has_line and bear.prox_charges == 0 and level > EASY and bear.bombs_max - bear.active_bombs >= 2 and _try_line(me, danger, fearless):
 		return
 
 	if goal == "flee" and not path.is_empty():
@@ -138,26 +141,41 @@ func _think() -> void:
 	_choose_goal(me, danger)
 
 
-func _try_detonate(me: Vector2i) -> bool:
-	var mine := []
-	for b in game.bombs:
-		if b.remote and b.owner_bear == bear and not b.exploded:
-			mine.append(b)
-	if mine.is_empty():
+## Proximity bombs: a trap is worth laying in a corridor rivals are heading
+## through (Hard), near a rival (Normal), or just whenever one is about (Easy).
+## We must be able to walk out of its blast before it arms.
+func _try_proximity(me: Vector2i, danger: Dictionary, fearless: bool) -> bool:
+	if arena.bombs.has(me) or _threat(danger, me):
 		return false
-	var zone := {}
-	for b in mine:
-		for c in game.blast_cells(b.cell, b.blast_range):
-			zone[c] = true
-	if zone.has(me) and level > EASY:
-		return false  # Easy sometimes blows itself up
+	for b in game.bombs:
+		if b.proximity and b.owner_bear == bear and absi(b.cell.x - me.x) + absi(b.cell.y - me.y) <= 3:
+			return false   # spread them out
+	var near := 99
 	for o in game.bears:
-		if _targetable(o) and zone.has(o.cell()):
-			if level == EASY and rng.randf() < 0.5:
+		if _targetable(o):
+			var oc: Vector2i = o.cell()
+			near = mini(near, absi(oc.x - me.x) + absi(oc.y - me.y))
+	match level:
+		EASY:
+			if near > 5 or rng.randf() > 0.25:
 				return false
-			bear.want_special = true
-			return true
-	return false
+		NORMAL:
+			if near > 4 or near < 2:
+				return false
+		_:
+			# a chokepoint (few exits) on the way between us and a rival, not on top of them
+			if near > 6 or near < 2 or _exits(me) > 2:
+				return false
+	var d2 := danger.duplicate()
+	for c in game.blast_cells(me, bear.bomb_range):
+		d2[c] = minf(d2.get(c, FAR), Tuning.PROX_ARM_TIME)
+	var esc := _escape_path(me, d2, Tuning.PROX_ARM_TIME - 0.6)
+	if (esc.is_empty() or d2.has(esc[esc.size() - 1])) and not fearless:
+		return false
+	bear.want_special = true
+	path = esc
+	goal = "flee"
+	return true
 
 
 func _targetable(b) -> bool:
@@ -356,8 +374,8 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 					value = 32.0 if not (bear.can_kick if kind == PowerupScript.KICK else bear.has_line) else 8.0
 				PowerupScript.RUBBER:
 					value = 22.0 if not bear.has_rubber else 6.0
-				PowerupScript.REMOTE:
-					value = (36.0 if level == HARD else 30.0) if not bear.has_remote else 5.0
+				PowerupScript.PROXIMITY:
+					value = (34.0 if level == HARD else 28.0) if bear.prox_charges < Tuning.PROX_CHARGES else 6.0
 			if level == HARD:
 				if kind == PowerupScript.SHUFFLE:
 					value = 30.0 if bear.fluff_ratio() < 1.3 else 12.0
@@ -423,6 +441,9 @@ func _time_per_tile() -> float:
 
 ## A cell is unsafe if it will be ablaze around the time we'd be in it.
 func _unsafe(c: Vector2i, arrival: float, danger: Dictionary) -> bool:
+	# rivals' proximity traps stay deadly once armed (Easy only respects armed ones)
+	if traps.has(c) and (traps[c] <= 0.0 or (level > EASY and arrival + 0.3 >= traps[c])):
+		return true
 	if not danger.has(c):
 		return false
 	var t: float = danger[c]

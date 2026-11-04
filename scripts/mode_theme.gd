@@ -26,6 +26,11 @@ static func horror() -> bool:
 	return Settings.mode == "horror"
 
 
+## Horror's arena dressing (wall decor, calm floor, rim remains): Horror and Custom.
+static func horror_dressing() -> bool:
+	return Settings.mode == "horror" or Settings.mode == "custom"
+
+
 static func confetti() -> Array:
 	return CONFETTI[mode()]
 

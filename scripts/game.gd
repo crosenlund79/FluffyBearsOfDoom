@@ -224,7 +224,7 @@ func _draw() -> void:
 	var pit := Rect2(ARENA_ORIGIN - Vector2(3, 3), ARENA_SIZE + Vector2(6, 6))
 	draw_rect(pit, Color(0.1, 0.05, 0.04, 0.75))                                  # the step down into the pit
 	UiStyle.stitch_rect(self, r.grow(-7), Color(UiStyle.ROSE_DARK, 0.6), 1.6, 6.0)
-	if Mode.horror():
+	if Mode.horror_dressing():
 		_draw_rim_remains(r)
 
 
@@ -355,9 +355,10 @@ func place_line(bear) -> void:
 		Sfx.play("place", 1.1, -4.0)
 
 
-func _spawn_bomb(bear, c: Vector2i) -> void:
+func _spawn_bomb(bear, c: Vector2i, proximity := false) -> void:
 	var b = BombScript.new()
-	b.setup(self, bear, c, bear.bomb_range)
+	b.setup(self, bear, c, bear.bomb_range, proximity)
+	bear.bombs_placed += 1
 	for other in bears:
 		if other.overlaps_cell(c):
 			b.pass_through.append(other)
@@ -425,7 +426,7 @@ func explode(bomb) -> void:
 
 func _finish_bomb(bomb, origin: Vector2i, hit: Array, segs: Array, chain: Array) -> void:
 	bomb.queue_free()
-	_apply_blast(origin, hit, segs, chain, 14)
+	_apply_blast(origin, hit, segs, chain, 14, bomb.owner_bear, true)
 	arena.add_shake(4.0)
 	Sfx.play("explosion", randf_range(0.92, 1.08), -4.0)   # supplied recording
 	Sfx.play("confetti", randf_range(0.85, 1.15), -6.0)   # plus the paper crackle
@@ -446,16 +447,28 @@ func _destroy_powerups(cells: Array) -> void:
 		Sfx.play("pop", 0.7, -4.0)
 
 
-## Detonate all of `bear`'s remote bombs. Returns true if there were any.
-func detonate_remote(bear) -> bool:
-	var any := false
-	for b in bombs:
-		if b.remote and b.owner_bear == bear and not b.exploded:
-			b.fuse = 0.0
-			any = true
-	if any:
-		Sfx.play("tick", 1.6, -2.0)
-	return any
+## When an untripped proximity bomb might go off, as `asker` sees it: only if
+## someone who can trip it (not its owner, not the asker) is close by.
+func _proximity_threat_time(b, asker) -> float:
+	for o in bears:
+		if o == b.owner_bear or o == asker or o.eliminated:
+			continue
+		if o.position.distance_to(b.position) < arena.T * 3.0:
+			return maxf(b.arm_left, 0.0) + 0.6
+	return 999.0
+
+
+## The special key with proximity charges: a proximity bomb on our tile.
+func place_proximity(bear) -> bool:
+	if bear.prox_charges <= 0 or not bear.can_place_bomb() or clock - start_clock < 0.25:
+		return false
+	var c: Vector2i = bear.cell()
+	if arena.is_solid(c):
+		return false
+	_spawn_bomb(bear, c, true)
+	bear.prox_charges -= 1
+	Sfx.play("place", 0.75, -2.0)
+	return true
 
 
 func add_footprint(pos: Vector2, dir: Vector2, strength: float) -> void:
@@ -485,7 +498,7 @@ func _break_blocks(broken: Array) -> void:
 
 
 ## Shared by bombs and the duck: confetti visuals, chained bombs, stuns.
-func _apply_blast(origin: Vector2i, hit: Array, segs: Array, chain: Array, confetti: int) -> void:
+func _apply_blast(origin: Vector2i, hit: Array, segs: Array, chain: Array, confetti: int, owner = null, knock := false) -> void:
 	var ex = ExplosionScript.new()
 	ex.segments = segs
 	flame_layer.add_child(ex)
@@ -495,7 +508,7 @@ func _apply_blast(origin: Vector2i, hit: Array, segs: Array, chain: Array, confe
 	for other in chain:
 		if is_instance_valid(other) and not other.exploded:
 			other.fuse = minf(other.fuse, 0.06)
-	_check_flame_hits(origin)
+	_hit_bears(hit, origin, owner, knock)
 
 
 func _update_flames(delta: float) -> void:
@@ -507,20 +520,31 @@ func _update_flames(delta: float) -> void:
 			flames.erase(c)
 			flame_owner.erase(c)
 			flame_origin.erase(c)
-	_check_flame_hits(Vector2i(-1, -1))
 
 
-func _check_flame_hits(origin: Vector2i) -> void:
+## An explosion hits only at the instant it goes off: every bear standing in
+## its own blast cells right now is stunned once (and knocked back if it was a
+## bomb). The lingering confetti/blood afterwards is just a visual.
+func _hit_bears(cells: Array, origin: Vector2i, owner, knock: bool) -> void:
+	var zone := {}
+	for c in cells:
+		zone[c] = true
 	for b in bears:
-		if flames.has(b.cell()) and not b.is_stunned() and b.immune_t <= 0.0:
-			var src: Vector2 = arena.cell_center(origin) if origin.x >= 0 else b.position - b.velocity.normalized() * 10.0
-			b.last_hit_by = flame_owner.get(b.cell())
-			var from: Vector2i = flame_origin.get(b.cell(), Vector2i(-1, -1))
-			b.stun(src)
-			if b.is_stunned() and from.x >= 0:
-				_knock_back(b, from)
-				if b.last_hit_by != null and b.last_hit_by != b:
-					b.last_hit_by.growl()   # the bomber snarls in triumph
+		if not zone.has(b.cell()) or b.is_stunned() or b.immune_t > 0.0:
+			continue
+		b.last_hit_by = owner
+		b.stun(arena.cell_center(origin))
+		if b.is_stunned():
+			if knock:
+				_knock_back(b, origin)
+			if owner != null and owner != b:
+				owner.growl()   # the bomber snarls in triumph
+				owner.bomb_hits += 1
+			elif owner == b:
+				b.self_hits += 1
+	# the princess is driven off by a blast on her tile
+	if princess != null and is_instance_valid(princess) and princess.on_ground() and zone.has(princess.cell()):
+		princess.blasted()
 
 
 ## A bear stunned by a bomb is blown along the blast direction.
@@ -978,16 +1002,28 @@ func duck_explode(p) -> void:
 
 ## Danger map for the AI: cell -> seconds until it is ablaze (0 = burning now).
 ## level: 0 easy, 1 normal, 2 hard.
+## Cells that would trip a rival's untriggered proximity bomb -> seconds until it arms.
+func trap_cells(asker) -> Dictionary:
+	var out := {}
+	for b in bombs:
+		if b.proximity and not b.triggered and not b.exploded and b.owner_bear != asker:
+			for c in b.trip_cells():
+				out[c] = minf(out.get(c, 999.0), b.arm_left)
+	return out
+
+
 func compute_danger(level: int, asker = null) -> Dictionary:
 	var chain := level == 2
-	var d := {}
-	for c in flames:
-		d[c] = 0.0
+	var d := {}   # (lingering flames are harmless: only live bombs count)
 	var times := {}
 	for b in bombs:
 		times[b] = b.fuse
-		if b.remote and b.owner_bear != asker:
-			times[b] = minf(b.fuse, Tuning.REMOTE_THREAT_TIME)  # could be set off any moment
+		if b.proximity and not b.triggered:
+			times[b] = _proximity_threat_time(b, asker)
+			# its trip zone: deadly to walk into once it's armed (unless it's ours)
+			if b.owner_bear != asker:
+				for c in b.trip_cells():
+					d[c] = minf(d.get(c, 999.0), b.arm_left)
 	if chain:
 		for _i in 4:
 			for b in bombs:
@@ -996,6 +1032,8 @@ func compute_danger(level: int, asker = null) -> Dictionary:
 					if other != null and other != b and times[b] < times[other]:
 						times[other] = times[b]
 	for b in bombs:
+		if times[b] >= 999.0:
+			continue   # an untripped proximity bomb with nobody around to trip it
 		for c in blast_cells(b.cell, b.blast_range):
 			d[c] = minf(d.get(c, 999.0), times[b])
 	# Time of Doom: a flashing ring is about to become solid.
@@ -1145,8 +1183,8 @@ func _apply_powerup(b, p) -> void:
 			b.has_line = true
 		PowerupScript.RUBBER:
 			b.has_rubber = true
-		PowerupScript.REMOTE:
-			b.has_remote = true
+		PowerupScript.PROXIMITY:
+			b.prox_charges = mini(b.prox_charges + Tuning.PROX_CHARGES, Tuning.PROX_MAX_CHARGES)
 		PowerupScript.IMMORTAL:
 			b.immortal_t = Tuning.IMMORTAL_TIME
 			Sfx.play("immortal")

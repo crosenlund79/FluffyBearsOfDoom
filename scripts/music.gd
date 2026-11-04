@@ -72,7 +72,7 @@ func _scan(dir_path: String, imported: bool, key: String) -> void:
 
 
 func _key(screen: String) -> String:
-	return screen + "/" + Settings.style()   # Custom uses the Normal music
+	return screen + "/" + ("horror" if Settings.mode in ["horror", "custom"] else "normal")   # Custom plays the Horror music
 
 
 ## The playlist that will really play for `key`, applying the Horror fallback.

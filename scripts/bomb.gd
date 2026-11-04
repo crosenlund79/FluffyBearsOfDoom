@@ -1,6 +1,8 @@
-## A stitched fabric toy bomb on a grid cell. Every bomb can be kicked; rubber
-## bombs bounce off obstacles instead of stopping; remote bombs wait for their
-## owner's detonator. A ring in the owner's colour shows whose bomb it is.
+## A stitched fabric toy bomb on a grid cell. Ordinary bombs burn a timed fuse;
+## rubber bombs bounce off obstacles when kicked; proximity bombs (special key)
+## count down 3-2-1 while arming, then go off when a rival steps next to them.
+## The owner can never trip their own. A ring in the owner's colour shows whose
+## bomb it is.
 extends Node2D
 
 const Tuning = preload("res://scripts/tuning.gd")
@@ -14,7 +16,9 @@ var blast_range := 2
 var fuse: float = Tuning.BOMB_FUSE
 var exploded := false
 var rubber := false
-var remote := false     # waits for its owner's detonator (with a long backup fuse)
+var proximity := false  # arms, then waits for a rival to come close
+var arm_left := 0.0     # seconds until a proximity bomb is armed
+var triggered := false  # a rival tripped it: the short trigger fuse is burning
 var pass_through: Array = []  # bears overlapping it may walk off it
 var move_dir := Vector2i.ZERO
 var bounces := 0
@@ -27,21 +31,62 @@ var squash_v := 0.0
 var _last_tick := 3
 
 
-func setup(g, bear, c: Vector2i, r: int) -> void:
+func setup(g, bear, c: Vector2i, r: int, prox := false) -> void:
 	game = g
 	arena = g.arena
 	owner_bear = bear
 	cell = c
 	blast_range = r
 	rubber = bear.has_rubber
-	remote = bear.has_remote
-	if remote:
-		fuse = Tuning.REMOTE_BACKUP_FUSE
+	proximity = prox
+	if proximity:
+		arm_left = Tuning.PROX_ARM_TIME
+		fuse = Tuning.PROX_ARM_TIME + Tuning.PROX_LIFETIME   # goes off on its own eventually
 	position = arena.cell_center(c)
 	tex = Assets.tex("objects/bomb")
 	fx = Assets.tex("effects/effects")
 	# pastel version of the owner's colour; rubber bombs are brighter
 	tint = preload("res://scripts/mode_theme.gd").bomb_tint(bear.color, rubber)
+
+
+func armed() -> bool:
+	return proximity and arm_left <= 0.0 and not triggered
+
+
+## Cells a rival can stand in to trip this bomb (its own cell and the four around it).
+func trip_cells() -> Array:
+	var out := [cell]
+	for d in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+		if not arena.is_solid(cell + d):
+			out.append(cell + d)
+	return out
+
+
+func _proximity(delta: float) -> void:
+	if triggered:
+		return
+	if arm_left > 0.0:
+		var before := ceili(arm_left)
+		arm_left -= delta
+		if arm_left <= 0.0:
+			arm_left = 0.0
+			squash_v -= 6.0
+			Sfx.play("prox_armed", 1.0, -6.0)
+		elif ceili(arm_left) != before:
+			Sfx.play("fuse", 0.8, -12.0)
+		return
+	if is_moving():
+		return
+	var reach: float = Tuning.PROX_RANGE * arena.T
+	for b in game.bears:
+		if b == owner_bear or b.eliminated:
+			continue
+		if b.position.distance_to(position) <= reach:
+			triggered = true
+			fuse = minf(fuse, Tuning.PROX_TRIGGER_DELAY)
+			squash_v += 10.0
+			Sfx.play("prox_alert", 1.0, -3.0)
+			return
 
 
 func is_moving() -> bool:
@@ -67,6 +112,8 @@ func _physics_process(delta: float) -> void:
 	squash += squash_v * delta
 	if is_moving():
 		_slide(delta)
+	if proximity:
+		_proximity(delta)
 	for b in pass_through.duplicate():
 		if not b.overlaps_cell(cell):
 			pass_through.erase(b)
@@ -122,6 +169,8 @@ func _slide(delta: float) -> void:
 func _draw() -> void:
 	var T: float = arena.T
 	var urgency := clampf(1.0 - fuse / Tuning.BOMB_FUSE, 0.0, 1.0)
+	if proximity and not triggered:
+		urgency = 0.0
 	# ticking: a pulse and little hops that get faster
 	var rate := 6.0 + urgency * urgency * 26.0
 	var pulse := sin(t * rate) * (0.04 + 0.07 * urgency)
@@ -157,15 +206,38 @@ func _draw() -> void:
 			var y: float = c.y + k * s
 			var hw: float = sqrt(maxf(0.0, 0.09 - k * k)) * s
 			draw_line(Vector2(c.x - hw, y), Vector2(c.x + hw, y), Color(1, 1, 1, 0.75), s * 0.05)
-	if remote:
-		# radio antenna in the owner's colour instead of a burning fuse
-		Powerup.draw_remote_antenna(self, Vector2(s * 0.24, -s * 0.98), s / 40.0, t, owner_bear.color.lightened(0.2))
-		if fuse > Tuning.BOMB_FUSE:
+	if proximity and not triggered:
+		# sensor antenna instead of a burning fuse; blinks red once armed
+		var tip: Color = Color(1.0, 0.15, 0.15) if armed() and fmod(t * 2.0, 1.0) < 0.5 else owner_bear.color.lightened(0.2)
+		Powerup.draw_remote_antenna(self, Vector2(s * 0.24, -s * 0.98), s / 40.0, t, tip)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		if arm_left > 0.0:
+			_draw_countdown(T)
+		else:
+			# detection range on the floor, so everyone can see the trap
+			draw_set_transform(Vector2(0, T * 0.32), 0.0, Vector2(1.0, 0.45))
+			var glow := 0.5 + 0.5 * sin(t * 5.0)
+			var reach: float = Tuning.PROX_RANGE * T
+			draw_circle(Vector2.ZERO, reach, Color(1.0, 0.15, 0.15, 0.08 + 0.08 * glow))
+			draw_arc(Vector2.ZERO, reach, 0.0, TAU, 40, Color(0.9, 0.1, 0.1, 0.5 + 0.4 * glow), 3.0)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-			return
+		return
 	# brightening stitched fuse spark
 	var spark := Vector2(s * 0.26, -s * 1.02)
 	var ss := 8.0 + urgency * 8.0 + sin(t * 40.0) * 3.0
 	var spark_col := Color(1.0, 0.95, 0.8).lerp(Color(1.0, 0.6, 0.55), urgency)
 	draw_texture_rect_region(fx, Rect2(spark - Vector2(ss, ss) * 0.5, Vector2(ss, ss)), Assets.region(fx, Assets.EFFECT_CELLS, 5), spark_col)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## Big 3-2-1 on the bomb while a proximity bomb arms.
+func _draw_countdown(T: float) -> void:
+	var n := ceili(arm_left)
+	var frac := arm_left - floorf(arm_left)   # 1 -> 0 within each second
+	var font := ThemeDB.fallback_font
+	var size := int(T * (0.5 + 0.18 * frac))
+	var txt := str(n)
+	var w := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	var at := Vector2(-w * 0.5, -T * 0.05)
+	draw_string_outline(font, at, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, size, 6, Color(0.1, 0.05, 0.05, 0.9))
+	draw_string(font, at, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(1.0, 0.95, 0.6))

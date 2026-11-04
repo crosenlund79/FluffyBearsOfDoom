@@ -209,7 +209,7 @@ func _draw() -> void:
 			var t := terrain[i]
 			var p := Terrain.props(t)
 			var idx: int = p["tile"]
-			if t == Terrain.NORMAL and (x + y) % 2 == 1 and not Mode.horror():
+			if t == Terrain.NORMAL and (x + y) % 2 == 1 and not Mode.horror_dressing():
 				idx = 1   # (Horror keeps the floor calm: no checkerboard)
 			if Terrain.is_conveyor(t):
 				draw_set_transform(r.get_center(), Terrain.conveyor_rotation(t), Vector2.ONE)
@@ -260,7 +260,7 @@ func _draw() -> void:
 				draw_texture_rect_region(tiles_tex, Rect2(Vector2(r.position.x, r.end.y - h), Vector2(T, h)), _tile(7))
 
 	_draw_sunken_shadow()
-	if Mode.horror():
+	if Mode.horror_dressing():
 		_draw_horror_decor()
 
 

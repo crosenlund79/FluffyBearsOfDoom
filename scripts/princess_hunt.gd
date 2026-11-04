@@ -75,6 +75,15 @@ func setup(g) -> void:
 	Sfx.play("doom_warn", 1.3, -4.0)
 
 
+## A bomb blast on her tile drives her off (she can't be stunned, but she's had enough).
+func blasted() -> void:
+	if defeated or not on_ground():
+		return
+	defeated = true
+	game.on_princess_defeated(self)
+	_leave()
+
+
 func cell() -> Vector2i:
 	return arena.world_to_cell(position)
 
@@ -95,11 +104,7 @@ func _physics_process(delta: float) -> void:
 	age += delta
 	if game.state != game.State.PLAYING and phase != LEAP_OUT:
 		_leave()
-	# a bomb blast on her tile drives her off (she can't be stunned, but she's had enough)
-	if on_ground() and not defeated and game.flames.has(cell()):
-		defeated = true
-		game.on_princess_defeated(self)
-		_leave()
+
 	# the Time of Doom shut her tile: hop to open ground
 	if phase == HUNT and arena.is_solid(cell()):
 		_leap_to(arena.cell_center(game.nearest_open_cell(cell())), HUNT)
