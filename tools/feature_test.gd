@@ -379,6 +379,16 @@ func _run_checks() -> void:
 	Settings.reset_bindings()
 	_expect(Settings.keys_for("p2_special")[0][0] == KEY_R, "reset restores defaults")
 
+	# --- simultaneous eliminations: the last bear with stuffing wins at once
+	game.bears[0].fluff = 50.0
+	game.bears[0].immortal_t = 0.0
+	for k in [1, 3]:
+		game.bears[k].fluff = 0.0   # both emptied on the same frame
+	await _wait(0.4)
+	var order: Array = game.final_ranking()
+	_expect(game.state == game.State.ENDED and order[0] == game.bears[0], "last bear standing ends the round as the winner")
+	_expect(order[3] == game.bears[2], "eliminated earlier ranks lower (%s last)" % order[3].bear_name)
+
 
 
 func _clear_row(y: int) -> void:

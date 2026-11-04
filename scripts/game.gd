@@ -305,6 +305,7 @@ func _physics_process(delta: float) -> void:
 			_update_clown(delta)
 			_update_reserve()
 			_check_instant_win()
+			_check_last_standing()
 			if state == State.PLAYING and time_left <= 0.0:
 				time_left = 0.0
 				_end_match()
@@ -1232,6 +1233,7 @@ func _update_pickups() -> void:
 
 
 func _apply_powerup(b, p) -> void:
+	b.pickups += 1
 	match p.kind:
 		PowerupScript.BOMB:
 			b.bombs_max = mini(b.bombs_max + 1, Tuning.MAX_BOMBS)
@@ -1504,6 +1506,7 @@ func _update_shuffles(delta: float) -> void:
 		for y in arena.rows:
 			for x in arena.cols:
 				arena.set_terrain(Vector2i(x, y), shuffle_snapshot[y * arena.cols + x])
+		arena.refresh_conveyors()
 		shuffle_snapshot = null
 		shuffle_phase = ""
 		hud.toast("The floor settles back.", Color(0.5, 0.45, 0.6))
@@ -1522,6 +1525,34 @@ func _check_instant_win() -> void:
 			return
 
 
+## One bear left with stuffing (or none, after simultaneous eliminations):
+## nothing left to fight over, the round ends now.
+func _check_last_standing() -> void:
+	if state != State.PLAYING:
+		return
+	var alive := bears.filter(func(b): return not b.eliminated)
+	if alive.size() > 1:
+		return
+	if alive.size() == 1:
+		hud.banner("%s is the last bear stuffed!" % alive[0].bear_name, 2.0)
+	_end_match()
+
+
+## Final order: most stuffing first; among equals, whoever lasted longer
+## (still standing beats eliminated, a later elimination beats an earlier one).
+func final_ranking() -> Array:
+	var ranking := bears.duplicate()
+	ranking.sort_custom(func(a, b):
+		if absf(a.fluff - b.fluff) > 0.001:
+			return a.fluff > b.fluff
+		var ta: float = 1e9 if not a.eliminated else a.eliminated_at
+		var tb: float = 1e9 if not b.eliminated else b.eliminated_at
+		if ta != tb:
+			return ta > tb
+		return a.slot < b.slot)
+	return ranking
+
+
 func _end_match(instant_winner = null) -> void:
 	state = State.ENDED
 	if parade != null and is_instance_valid(parade):
@@ -1533,8 +1564,7 @@ func _end_match(instant_winner = null) -> void:
 		clown_box._finish()   # round over: back in the box
 	for b in bears:
 		b.stealing = false
-	var ranking := bears.duplicate()
-	ranking.sort_custom(func(a, b): return a.fluff > b.fluff)
+	var ranking := final_ranking()
 	if instant_winner != null:   # the bear that hit the threshold is the winner, full stop
 		ranking.erase(instant_winner)
 		ranking.push_front(instant_winner)

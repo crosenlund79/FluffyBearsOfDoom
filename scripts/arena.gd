@@ -176,7 +176,16 @@ func limit_conveyors(max_h: int, max_v: int) -> void:
 		for i in range(pair[1], list.size()):
 			for c in list[i]:
 				terrain[c.y * cols + c.x] = Terrain.NORMAL
-	has_conveyors = not conveyor_runs()["h"].is_empty() or not conveyor_runs()["v"].is_empty()
+	refresh_conveyors()
+
+
+## Whether any belt is left (belts animate, so the floor redraws every frame).
+func refresh_conveyors() -> void:
+	has_conveyors = false
+	for t in terrain:
+		if Terrain.is_conveyor(t):
+			has_conveyors = true
+			return
 
 
 ## Destroys a cushion block, returning the hidden power-up kind or -1.

@@ -46,6 +46,19 @@ func _ready() -> void:
 		add_child(tester)
 		tester.run.call_deferred(current, shot_dir)
 		return
+	# `godot -- --balance [--matches=N] [--levels=hard,easy,easy,easy] [--seed=N] [--out=FILE]`
+	# plays headless all-AI matches and writes one JSON line per match (tools/balance.gd).
+	if "--balance" in OS.get_cmdline_user_args():
+		var bal = load("res://tools/balance.gd").new()
+		add_child(bal)
+		bal.run.call_deferred(self)
+		return
+	# `godot -- --perf [--seconds=N] [--stress]` samples frame times, draw calls and memory.
+	if "--perf" in OS.get_cmdline_user_args():
+		var perf = load("res://tools/perf.gd").new()
+		add_child(perf)
+		perf.run.call_deferred(self)
+		return
 	# `godot -- --feature-test` checks knockback, shuffle, elimination, princess, doom order, rebinding.
 	if "--feature-test" in OS.get_cmdline_user_args():
 		Settings.human_count = 0
