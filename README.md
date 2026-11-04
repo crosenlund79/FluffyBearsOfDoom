@@ -187,9 +187,36 @@ Gameplay is identical in all modes; only the presentation changes.
   `bears/custom/bunny.png`, `tiles/custom/tiles.png`, `powerups/custom/powerups.png`). Anything
   you haven't supplied is shown exactly as in **Horror** (Horror art is Custom's template), so
   `custom/` holds the same file names and layouts as the Horror sheets. Custom files are never read
-  in Normal or Horror, and the placeholder generator never writes into `custom/`. Only sprites come
-  from Horror: Custom mode plays, sounds and looks otherwise (menus, music, taunts, colours, arena
-  dressing) like Normal. `assets/sprites/CUSTOM_ART.txt` lists every file name you can supply.
+  in Normal or Horror, and the placeholder generator never writes into `custom/`. Custom also
+  takes Horror's music, arena dressing (decorations, remains) and the jack-in-the-box clown; menus,
+  taunts and sounds stay as in Normal. `assets/sprites/CUSTOM_ART.txt` lists every file name you can supply.
+
+### Custom characters: the clown and the princess
+Both can be fully re-skinned in Custom mode (and in Horror, from the `horror/` folders), including
+their entrances, attacks and exits. Every file is optional and is looked up Custom → Horror; when
+none exists the built-in animation plays, so Normal and Horror look exactly as before.
+
+- **Base art:** `objects/custom/clown.png` (3 cells: head, mallet, box; same as the Horror template).
+- **Animation strips:** one row of square frames (frame size = image height, any number of frames,
+  any resolution), in `assets/sprites/objects/custom/`:
+
+| File | Plays during | Replaces |
+|---|---|---|
+| `clown_enter.png` | bursting out of the box and staring | head + mallet |
+| `clown_attack.png` | cackling (first half), lunging (third quarter), hammering (last quarter) | head + mallet |
+| `clown_exit.png` | sinking back into the box | head + mallet |
+| `clown_hit.png` | the hammer's impact, on the victim | the red shock ring |
+| `princess_enter.png` | peeking over the wall (first half), leaping in (second half) | crown peek, rig |
+| `princess_walk.png` | hunting (loops about once a second) | rig |
+| `princess_attack.png` | aiming (first half), firing (second half) | rig and toy gun |
+| `princess_exit.png` | leaping out over the wall | rig |
+| `princess_idle.png` | any princess phase without its own strip (loops) | rig |
+| `princess_shot.png` | the muzzle blast when she fires, pointed at her victim | flash and pellets |
+
+Frames face right; they are mirrored to face the victim. The princess keeps her perspective scaling
+(bigger on the rim and mid-leap), her shadow, the laser sight and all gameplay timing. The clown
+keeps its spring neck, box, hatch and crosshair. The princess's own strips never touch Theodor
+(`bears/custom/princess.png` is still Theodor's sheet).
 
 **Taunts:** a bear gloats when its bomb stuns someone, mocks bombers who stun themselves,
 crows when it starts stealing, and complains when it wakes up robbed. Each taunt is a short
@@ -273,6 +300,29 @@ and positions on screen don't change, only the detail.
 | `powerups/template_powerups.png` | 640×64 | 10 cells: bomb, blast, speed, shuffle, kick, line, rubber, immortality, reverse, diarrhea. The glow halo, outline, sparkles and pickup burst are drawn in code, so a replacement only needs the badge. Horror has its own sheet: dark badges with a blood-red rim (eyeball bomb, blood drops, a spine, a staring eye, a crossed-out heart; the curses in sickly green). |
 | `objects/horror/template_clown.png` | 192×64 | Horror only, 3 cells: jack-in-the-box clown head (facing you), mallet (head up), the striped box (front; the lid is drawn in code) |
 | `effects/template_effects.png` | 512×64 | 8 cells: blast centre, blast arm (horizontal), blast end (pointing right), star, dust, sparkle, cartoon bird (facing right), floor splat decal. In Horror: blood bursts, a skull, a crow and a blood splatter. |
+
+## Windows build and installer
+The version is `application/config/version` in `project.godot` (currently **1.0.0**); the build
+script, the installer and the uninstall entry all use it.
+
+```bash
+tools/build_windows.sh /path/to/godot-4.3
+```
+
+It needs Godot 4.3 with its export templates, plus Inno Setup 6 for the installer (`ISCC` on
+Windows, or `ISCC="wine C:\\path\\ISCC.exe"` elsewhere). It writes to `dist/`, which Git ignores:
+
+| File | What |
+|---|---|
+| `dist/FluffyHorrorBears.exe` | the game: one standalone 64-bit EXE with every asset embedded |
+| `dist/FluffyHorrorBears-<version>-win64.zip` | portable copy of the EXE |
+| `dist/FluffyHorrorBears-<version>-setup.exe` | installer: Start Menu shortcut, optional desktop shortcut (unchecked by default), uninstaller (also in Apps & features) |
+
+The installer script is `installer/FluffyHorrorBears.iss` (installs per user by default; an
+administrator can choose all users). The EXE keeps Godot's file icon unless you configure `rcedit`
+in Godot's editor settings and set `application/modify_resources=true` in `export_presets.cfg`;
+the in-game window icon is the game's own either way. Settings and saves go to
+`%APPDATA%\godot\app_userdata\Fluffy Bears of Doom` (kept on uninstall).
 
 ## Tests
 - `godot --headless -- --feature-test` checks the supplied recordings load, bomb knockback (slide

@@ -372,6 +372,9 @@ func _run_checks() -> void:
 			times_ok = false
 	_expect(times_ok and doom.close_at[doom.order[-1]] < game.round_duration, "one tile at a time, all shut before the timer ends")
 
+	# --- custom character art: optional strips resolve Custom -> Horror -> none
+	await _check_strip_fallback()
+
 	# --- key rebinding: conflicts swap instead of leaving an action unbound
 	Settings.reset_bindings()
 	var swapped := Settings.rebind("p1_bomb", [KEY_E, KEY_LOCATION_UNSPECIFIED])
@@ -389,6 +392,48 @@ func _run_checks() -> void:
 	_expect(game.state == game.State.ENDED and order[0] == game.bears[0], "last bear standing ends the round as the winner")
 	_expect(order[3] == game.bears[2], "eliminated earlier ranks lower (%s last)" % order[3].bear_name)
 
+
+
+## Uses a throwaway folder (never the real custom/ folders) with a 2-frame Horror
+## strip and a 3-frame Custom strip, checks each mode picks the right one, then cleans up.
+func _check_strip_fallback() -> void:
+	var root := "res://assets/sprites/_strip_test/"
+	DirAccess.make_dir_recursive_absolute(root + "custom")
+	DirAccess.make_dir_recursive_absolute(root + "horror")
+	var img := Image.create(64, 32, false, Image.FORMAT_RGBA8)
+	img.fill(Color.RED)
+	img.save_png(root + "horror/anim.png")
+	img = Image.create(96, 32, false, Image.FORMAT_RGBA8)
+	img.fill(Color.BLUE)
+	img.save_png(root + "custom/anim.png")
+	img.save_png(root + "custom/only_custom.png")
+	var keep: String = Settings.mode
+	var got := {}
+	for m in ["normal", "horror", "custom"]:
+		Settings.mode = m
+		var a: Texture2D = Assets.strip("_strip_test/anim")
+		var c: Texture2D = Assets.strip("_strip_test/only_custom")
+		got[m] = [Assets.strip_frames(a) if a != null else 0, c != null]
+	Settings.mode = keep
+	DirAccess.remove_absolute(root + "custom/anim.png")
+	DirAccess.remove_absolute(root + "custom/only_custom.png")
+	DirAccess.remove_absolute(root + "horror/anim.png")
+	DirAccess.remove_absolute(root + "custom")
+	DirAccess.remove_absolute(root + "horror")
+	DirAccess.remove_absolute(root)
+	_expect(got["custom"] == [3, true], "Custom uses its own strip first (%s)" % [got["custom"]])
+	_expect(got["horror"] == [2, false], "Horror uses the Horror strip, never Custom's (%s)" % [got["horror"]])
+	_expect(got["normal"] == [0, false], "Normal ignores Horror/Custom strips (%s)" % [got["normal"]])
+	Settings.mode = "custom"
+	var clown_strips := ["clown_enter", "clown_attack", "clown_exit", "clown_hit", "princess_enter", "princess_walk", "princess_attack", "princess_exit", "princess_shot", "princess_idle"].filter(func(n): return Assets.strip("objects/" + n) != null)
+	Settings.mode = keep
+	var paths := {}
+	for m in ["horror", "custom"]:
+		Settings.mode = m
+		paths[m] = Assets.resolve("objects/clown")
+	Settings.mode = keep
+	_expect(paths["horror"].ends_with("objects/horror/template_clown.png") and paths["custom"].ends_with("objects/custom/clown.png"), "clown sheet: Horror keeps its template, Custom uses custom/clown.png (%s)" % [paths])
+	print("   optional character strips present in Custom: %s" % [clown_strips])
 
 
 func _clear_row(y: int) -> void:

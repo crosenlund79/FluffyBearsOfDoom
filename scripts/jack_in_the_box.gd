@@ -1,4 +1,8 @@
-## Horror-only hazard: one wooden pillar carries a striped box with a hatch from
+## Horror (and Custom) hazard. Custom art: objects/custom/clown.png (head, mallet,
+## box) plus optional animation strips clown_enter / clown_attack / clown_exit /
+## clown_hit (see README: "Custom characters"); each falls back to Horror, then
+## to the built-in animation.
+## Hazard: one wooden pillar carries a striped box with a hatch from
 ## the start of the round. Every so often it rattles and flashes, the hatch
 ## creaks open, a pause... the clown rises out, a pause... it cackles
 ## frantically, locks on to the nearest bear (wherever it is), and lunges on its
@@ -260,8 +264,19 @@ func _draw() -> void:
 		pts.append(base + axis * k + side * w)
 	draw_polyline(pts, Color(0.12, 0.1, 0.1), 6.0)
 	draw_polyline(pts, Color(0.72, 0.68, 0.64), 3.0)
-	# ruff collar, head (leaning toward its victim), mallet
 	var lean := clampf(axis.x / 300.0, -0.6, 0.6)
+	# a replacement animation strip for this phase, if one exists (Custom -> Horror)
+	var anim := _anim_strip()
+	if anim.size() > 0:
+		var st: Texture2D = anim[0]
+		var fs := T * 2.2 * zoom
+		var flip := -1.0 if target != null and target.position.x < head.x else 1.0
+		draw_set_transform(head, lean * 0.5, Vector2(flip, 1.0))
+		draw_texture_rect_region(st, Rect2(-fs * 0.5, -fs * 0.6, fs, fs), Assets.strip_frame(st, anim[1], anim[2]))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		_draw_impact(T)
+		return
+	# ruff collar, head (leaning toward its victim), mallet
 	for i in 8:
 		var a := TAU * i / 8.0 + age * 2.0
 		draw_circle(head + Vector2(0, T * 0.45) + Vector2(cos(a) * 16.0, sin(a) * 6.0), 8.0, Color(0.45, 0.04, 0.08) if i % 2 else Color(0.78, 0.72, 0.62))
@@ -275,7 +290,50 @@ func _draw() -> void:
 	draw_texture_rect_region(tex, Rect2(-ms * 0.5, -ms * 0.95, ms, ms), Assets.region(tex, 3, 1))
 	draw_circle(Vector2.ZERO, 8.0, Color(0.9, 0.88, 0.84))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	# impact burst
-	if phase == SLAM:
-		var k := t / SLAM_TIME
-		draw_arc(_target_point() + Vector2(0, T * 0.7), T * (0.4 + 1.1 * k), 0.0, TAU, 24, Color(0.85, 0.05, 0.08, 1.0 - k), 4.0 * (1.0 - k) + 1.0)
+	_draw_impact(T)
+
+
+## The hammer's impact: a replacement effect strip (clown_hit) or the red shock ring.
+func _draw_impact(T: float) -> void:
+	if phase != SLAM:
+		return
+	var k := t / SLAM_TIME
+	var fx: Texture2D = Assets.strip("objects/clown_hit")
+	if fx != null:
+		var s := T * 1.8
+		draw_texture_rect_region(fx, Rect2(_target_point() + Vector2(-s * 0.5, -s * 0.3), Vector2(s, s)), Assets.strip_frame(fx, k))
+		return
+	draw_arc(_target_point() + Vector2(0, T * 0.7), T * (0.4 + 1.1 * k), 0.0, TAU, 24, Color(0.85, 0.05, 0.08, 1.0 - k), 4.0 * (1.0 - k) + 1.0)
+
+
+## [strip, progress 0..1, loop] for the current phase, or [] for the built-in look.
+## enter = bursting out and staring (BURST + PAUSE2), attack = cackling, lunging
+## and hammering (AIM + STRIKE + SLAM), exit = sinking back into the box.
+func _anim_strip() -> Array:
+	var rel := ""
+	var p := 0.0
+	match phase:
+		BURST:
+			rel = "objects/clown_enter"
+			p = t / (BURST_TIME + PAUSE2_TIME)
+		PAUSE2:
+			rel = "objects/clown_enter"
+			p = (BURST_TIME + t) / (BURST_TIME + PAUSE2_TIME)
+		AIM:
+			rel = "objects/clown_attack"
+			p = 0.5 * clampf(t / AIM_TIME, 0.0, 1.0)
+		STRIKE:
+			rel = "objects/clown_attack"
+			p = 0.5 + 0.25 * clampf(1.0 - head.distance_to(_target_point()) / strike_len, 0.0, 1.0)
+		SLAM:
+			rel = "objects/clown_attack"
+			p = 0.75 + 0.25 * clampf(t / SLAM_TIME, 0.0, 1.0)
+		RETRACT:
+			rel = "objects/clown_exit"
+			p = t / RETRACT_TIME
+	if rel == "":
+		return []
+	var st: Texture2D = Assets.strip(rel)
+	if st == null:
+		return []
+	return [st, clampf(p, 0.0, 0.999), false]

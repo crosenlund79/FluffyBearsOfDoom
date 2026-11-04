@@ -1,3 +1,5 @@
 .godot/
 *.tmp
 /export/
+# Windows builds and installers (tools/build_windows.sh)
+/dist/

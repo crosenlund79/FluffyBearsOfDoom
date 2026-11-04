@@ -6,6 +6,7 @@ config_version=5
 [application]
 
 config/name="Fluffy Horror Bears"
+config/version="1.0.0"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="godot/app_userdata/Fluffy Bears of Doom"
 config/description="Four plush horrors steal the stuffing out of each other."

@@ -32,6 +32,7 @@ const HUNT_GIVE_UP := 10.0         # after this long on foot she just leaps at h
 var leap_from := Vector2.ZERO
 var leap_to := Vector2.ZERO
 var wall_spot := Vector2.ZERO      # where she peeks over the wall
+var custom_art := false           # a replacement strip is drawn instead of the rig
 var height := 0.0                  # jump height (drawn offset)
 var defeated := false
 var blank := false
@@ -307,11 +308,67 @@ func _process(_delta: float) -> void:
 	if visual != null:
 		visual.position = Vector2(0, -height)
 		visual.scale = Vector2.ONE * perspective_scale()
+		# a replacement animation strip hides the built-in rig (and its toy gun)
+		custom_art = not _anim_strip().is_empty()
+		if phase != WARN:
+			visual.visible = not custom_art
 	queue_redraw()
+
+
+## Custom art for the princess (objects/custom/, falling back to Horror): optional
+## strips princess_enter (peeking over the wall + leaping in), princess_walk
+## (hunting, loops), princess_attack (aiming + firing), princess_exit (leaping
+## out) and the effect princess_shot (at the muzzle when she fires). Any strip that
+## is missing uses princess_idle if present, otherwise the built-in rig.
+## Returns [strip, progress 0..1, loop] or [].
+func _anim_strip() -> Array:
+	var rel := ""
+	var p := 0.0
+	var loop := false
+	match phase:
+		WARN:
+			rel = "objects/princess_enter"
+			p = 0.5 * clampf(t / Tuning.PRINCESS_WARN, 0.0, 1.0)
+		LEAP_IN:
+			rel = "objects/princess_enter" if _after_leap == HUNT and age < Tuning.PRINCESS_WARN + LEAP_TIME + 0.1 else "objects/princess_walk"
+			p = 0.5 + 0.5 * clampf(t / LEAP_TIME, 0.0, 1.0)
+			if rel == "objects/princess_walk":
+				p = age * 1.2
+				loop = true
+		HUNT:
+			rel = "objects/princess_walk"
+			p = age * 1.2   # loops a little over once a second
+			loop = true
+		AIM:
+			rel = "objects/princess_attack"
+			p = 0.5 * clampf(t / AIM_TIME, 0.0, 1.0)
+		FIRE:
+			rel = "objects/princess_attack"
+			p = 0.5 + 0.5 * clampf(t / FIRE_TIME, 0.0, 1.0)
+		LEAP_OUT:
+			rel = "objects/princess_exit"
+			p = clampf(t / LEAP_TIME, 0.0, 1.0)
+	if rel == "":
+		return []
+	var st: Texture2D = Assets.strip(rel)
+	if st == null:
+		st = Assets.strip("objects/princess_idle")
+		loop = true
+		p = age * 1.2
+		if st == null or phase == WARN:
+			return []
+	return [st, p if loop else clampf(p, 0.0, 0.999), loop]
 
 
 func _draw() -> void:
 	var T: float = arena.T
+	var anim := _anim_strip()
+	if phase == WARN and not anim.is_empty():
+		# replacement art peeking over the wall (the first half of princess_enter)
+		var pw := wall_spot - position
+		var fs := T * 1.6 * SCALE_RIM
+		draw_texture_rect_region(anim[0], Rect2(pw + Vector2(-fs * 0.5, -fs * 0.85), Vector2(fs, fs)), Assets.strip_frame(anim[0], anim[1], anim[2]))
+		return
 	if phase == WARN:
 		# her crown and fingertips peek over the wall, with a pulsing alarm
 		var k := clampf(t / Tuning.PRINCESS_WARN, 0.0, 1.0)
@@ -328,6 +385,14 @@ func _draw() -> void:
 	draw_set_transform(Vector2(0, 14), 0.0, Vector2(1.0, 0.35))
 	draw_circle(Vector2.ZERO, 20.0 * sh, Color(0.1, 0.05, 0.05, 0.3))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if not anim.is_empty():
+		var fs := T * 1.6 * perspective_scale()
+		var flip := -1.0 if puppet.facing.x < 0.0 else 1.0
+		if (phase == AIM or phase == FIRE) and is_instance_valid(target):
+			flip = -1.0 if target.position.x < position.x else 1.0
+		draw_set_transform(Vector2(0, -height), 0.0, Vector2(flip, 1.0))
+		draw_texture_rect_region(anim[0], Rect2(-fs * 0.5, -fs * 0.85, fs, fs), Assets.strip_frame(anim[0], anim[1], anim[2]))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# while aiming: a laser-dot line to the victim
 	if phase == AIM and is_instance_valid(target):
 		var blink := 0.5 + 0.5 * sin(age * 30.0)
@@ -344,7 +409,9 @@ class Gun extends Node2D:
 
 	func _draw() -> void:
 		var h = owner_hunt
-		if h.phase in [h.WARN, h.DONE] or not h.visual.visible:
+		if h.phase in [h.WARN, h.DONE] or not (h.visual.visible or h.custom_art):
+			return
+		if h.phase == h.LEAP_OUT and h.custom_art:
 			return
 		var horror := Mode.horror()
 		var aim := Vector2(h.puppet.facing.x, 0) if absf(h.puppet.facing.x) > 0.0 else Vector2(1, 0)
@@ -352,11 +419,20 @@ class Gun extends Node2D:
 			aim = (h.target.position - h.position).normalized()
 		var base := Vector2(0, -22 - h.height)
 		var tip := base + aim * 30.0
-		var stock := Color(0.35, 0.2, 0.12) if horror else Color(0.95, 0.55, 0.75)
-		var barrel := Color(0.25, 0.25, 0.28) if horror else Color(0.75, 0.45, 0.85)
-		draw_line(base - aim * 8.0, base + aim * 6.0, stock, 7.0)
-		draw_line(base + aim * 4.0, tip, barrel, 4.5)
-		if h.phase == h.FIRE and h.t < 0.25:
+		var custom_body: bool = h.custom_art
+		if not custom_body:   # (replacement art brings its own gun)
+			var stock := Color(0.35, 0.2, 0.12) if horror else Color(0.95, 0.55, 0.75)
+			var barrel := Color(0.25, 0.25, 0.28) if horror else Color(0.75, 0.45, 0.85)
+			draw_line(base - aim * 8.0, base + aim * 6.0, stock, 7.0)
+			draw_line(base + aim * 4.0, tip, barrel, 4.5)
+		var shot: Texture2D = Assets.strip("objects/princess_shot")
+		if h.phase == h.FIRE and shot != null:
+			if h.t < 0.4:   # replacement muzzle blast, pointed at the victim
+				var s := 56.0
+				draw_set_transform(tip, aim.angle(), Vector2.ONE)
+				draw_texture_rect_region(shot, Rect2(0, -s * 0.5, s, s), Assets.strip_frame(shot, h.t / 0.4), Color(1, 1, 1, 0.6) if h.blank else Color.WHITE)
+				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		elif h.phase == h.FIRE and h.t < 0.25:
 			var k: float = h.t / 0.25
 			var flash := Color(1.0, 0.85, 0.3, 1.0 - k) if not h.blank else Color(0.8, 0.8, 0.8, 0.8 - k)
 			draw_circle(tip + aim * 8.0, 10.0 * (1.0 - k) + 3.0, flash)

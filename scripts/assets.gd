@@ -40,6 +40,33 @@ func tex(rel: String) -> Texture2D:
 	return t
 
 
+## Optional animation strip: a single row of square frames (frame size = image
+## height, any number of frames). Returns null when no file exists in the
+## current mode's chain (Custom -> Horror -> shared), so callers fall back to
+## their built-in animation. No templates ship for these, so Normal and Horror
+## look exactly as before unless someone adds a strip for them.
+func strip(rel: String) -> Texture2D:
+	var key: String = Settings.mode + ":strip:" + rel
+	if _cache.has(key):
+		return _cache[key]
+	var path := resolve(rel)
+	var t: Texture2D = _load(path) if path != "" else null
+	_cache[key] = t
+	return t
+
+
+static func strip_frames(t: Texture2D) -> int:
+	return maxi(1, roundi(float(t.get_width()) / maxf(1.0, float(t.get_height()))))
+
+
+## Frame of a strip at `progress` (0..1 across the strip; loops when `loop`).
+static func strip_frame(t: Texture2D, progress: float, loop := false) -> Rect2:
+	var n := strip_frames(t)
+	var i: int = posmod(floori(progress * n), n) if loop else clampi(floori(progress * n), 0, n - 1)
+	var h := float(t.get_height())
+	return Rect2(i * h, 0.0, h, h)
+
+
 ## The file `tex(rel)` will use in the current mode ("" if none exists).
 func resolve(rel: String) -> String:
 	var mode: String = Settings.mode

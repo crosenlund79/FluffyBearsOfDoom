@@ -15,8 +15,15 @@ objects/custom/bomb.png           objects/template_bomb.png            (no Horro
 objects/custom/fluff.png          objects/template_fluff.png           (shared)
 objects/custom/duck.png           objects/template_duck.png            (shared)
 objects/custom/chair.png          objects/horror/template_chair.png
-objects/custom/clown.png          objects/horror/template_clown.png    (the clown only appears in Horror rounds)
+objects/custom/clown.png          objects/horror/template_clown.png    (the clown appears in Horror and Custom rounds)
 powerups/custom/powerups.png      powerups/horror/template_powerups.png
 effects/custom/effects.png        effects/horror/template_effects.png
+
+Optional animation strips for the clown and the Princess Hunt (no template:
+without them the built-in animation plays). One row of square frames, any count:
+objects/custom/clown_enter.png  clown_attack.png  clown_exit.png  clown_hit.png
+objects/custom/princess_enter.png  princess_walk.png  princess_attack.png
+objects/custom/princess_exit.png  princess_idle.png  princess_shot.png
+Details: README.md, "Custom characters: the clown and the princess".
 
 Layouts (cell counts, sizes) are listed in README.md under "Replacing the art".

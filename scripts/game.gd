@@ -128,7 +128,7 @@ func _ready() -> void:
 		doom = DoomRings.new()
 		_layer(1).add_child(doom)   # warnings sit on the floor, over blocks, under bears
 		doom.setup(self, round_duration)
-	if Tuning.CLOWN_ENABLED and Mode.horror():
+	if Tuning.CLOWN_ENABLED and Mode.horror_dressing():
 		_setup_clown_box()
 	crane_timer = rng.randf_range(Tuning.CRANE_FIRST_DELAY[0], Tuning.CRANE_FIRST_DELAY[1])
 	if Tuning.CRANE_ENABLED:
@@ -704,7 +704,7 @@ func find_chair(thief):
 # --- Horror jack-in-the-box ---------------------------------------------------------
 
 func _update_clown(delta: float) -> void:
-	if not Tuning.CLOWN_ENABLED or not Mode.horror() or clown != null:
+	if not Tuning.CLOWN_ENABLED or not Mode.horror_dressing() or clown != null:
 		return
 	clown_timer -= delta
 	if clown_timer <= 0.0 and time_left > Tuning.CLOWN_WARN + 3.0:
