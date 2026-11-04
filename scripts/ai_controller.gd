@@ -53,7 +53,7 @@ func _init(b, g, lvl: int) -> void:
 	game = g
 	arena = g.arena
 	level = lvl
-	rng.randomize()
+	rng.seed = g.rng.randi()   # follows the match seed
 	think_t = rng.randf_range(0.2, 0.6)
 
 

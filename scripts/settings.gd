@@ -23,6 +23,8 @@ var shuffle_music := true
 var bear_outlines := true  # dark outline around bears for visibility
 var diseases := true      # Reverse Controls and Bomb Diarrhea can drop (off = never)
 var instant_win: float = preload("res://scripts/tuning.gd").INSTANT_WIN_FLUFF   # fluff that ends a round at once (0 = off)
+var match_seed := 0       # (not saved) fixed seed for the arena + power-ups; 0 = random
+var spawn_rotation := 0   # (not saved) shifts which bear starts in which corner (AI testing)
 var key_overrides := {}   # action -> [[physical keycode, location], ...] chosen in Settings > Controls
 const MODES := ["normal", "horror", "custom"]
 var mode := "normal"  # "normal", "horror" or "custom": same gameplay, different look (and sound)
@@ -132,7 +134,7 @@ func roster() -> Array:
 		if human_count == 2 and i == sitting_out:
 			continue
 		out.append({"name": AI_NAMES[i], "color": AI_COLORS[i], "controller": ai_levels[i], "schemes": []})
-	return out
+	return out.slice(0, 4)   # strictly four bears, whatever the configuration
 
 
 func apply_input_bindings() -> void:

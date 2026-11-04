@@ -30,7 +30,7 @@ var closing := {}   # Vector2i -> seconds since the cell slammed shut (drop-in a
 const SLAM_TIME := 0.32
 
 
-func setup(map: Dictionary, rng: RandomNumberGenerator, powerup_weights: Array) -> void:
+func setup(map: Dictionary, rng: RandomNumberGenerator) -> void:
 	tiles_tex = Assets.tex("tiles/tiles")
 	map_name = map["name"]
 	_origin = position
@@ -56,35 +56,8 @@ func setup(map: Dictionary, rng: RandomNumberGenerator, powerup_weights: Array) 
 				cells[i] = BLOCK
 			else:
 				cells[i] = EMPTY
+	limit_conveyors(Tuning.MAX_H_BELTS, Tuning.MAX_V_BELTS)
 	base_terrain = terrain.duplicate()
-	# Hide power-ups under some blocks, guaranteeing a couple of Biome Shuffles.
-	var blocks := []
-	for y in rows:
-		for x in cols:
-			if cells[y * cols + x] == BLOCK:
-				blocks.append(Vector2i(x, y))
-	blocks.shuffle()
-	var total_w := 0.0
-	for w in powerup_weights:
-		total_w += w
-	for c in blocks:
-		if rng.randf() < Tuning.POWERUP_CHANCE:
-			var r := rng.randf() * total_w
-			for k in powerup_weights.size():
-				r -= powerup_weights[k]
-				if r <= 0.0:
-					hidden_powerups[c] = k
-					break
-	var shuffles := 0
-	for c in hidden_powerups:
-		if hidden_powerups[c] == 3:
-			shuffles += 1
-	for c in blocks:
-		if shuffles >= 2:
-			break
-		if not hidden_powerups.has(c) or hidden_powerups[c] != 3:
-			hidden_powerups[c] = 3
-			shuffles += 1
 	queue_redraw()
 
 
@@ -157,6 +130,53 @@ func set_terrain(c: Vector2i, t: int) -> void:
 		if Terrain.is_conveyor(t):
 			has_conveyors = true
 		queue_redraw()
+
+
+## Every cell holding a cushion block (row by row).
+func block_cells() -> Array:
+	var out := []
+	for y in rows:
+		for x in cols:
+			if cells[y * cols + x] == BLOCK:
+				out.append(Vector2i(x, y))
+	return out
+
+
+## Conveyor belts as straight runs of one direction: {"h": [[cells]], "v": [[cells]]}.
+func conveyor_runs(t_arr: PackedInt32Array = PackedInt32Array()) -> Dictionary:
+	var src := terrain if t_arr.is_empty() else t_arr
+	var h := []
+	var v := []
+	var seen := {}
+	for y in rows:
+		for x in cols:
+			var c := Vector2i(x, y)
+			var t: int = src[y * cols + x]
+			if not Terrain.is_conveyor(t) or seen.has(c):
+				continue
+			var horiz: bool = t == Terrain.CONVEYOR_R or t == Terrain.CONVEYOR_L
+			var step := Vector2i(1, 0) if horiz else Vector2i(0, 1)
+			var run := []
+			var k := c
+			while in_bounds(k) and src[k.y * cols + k.x] == t and not seen.has(k):
+				run.append(k)
+				seen[k] = true
+				k += step
+			(h if horiz else v).append(run)
+	return {"h": h, "v": v}
+
+
+## Keeps at most `max_h` horizontal and `max_v` vertical belts (the longest);
+## the rest become plain floor.
+func limit_conveyors(max_h: int, max_v: int) -> void:
+	var runs := conveyor_runs()
+	for pair in [[runs["h"], max_h], [runs["v"], max_v]]:
+		var list: Array = pair[0]
+		list.sort_custom(func(a, b): return a.size() > b.size())
+		for i in range(pair[1], list.size()):
+			for c in list[i]:
+				terrain[c.y * cols + c.x] = Terrain.NORMAL
+	has_conveyors = not conveyor_runs()["h"].is_empty() or not conveyor_runs()["v"].is_empty()
 
 
 ## Destroys a cushion block, returning the hidden power-up kind or -1.

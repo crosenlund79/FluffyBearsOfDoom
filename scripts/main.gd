@@ -16,6 +16,10 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--mode="):
 			Settings.set_mode(a.get_slice("=", 1))  # dev/test override, not saved
+		if a.begins_with("--seed="):
+			Settings.match_seed = int(a.get_slice("=", 1))   # reproducible arena + power-ups
+		if a.begins_with("--rotate="):
+			Settings.spawn_rotation = int(a.get_slice("=", 1)) % 4   # who starts in which corner
 		if a.begins_with("--win="):
 			Settings.instant_win = float(a.get_slice("=", 1))  # dev/test override, not saved
 		if a.begins_with("--menu-shot="):

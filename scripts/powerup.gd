@@ -5,9 +5,7 @@ enum { BOMB, FIRE, SPEED, SHUFFLE, KICK, LINE, RUBBER, IMMORTAL, REVERSE, DIARRH
 const NAMES := ["Extra Bomb", "Bigger Blast", "Springy Stitching", "Biome Shuffle", "Bomb Kick",
 	"Line Bomb", "Rubber Bombs", "Immortality", "Reverse Controls!", "Bomb Diarrhea!", "Proximity Bombs",
 	"Princess Hunt!"]
-# Every bear can kick now, so Bomb Kick no longer drops (its sheet cell is kept for compatibility).
-# Princess Hunt never drops by weight: at most one is hidden per round (Tuning.PRINCESS_CHANCE).
-const WEIGHTS := [22.0, 20.0, 9.0, 6.0, 0.0, 7.0, 5.0, 4.0, 9.0, 7.0, 7.0, 0.0]
+# How many of each appear per round: Tuning.PU_CATEGORIES (see powerup_plan.gd).
 ## Sheet cell for each kind. The Remote Detonator reuses the bomb badge plus a drawn
 ## antenna, so existing 10-cell replacement sheets keep working.
 const CELL := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 7]   # Princess Hunt is drawn in code (crown badge)

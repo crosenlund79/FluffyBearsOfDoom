@@ -30,6 +30,7 @@ const PickupFx = preload("res://scripts/pickup_fx.gd")
 const DoomRings = preload("res://scripts/doom_rings.gd")
 const JackInTheBox = preload("res://scripts/jack_in_the_box.gd")
 const PrincessHunt = preload("res://scripts/princess_hunt.gd")
+const PowerupPlan = preload("res://scripts/powerup_plan.gd")
 
 enum State { READY, COUNTDOWN, PLAYING, ENDED }   # READY: everyone dances until Space/Enter
 
@@ -43,6 +44,9 @@ var start_clock := -10.0   # when the round started (a moment of grace for the s
 var time_left := 150.0
 var countdown := 3.0
 var rng := RandomNumberGenerator.new()
+var match_seed := 0
+var pu_plan
+var reserve_drops: Array = []   # [{"at": seconds into the round, "kind": k}]
 
 var arena
 var powerup_layer: Node2D
@@ -86,7 +90,9 @@ var round_duration := 150.0
 
 
 func _ready() -> void:
-	rng.randomize()
+	match_seed = Settings.match_seed if Settings.match_seed != 0 else randi() % 2000000000 + 1
+	rng.seed = match_seed
+	seed(match_seed)   # incidental randomness too, as far as it goes
 	Settings.apply_input_bindings()
 	fx_tex = Assets.tex("effects/effects")
 	fluff_tex = Assets.tex("objects/fluff")
@@ -97,16 +103,12 @@ func _ready() -> void:
 	arena.position = ARENA_ORIGIN
 	arena.scale = Vector2.ONE * Tuning.ARENA_SCALE
 	add_child(arena)
-	var weights: Array = PowerupScript.WEIGHTS.duplicate()
-	if not Settings.diseases:   # Settings: no diseases at all
-		weights[PowerupScript.REVERSE] = 0.0
-		weights[PowerupScript.DIARRHEA] = 0.0
-	arena.setup(Maps.MAPS[Settings.arena_index], rng, weights)
-	# rarely, one block hides the Princess Hunt trap (never more than one)
-	if rng.randf() < Tuning.PRINCESS_CHANCE and not arena.hidden_powerups.is_empty():
-		var spots: Array = arena.hidden_powerups.keys().filter(func(c): return arena.hidden_powerups[c] != PowerupScript.SHUFFLE)
-		if not spots.is_empty():
-			arena.hidden_powerups[spots[rng.randi() % spots.size()]] = PowerupScript.PRINCESS
+	arena.setup(Maps.MAPS[Settings.arena_index], rng)
+	# seeded, controlled power-up distribution (see powerup_plan.gd)
+	pu_plan = PowerupPlan.new()
+	pu_plan.build(rng, arena.block_cells(), _spawn_cells(), Settings.diseases)
+	arena.hidden_powerups = pu_plan.hidden
+	_schedule_reserve()
 
 	decal_layer = _layer(1)
 	footprints = FootprintsScript.new()
@@ -139,7 +141,7 @@ func _ready() -> void:
 		var r: Dictionary = roster[i]
 		var b = BearScript.new()
 		bear_layer.add_child(b)
-		b.setup(self, i, r["name"], Mode.bear_color(r["color"]), ArenaScript.SPAWNS[i])
+		b.setup(self, i, r["name"], Mode.bear_color(r["color"]), _spawn_cells()[i])
 		if r["controller"] == "human":
 			b.is_human = true
 			b.controller = HumanController.new(b, r["schemes"])
@@ -301,6 +303,7 @@ func _physics_process(delta: float) -> void:
 			if doom != null:
 				doom.update(delta, round_duration - time_left)
 			_update_clown(delta)
+			_update_reserve()
 			_check_instant_win()
 			if state == State.PLAYING and time_left <= 0.0:
 				time_left = 0.0
@@ -479,6 +482,74 @@ func is_bloody(c: Vector2i) -> bool:
 	return bloody.get(c, -1.0) > clock
 
 
+## Spawn corners, rotated by Settings.spawn_rotation (bear i starts at entry i).
+func _spawn_cells() -> Array:
+	var out := []
+	var n: int = ArenaScript.SPAWNS.size()
+	for i in n:
+		out.append(ArenaScript.SPAWNS[(i + Settings.spawn_rotation) % n])
+	return out
+
+
+## The reserve drops at spread-out moments in the middle of the round.
+func _schedule_reserve() -> void:
+	reserve_drops = []
+	var n: int = pu_plan.reserve.size()
+	var w: Array = Tuning.PU_RESERVE_WINDOW
+	for i in n:
+		var f: float = lerpf(w[0], w[1], (i + rng.randf_range(0.25, 0.75)) / float(n))
+		reserve_drops.append({"at": f * round_duration, "kind": pu_plan.reserve[i]})
+
+
+func _update_reserve() -> void:
+	if reserve_drops.is_empty() or round_duration - time_left < reserve_drops[0]["at"]:
+		return
+	var c := _reserve_cell()
+	if c == Vector2i(-1, -1):
+		reserve_drops[0]["at"] += 2.0   # nowhere sensible right now: try again shortly
+		return
+	var kind: int = reserve_drops.pop_front()["kind"]
+	if kind == PowerupScript.PRINCESS and princess_used:
+		kind = PowerupScript.BOMB
+	_reveal_powerup(c, kind)
+	spawn_dust(arena.cell_center(c), 5)
+	Sfx.play("pop", 1.2, -4.0)
+
+
+## An open floor cell away from every bear, bomb and closing ring.
+func _reserve_cell() -> Vector2i:
+	var options := []
+	for y in range(1, arena.rows - 1):
+		for x in range(1, arena.cols - 1):
+			var c := Vector2i(x, y)
+			if arena.cell_type(c) != ArenaScript.EMPTY or arena.bombs.has(c) or powerups.has(c):
+				continue
+			if doom != null and doom.warning_cells().has(c):
+				continue
+			var ok := true
+			for b in bears:
+				var bc: Vector2i = b.cell()
+				if absi(bc.x - x) + absi(bc.y - y) < 3:
+					ok = false
+					break
+			if ok:
+				options.append(c)
+	if options.is_empty():
+		return Vector2i(-1, -1)
+	return options[rng.randi() % options.size()]
+
+
+func _reveal_powerup(c: Vector2i, kind: int) -> void:
+	var p = PowerupScript.new()
+	p.kind = kind
+	p.cell = c
+	p.position = arena.cell_center(c)
+	powerup_layer.add_child(p)
+	powerups[c] = p
+	# a little reveal flourish
+	_burst(p.position, fx_tex, Assets.region(fx_tex, Assets.EFFECT_CELLS, 5), 6, 13.0, PowerupScript.glow_color(kind))
+
+
 func _break_blocks(broken: Array) -> void:
 	for c in broken:
 		var kind: int = arena.destroy_block(c)
@@ -487,14 +558,7 @@ func _break_blocks(broken: Array) -> void:
 		spawn_dust(arena.cell_center(c), 4)
 		_burst(arena.cell_center(c), fluff_tex, Rect2(Vector2.ZERO, fluff_tex.get_size()), 3, 12.0, Color(0.95, 0.85, 0.85))
 		if kind >= 0:
-			var p = PowerupScript.new()
-			p.kind = kind
-			p.cell = c
-			p.position = arena.cell_center(c)
-			powerup_layer.add_child(p)
-			powerups[c] = p
-			# a little reveal flourish
-			_burst(p.position, fx_tex, Assets.region(fx_tex, Assets.EFFECT_CELLS, 5), 6, 13.0, PowerupScript.glow_color(kind))
+			_reveal_powerup(c, kind)
 
 
 ## Shared by bombs and the duck: confetti visuals, chained bombs, stuns.
@@ -1307,26 +1371,102 @@ var shuffle_phase := ""        # "", "warn" (tiles show what's coming), "active"
 var shuffle_t := 0.0
 
 
-## Biome Shuffle: after a short warning the WHOLE playable floor becomes one
-## random biome (ice, honey, bouncy or a conveyor belt in one direction) with
-## its physics, then goes back to exactly what it was. Walls, blocks, bombs
-## and power-ups are untouched.
+## Biome Shuffle: after a short warning the playable floor changes, then goes
+## back to exactly what it was. Ice, honey and bouncy cover the WHOLE floor;
+## Conveyor Chaos instead lays a few belts along corridors (never more than
+## Tuning.MAX_H_BELTS + MAX_V_BELTS, the map's own belts included) so the arena
+## stays navigable. Walls, blocks, bombs and power-ups are untouched.
+var shuffle_plan := {}   # Vector2i -> terrain applied while the shuffle is active
+
 func biome_shuffle() -> void:
 	Sfx.play("shuffle")
 	var pick: Array = SHUFFLE_BIOMES[rng.randi() % SHUFFLE_BIOMES.size()]
 	var biome: int = pick[0]
-	if biome == -1:
-		biome = Terrain.CONVEYOR_R + rng.randi() % 4
 	if shuffle_snapshot == null:
 		shuffle_snapshot = arena.terrain.duplicate()   # a shuffle during a shuffle still restores the original
+	shuffle_plan = {}
+	if biome == -1:
+		shuffle_plan = _conveyor_plan()
+		biome = Terrain.CONVEYOR_R
+	else:
+		for c in _floor_cells():
+			shuffle_plan[c] = biome
 	shuffle_biome = biome
 	hud.banner("Biome Shuffle: " + pick[1], 1.8)
 	shuffle_phase = "warn"
 	shuffle_t = Tuning.SHUFFLE_WARN
 	arena.warn.clear()
-	for c in _floor_cells():
-		arena.warn[c] = biome
+	for c in shuffle_plan:
+		arena.warn[c] = shuffle_plan[c]
 	arena.warn_t = 0.0
+
+
+## Conveyor Chaos: the map's belts are rolled up and new ones run along open
+## corridors (odd rows / columns), up to two each way, each a few tiles long.
+func _conveyor_plan() -> Dictionary:
+	var plan := {}
+	var floor := {}
+	for c in _floor_cells():
+		floor[c] = true
+		if Terrain.is_conveyor(shuffle_snapshot[c.y * arena.cols + c.x]):
+			plan[c] = Terrain.NORMAL
+	var rows_free := []
+	for y in range(1, arena.rows - 1, 2):
+		rows_free.append(y)
+	var cols_free := []
+	for x in range(1, arena.cols - 1, 2):
+		cols_free.append(x)
+	_shuffle_array(rows_free)
+	_shuffle_array(cols_free)
+	var lay := func(lines: Array, horiz: bool, count: int) -> void:
+		var made := 0
+		for line in lines:
+			if made >= count:
+				break
+			var span: int = (arena.cols if horiz else arena.rows) - 2
+			var length: int = rng.randi_range(Tuning.SHUFFLE_BELT_LEN.x, mini(Tuning.SHUFFLE_BELT_LEN.y, span))
+			var start: int = 1 + rng.randi() % maxi(1, span - length + 1)
+			var dir: int
+			if horiz:
+				dir = Terrain.CONVEYOR_R if rng.randf() < 0.5 else Terrain.CONVEYOR_L
+			else:
+				dir = Terrain.CONVEYOR_D if rng.randf() < 0.5 else Terrain.CONVEYOR_U
+			# the longest unbroken stretch: belts never cross or run over shut tiles
+			var cells := []
+			var cur := []
+			for i in length:
+				var c := Vector2i(start + i, line) if horiz else Vector2i(line, start + i)
+				if floor.has(c) and not Terrain.is_conveyor(plan.get(c, Terrain.NORMAL)):
+					cur.append(c)
+				else:
+					cur = []
+				if cur.size() > cells.size():
+					cells = cur.duplicate()
+			if cells.size() < 3:
+				continue
+			for c in cells:
+				plan[c] = dir
+			made += 1
+	lay.call(rows_free, true, Tuning.MAX_H_BELTS)
+	lay.call(cols_free, false, Tuning.MAX_V_BELTS)
+	return plan
+
+
+## (feature test) a Conveyor Chaos plan for the current floor, without applying it.
+func _conveyor_plan_for_test() -> Dictionary:
+	var keep = shuffle_snapshot
+	shuffle_snapshot = arena.terrain.duplicate()
+	var plan := _conveyor_plan()
+	shuffle_snapshot = keep
+	return plan
+
+
+func _shuffle_array(a: Array) -> void:
+	for i in range(a.size() - 1, 0, -1):
+		var j := rng.randi() % (i + 1)
+		var tmp = a[i]
+		a[i] = a[j]
+		a[j] = tmp
 
 
 ## Every cell that has a floor (not the border, not shut by the Time of Doom).
@@ -1348,14 +1488,15 @@ func _update_shuffles(delta: float) -> void:
 	if shuffle_phase == "warn":
 		if shuffle_t <= 0.0:
 			arena.warn.clear()
-			for c in _floor_cells():
-				arena.set_terrain(c, shuffle_biome)
+			for c in shuffle_plan:
+				if arena.cell_type(c) != ArenaScript.CLOSED:
+					arena.set_terrain(c, shuffle_plan[c])
 			shuffle_phase = "active"
 			shuffle_t = Tuning.SHUFFLE_DURATION
 		return
 	# active: show the way back shortly before it wears off
 	if shuffle_t < Tuning.SHUFFLE_WARN and arena.warn.is_empty():
-		for c in _floor_cells():
+		for c in shuffle_plan:
 			arena.warn[c] = shuffle_snapshot[c.y * arena.cols + c.x]
 		arena.warn_t = 0.0
 	if shuffle_t <= 0.0:

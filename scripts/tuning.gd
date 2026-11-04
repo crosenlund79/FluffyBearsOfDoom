@@ -7,7 +7,30 @@ const COLS := 17          # one extra outer ring (zoomed out: see ARENA_SCALE)
 const ROWS := 15
 const ARENA_SCALE := 0.8667   # the 17x15 grid drawn at this scale fills the same screen area as the old 15x13
 const BLOCK_DENSITY := 0.72
-const POWERUP_CHANCE := 0.34
+
+# --- Power-up distribution (scripts/powerup_plan.gd) ----------------------------
+# Kinds: 0 Bomb, 1 Fire, 2 Speed, 3 Shuffle, 4 Kick, 5 Line, 6 Rubber, 7 Immortal,
+#        8 Reverse, 9 Diarrhea, 10 Proximity, 11 Princess
+# Each category draws `count` items by weight; "chance" < 1 makes it a maximum
+# rather than a guarantee; "refill": false keeps it out of redistribution.
+const PU_TOTAL := 24
+const PU_CATEGORIES := [
+	{"name": "core", "count": 10, "kinds": {0: 1.0, 1: 1.0}},
+	{"name": "mobility", "count": 6, "kinds": {4: 1.0, 2: 1.4, 6: 0.6}},
+	{"name": "tactical", "count": 4, "kinds": {10: 1.2, 5: 0.8, 7: 0.8}},
+	{"name": "chaos", "count": 3, "kinds": {3: 1.2, 8: 0.9, 9: 0.9}, "refill": false},
+	{"name": "special", "count": 1, "kinds": {11: 1.0}, "chance": 0.45, "refill": false},
+]
+# most of one kind per round (per-bear stacking caps live in bear.gd: 8 bombs, range 8)
+const PU_CAPS := {0: 6, 1: 6, 2: 4, 3: 2, 4: 2, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 2, 11: 1}
+const PU_RESERVE := 4              # items held back to drop onto the floor later
+const PU_RESERVE_WINDOW := [0.3, 0.7]   # share of the round over which the reserve drops
+const PU_EARLY_RADIUS := 5         # blocks this close to a spawn count as its region
+const PU_EARLY_SET := [[0], [1], [2, 4]]   # near every corner: a Bomb, a Fire and a Speed-or-Kick
+const PU_EARLY_PER_SPAWN := 3
+const PU_RARE := [3, 5, 7, 8, 9, 10, 11]   # placed far from every spawn
+const PU_RARE_MIN_DIST := 5
+const PU_VALUE := {0: 1.0, 1: 1.0, 2: 0.8, 4: 0.8, 6: 0.6}
 
 # --- Fluff --------------------------------------------------------------------
 const START_FLUFF := 100.0
@@ -48,6 +71,9 @@ const ROBBED_GRUMPY := 2.2       # seconds a robbed bear looks indignant
 
 # --- Biome Shuffle --------------------------------------------------------------
 const SHUFFLE_WARN := 1.8
+const MAX_H_BELTS := 2                   # conveyor belts per arena (maps and Biome Shuffle alike)
+const MAX_V_BELTS := 2
+const SHUFFLE_BELT_LEN := Vector2i(5, 9)  # Conveyor Chaos belt length range (tiles)
 const SHUFFLE_DURATION := 15.0          # seconds the whole floor stays the shuffled biome before it reverts
 
 
@@ -121,7 +147,6 @@ const CLOWN_WARN := 3.0                    # seconds of accelerating flashing be
 const CLOWN_STUN := 2.2
 
 # Princess Hunt (a rare trap power-up; at most one princess per round)
-const PRINCESS_CHANCE := 0.45          # chance a round hides one Princess Hunt badge under a block
 const PRINCESS_SPEED := 175.0          # px/s along the corridors (a touch faster than a bear)
 const PRINCESS_STUN := 4.0             # her shotgun blast: a long stun...
 const PRINCESS_SPILL := 0.25           # ...and this share of the victim's stuffing blown out

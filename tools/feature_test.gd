@@ -9,6 +9,8 @@ class Idle:
 var game
 var fails := 0
 const PowerupScript = preload("res://scripts/powerup.gd")
+const Terrain = preload("res://scripts/terrain.gd")
+const Tuning = preload("res://scripts/tuning.gd")
 
 
 func run(g) -> void:
@@ -154,13 +156,126 @@ func _run_checks() -> void:
 	await _shot("shuffle")
 	var biome: int = game.shuffle_biome
 	var uniform := true
-	for c in game._floor_cells():
-		if arena.terrain_at(c) != biome:
-			uniform = false
-	_expect(uniform, "biome shuffle covers the whole floor with one biome (%d)" % biome)
+	if Terrain.is_conveyor(biome):
+		var runs: Dictionary = arena.conveyor_runs()
+		uniform = runs["h"].size() <= Tuning.MAX_H_BELTS and runs["v"].size() <= Tuning.MAX_V_BELTS and runs["h"].size() + runs["v"].size() > 0
+		_expect(uniform, "Conveyor Chaos lays at most 2 horizontal + 2 vertical belts (%d + %d)" % [runs["h"].size(), runs["v"].size()])
+	else:
+		for c in game._floor_cells():
+			if arena.terrain_at(c) != biome:
+				uniform = false
+		_expect(uniform, "biome shuffle covers the whole floor with one biome (%d)" % biome)
 	game.shuffle_t = 0.05
 	await _wait(0.3)
 	_expect(arena.terrain == before and game.shuffle_phase == "", "biome shuffle restores the previous floor exactly")
+
+	# --- conveyors: never more than 2 + 2 belts, even with every shuffle
+	var belts_ok := true
+	var worst := Vector2i.ZERO
+	for i in 40:
+		var plan: Dictionary = game._conveyor_plan_for_test()
+		var tarr: PackedInt32Array = arena.terrain.duplicate()
+		for c in plan:
+			tarr[c.y * arena.cols + c.x] = plan[c]
+		var r: Dictionary = arena.conveyor_runs(tarr)
+		worst = Vector2i(maxi(worst.x, r["h"].size()), maxi(worst.y, r["v"].size()))
+		if r["h"].size() > Tuning.MAX_H_BELTS or r["v"].size() > Tuning.MAX_V_BELTS:
+			belts_ok = false
+		var on_belts := 0
+		for c in plan:
+			if Terrain.is_conveyor(plan[c]):
+				on_belts += 1
+		if on_belts > (Tuning.MAX_H_BELTS + Tuning.MAX_V_BELTS) * Tuning.SHUFFLE_BELT_LEN.y:
+			belts_ok = false
+	_expect(belts_ok, "40 Conveyor Chaos plans: belts stay in corridors, max %d horizontal + %d vertical" % [worst.x, worst.y])
+	var crowded := []
+	for y in arena.rows:
+		crowded.append(">>>>>>>>>>>>>>>>>" if y % 2 == 1 else "vvvvvvvvvvvvvvvvv")
+	var test_arena = load("res://scripts/arena.gd").new()
+	var trng := RandomNumberGenerator.new()
+	test_arena.setup({"name": "t", "terrain": crowded}, trng)
+	var tr: Dictionary = test_arena.conveyor_runs()
+	_expect(tr["h"].size() <= 2 and tr["v"].size() <= 2, "a map with too many belts is trimmed to 2 + 2 (%d + %d)" % [tr["h"].size(), tr["v"].size()])
+	test_arena.free()
+
+	# --- power-up distribution: 24 items by category, fair corners, rares far, seeded
+	var PlanScript = load("res://scripts/powerup_plan.gd")
+	var cat_ok := true
+	var caps_ok := true
+	var fair_ok := true
+	var rare_ok := true
+	var totals := {}
+	var princess_rounds := 0
+	var cat_of := {}
+	for cat in Tuning.PU_CATEGORIES:
+		for k in cat["kinds"]:
+			cat_of[k] = cat["name"]
+	for sd in range(1, 201):
+		var r2 := RandomNumberGenerator.new()
+		r2.seed = sd
+		var ta = load("res://scripts/arena.gd").new()
+		ta.setup(game.Maps.MAPS[sd % game.Maps.MAPS.size()], r2)
+		var plan = PlanScript.new()
+		plan.build(r2, ta.block_cells(), ta.SPAWNS, true)
+		var kinds: Array = plan.hidden.values() + plan.reserve
+		var per_cat := {}
+		for k in kinds:
+			per_cat[cat_of[k]] = per_cat.get(cat_of[k], 0) + 1
+			totals[k] = totals.get(k, 0) + 1
+		if per_cat.get("core", 0) != 10 or per_cat.get("mobility", 0) != 6 or per_cat.get("tactical", 0) != 4 or per_cat.get("chaos", 0) != 3 or per_cat.get("special", 0) > 1:
+			cat_ok = false
+			print("   seed %d categories %s" % [sd, per_cat])
+		if per_cat.get("special", 0) == 1:
+			princess_rounds += 1
+		for k in Tuning.PU_CAPS:
+			if kinds.count(k) > Tuning.PU_CAPS[k]:
+				caps_ok = false
+		# each corner's nearest items: same total value
+		var vals := []
+		for sp in ta.SPAWNS:
+			var v := 0.0
+			for c in plan.hidden:
+				if absi(c.x - sp.x) + absi(c.y - sp.y) <= Tuning.PU_EARLY_RADIUS and not PlanScript.is_rare(plan.hidden[c]):
+					v += PlanScript.value(plan.hidden[c])
+			vals.append(v)
+		if vals.max() - vals.min() > 0.01:
+			fair_ok = false
+			print("   seed %d corner values %s" % [sd, vals])
+		for c in plan.hidden:
+			if PlanScript.is_rare(plan.hidden[c]):
+				for sp in ta.SPAWNS:
+					if absi(c.x - sp.x) + absi(c.y - sp.y) < Tuning.PU_RARE_MIN_DIST:
+						rare_ok = false
+		ta.free()
+	_expect(cat_ok, "200 seeds: 10 core, 6 mobility, 4 tactical, 3 chaos, at most 1 special")
+	_expect(caps_ok, "per-kind caps are never exceeded")
+	_expect(fair_ok, "every spawn corner gets the same early value")
+	_expect(rare_ok, "rare items are hidden away from the spawns")
+	_expect(princess_rounds > 40 and princess_rounds < 140, "Princess Hunt is a maximum, not a guarantee (%d / 200 rounds)" % princess_rounds)
+	print("   item totals over 200 rounds: %s" % [totals])
+	# diseases off: redistributed, never dropped
+	var r3 := RandomNumberGenerator.new()
+	var dis_ok := true
+	for sd in range(1, 101):
+		r3.seed = sd
+		var plan2 = PlanScript.new()
+		var items: Array = plan2.draw_items(r3, false)
+		if items.has(PowerupScript.REVERSE) or items.has(PowerupScript.DIARRHEA) or items.size() < 23:
+			dis_ok = false
+	_expect(dis_ok, "diseases off: no curses, and their slots go to other categories (23-24 items)")
+	# same seed, same layout
+	var layouts := []
+	for i in 2:
+		var r4 := RandomNumberGenerator.new()
+		r4.seed = 4242
+		var ta2 = load("res://scripts/arena.gd").new()
+		ta2.setup(game.Maps.MAPS[0], r4)
+		var plan3 = PlanScript.new()
+		plan3.build(r4, ta2.block_cells(), ta2.SPAWNS, true)
+		layouts.append([ta2.block_cells(), plan3.hidden, plan3.reserve])
+		ta2.free()
+	_expect(layouts[0] == layouts[1], "a seed reproduces blocks, hidden items and the reserve exactly")
+	_expect(game.pu_plan.reserve.size() == Tuning.PU_RESERVE and game.reserve_drops.size() <= Tuning.PU_RESERVE, "the reserve waits to drop later in the round")
 
 	# --- zero fluff: deflated, out, can't act
 	var z = game.bears[2]
