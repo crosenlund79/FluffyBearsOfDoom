@@ -6,7 +6,7 @@ const NAMES := ["Extra Bomb", "Bigger Blast", "Springy Stitching", "Biome Shuffl
 	"Line Bomb", "Rubber Bombs", "Immortality", "Reverse Controls!", "Bomb Diarrhea!", "Proximity Bombs",
 	"Princess Hunt!"]
 # How many of each appear per round: Tuning.PU_CATEGORIES (see powerup_plan.gd).
-## Sheet cell for each kind. The Remote Detonator reuses the bomb badge plus a drawn
+## Sheet cell for each kind. Proximity Bombs reuse the bomb badge plus a drawn
 ## antenna, so existing 10-cell replacement sheets keep working.
 const CELL := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 7]   # Princess Hunt is drawn in code (crown badge)
 const BAD := [REVERSE, DIARRHEA, PRINCESS]
@@ -119,7 +119,7 @@ func _draw() -> void:
 	draw_set_transform(c + off, wob, Vector2.ONE)
 	draw_texture_rect_region(tex, rect, region, Color(1, 1, 1, appear))
 	if kind == PROXIMITY:
-		draw_remote_antenna(self, Vector2(s * 0.18, -s * 0.2), s / 38.0, t)
+		draw_sensor_antenna(self, Vector2(s * 0.18, -s * 0.2), s / 38.0, t)
 	# a glint sweeping across the badge every couple of seconds
 	var g := fmod(t * 0.55 + float(cell.x + cell.y) * 0.13, 1.0)
 	if g < 0.25 and not horror:
@@ -151,7 +151,7 @@ static func draw_badge(ci: CanvasItem, center: Vector2, size: float, kind: int, 
 	ci.draw_texture_rect_region(tex, Rect2(center - Vector2(size, size) * 0.5, Vector2(size, size)),
 		Assets.region(tex, Assets.POWERUP_CELLS, CELL[kind]), Color(1, 1, 1, alpha))
 	if kind == PROXIMITY:
-		draw_remote_antenna(ci, center + Vector2(size * 0.18, -size * 0.2), size / 38.0, t)
+		draw_sensor_antenna(ci, center + Vector2(size * 0.18, -size * 0.2), size / 38.0, t)
 
 
 ## The Princess Hunt badge: a crown on a rose (Horror: crimson) disc, drawn in code
@@ -178,8 +178,8 @@ static func draw_princess_badge(ci: CanvasItem, c: Vector2, size: float, t: floa
 		ci.draw_line(base + Vector2(w * 0.3, 0), base + Vector2(w * 0.3, r * 0.4), Color(0.6, 0.02, 0.05, alpha), 2.0)
 
 
-## A little radio antenna with a blinking tip and signal arcs (remote bombs and their badge).
-static func draw_remote_antenna(ci: CanvasItem, base: Vector2, sc: float, t: float, tip := Color(0.9, 0.2, 0.25)) -> void:
+## A little sensor antenna with a blinking tip and signal arcs (proximity bombs and their badge).
+static func draw_sensor_antenna(ci: CanvasItem, base: Vector2, sc: float, t: float, tip := Color(0.9, 0.2, 0.25)) -> void:
 	var top := base + Vector2(4, -12) * sc
 	ci.draw_line(base, top, Color(0.25, 0.18, 0.15), 2.0 * sc)
 	var on := fmod(t * 2.5, 1.0) < 0.55

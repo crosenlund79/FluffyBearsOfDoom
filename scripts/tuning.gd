@@ -104,7 +104,7 @@ const DUCKLING_SPACING := 22.0           # px between ducks in the procession
 const CENTER_ASSIST_SPEED := 90.0        # px/s a bear is nudged toward an open corridor it is steering into
 const TURN_LOOKAHEAD := 1.15             # tiles ahead along the motion to look for the corridor you pressed toward
 
-# --- Remote Detonator -------------------------------------------------------------
+# --- Proximity Bombs -------------------------------------------------------------
 # Proximity bombs (the special key, from the Proximity Bombs power-up)
 const PROX_CHARGES := 3                  # proximity bombs per power-up
 const PROX_MAX_CHARGES := 6

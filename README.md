@@ -17,7 +17,7 @@ Open the folder in Godot 4.3 and press **Play**.
 | Move | WASD | Arrow keys |
 | Place bomb | Space | Enter |
 | Steal fluff (hold) | Left Shift | Right Ctrl |
-| Special (remote detonate / Line Bomb) | E | R (Right Shift also works) |
+| Special (proximity bomb / Line Bomb) | E | R (Right Shift also works) |
 
 A lone player can use either layout. Gamepads: stick/d-pad, A bomb, X/B/RT steal, Y/LB special.
 Esc/P pauses, N skips to the next music track. **Every key can be remapped** in Menu → Controls
@@ -67,7 +67,12 @@ picks up every power-up it slides over, curses included, and always ends centred
 out for the rest of the round. It can't move, bomb, steal or be targeted, and its cards are greyed
 and stamped DEFLATED.
 
-The round ends when the timer runs out (most fluff wins), or **instantly** when a bear's fluff
+**Bomb damage** happens only at the instant of detonation: a blast stuns every bear standing in it
+at that moment, once (a chain of bombs never hits the same bear twice). The lingering flames are
+just for show.
+
+The round ends when the timer runs out (most fluff wins), when only one bear (or none) still has
+stuffing (the survivor wins; among equals, whoever lasted longer ranks higher), or **instantly** when a bear's fluff
 reaches the instant-win threshold (default 300; Settings → *Instant win at*, or `INSTANT_WIN_FLUFF`
 in `scripts/tuning.gd`; *Off* plays to the timer).
 
@@ -92,20 +97,43 @@ mark the victim, and the hammer stuns. It never changes the grid, so it can't tr
 (3 cells: head, mallet, box). Timing is `CLOWN_*` in `scripts/tuning.gd`.
 
 ## Power-ups
-Every bear can **kick** bombs (walk into one): it slides along the corridor until something blocks it.
-A ring in the owner's colour on the floor shows whose bomb it is.
+Ordinary bombs always burn a timed fuse. A ring in the owner's colour on the floor shows whose
+bomb it is.
+
+**Bomb Kick** is a power-up (every round starts without it): walk into a bomb to kick it along the
+corridor until something blocks it.
+
+**Proximity Bombs** give 3 charges (up to 6) for the special key. A proximity bomb counts down
+**3 → 2 → 1** on its shell while it arms, then shows a red detection ring: the first rival to step
+next to it sets it off (after a short beep). Its owner can never trip it, and an untripped one goes
+off by itself after 30 s. It uses one of your bomb slots, keeps your blast range, chains like any
+bomb and can be kicked. The AI lays them in corridors near rivals and steers around rivals' traps
+(Easy only respects them once they're armed). Tuning: `PROX_*` in `scripts/tuning.gd`.
 
 Extra Bomb · Bigger Blast · Springy Stitching (speed) ·
-**Remote Detonator** (your bombs wait, with an antenna in your colour, until you press the special key; a backup fuse sets them off after 10 s) ·
-Line Bomb (special key when you have no remote bombs out: lays all free bombs in a line) · Rubber Bombs (kicked bombs bounce) ·
+Line Bomb (special key when you have no proximity bombs: lays all free bombs in a line) · Rubber Bombs (kicked bombs bounce) ·
 Immortality (20 s, can't be stunned or robbed) · Biome Shuffle (after a warning the **whole floor**
-becomes one biome, ice, honey, bouncy or a one-way conveyor, with its physics; after
-`SHUFFLE_DURATION` seconds it goes back exactly as it was; walls, blocks, bombs and power-ups stay) ·
+becomes ice, honey or bouncy with its physics, or **Conveyor Chaos** lays a few belts along the
+corridors; after `SHUFFLE_DURATION` seconds it goes back exactly as it was; walls, blocks, bombs and power-ups stay) ·
 **curses:** Reverse Controls (12 s, contagious on contact) · Bomb Diarrhea (10 s, bombs drop by themselves).
 Power-ups lying in a blast are destroyed; ones uncovered by that same blast survive.
 
+**Distribution** (`scripts/powerup_plan.gd`, numbers in `scripts/tuning.gd` under `PU_*`): every
+round has a fixed budget of 24 items: **10 core** (Extra Bomb, Bigger Blast), **6 mobility** (Bomb
+Kick, Springy Stitching, Rubber Bombs), **4 tactical** (Proximity Bombs, Line Bomb, Immortality),
+**3 chaos** (Biome Shuffle, the curses) and **at most 1 special** (Princess Hunt, in 45% of rounds).
+Category weights and per-kind caps are configurable. Kinds that are switched off (Settings →
+Diseases) are redistributed to the other categories. Most items hide under cushion blocks; 4 are
+held back and drop onto open floor between 30% and 70% of the round. Each spawn corner gets the same
+early set (a Bomb, a Fire and a Speed-or-Kick in its nearest blocks), and rare items hide far from
+every spawn. The layout follows the round's seed.
+
+**Conveyors:** an arena never has more than 2 horizontal and 2 vertical belts (`MAX_H_BELTS`,
+`MAX_V_BELTS`); maps are trimmed to that, and Conveyor Chaos lays belts of 5–9 tiles along
+corridors instead of covering the floor.
+
 ## Princess Hunt (a one-time trap)
-Some rounds (45%) hide one **Princess Hunt** badge (a crown) under a cushion block, never more than
+Some rounds (45%, the special category's chance) hide one **Princess Hunt** badge (a crown) under a cushion block, never more than
 one. Whoever picks it up springs the trap: her crown peeks over the outer wall with a warning, then
 the princess leaps in laughing and hunts the **nearest active bear** along the corridors,
 switching to another bear when it gets clearly closer (by 2+ tiles, so she never dithers between
@@ -253,13 +281,48 @@ and positions on screen don't change, only the detail.
   round, bomb defeat, leaving), Time of Doom tile order and timing, and key rebinding with swaps.
 - `godot --headless -- --autotest [--mode=horror|custom] [--arena=N] [--crane] [--clown] [--duck] [--princess] [--win=N]`
   plays an all-AI match and prints standings (`--shots=DIR` with a display saves screenshots).
+- The feature test also covers proximity bombs (countdown, owner-proof, rival trigger, AI trap
+  zones), instant-only blast damage and single hits in chains, Kick as a power-up, conveyor limits,
+  the power-up distribution over 200 seeds (categories, caps, fair corners, rare placement, diseases
+  off, reproducibility) and simultaneous eliminations.
+- `godot --headless -- --balance --levels=hard,easy,easy,easy --matches=50 [--first=N] --seed=1000 --out=FILE.jsonl`
+  plays headless AI matches back to back (match *i*: seed + *i*, spawn rotation *i* % 4, arena
+  (*i* / 4) % 3) and writes one JSON line per match with every bear's rank, fluff, stolen fluff,
+  stuns, bombs, hits, self-hits, pickups and elimination time. Shard with `--first` to use every core.
+- `godot -- --perf [--stress] [--seconds=60] [--mode=horror]` samples frame, process and physics
+  times, draw calls, memory, objects and nodes during an all-Hard match (`--stress`: every hazard and
+  ability at once).
+- `--seed=N` reproduces an arena's blocks and power-ups; `--rotate=N` rotates the spawn corners.
 - `godot --headless -- --rank-test` drives the HUD ranking through ties, a single overtake, a full
   simultaneous reversal, rapid consecutive changes and gradual stealing, and checks that both card
   stacks show the right order with every card settled in its slot.
 
 ## Tuning
 All gameplay numbers are in `scripts/tuning.gd`: the fluff→mass curve, braking, bombs,
-curses and so on. Terrain physics are in `scripts/terrain.gd` and arena layouts are in
+curses, power-up distribution and the AI's decision-making (`AI_*`, one value per difficulty). Terrain physics are in `scripts/terrain.gd` and arena layouts are in
 `scripts/arena_maps.gd`.
 
 Smoke test (all-AI match, prints standings): `godot --headless --path . -- --autotest [--arena=1]`
+
+## AI difficulty and balance
+All three levels play by the same rules with the same inputs (no peeking at hidden power-ups, no
+superhuman reactions); they differ only in how they decide:
+
+| | Easy | Normal | Hard |
+|---|---|---|---|
+| Decides every | 0.4 s | 0.34 s | 0.24 s |
+| Notices it's in a blast line | 85% | 88% | 95% |
+| Safety margin before a blast | 0.35 s | 0.5 s | 0.6 s (+ chain reactions) |
+| Robs a stunned bear | 85%, for 2.6–3.8 s | 85% | always, whole stun |
+| Extras | careless bombs (5%), no kick / line | kicks, line bombs | predicts movement, traps rivals, avoids ice when heavy, counter-steers |
+
+Measured with `--balance` (150 s rounds, rotating spawns and all three arenas, fresh seeds):
+
+| Matchup | Matches | Result |
+|---|---|---|
+| 1 Hard vs 3 Easy (before tuning) | 120 | Hard wins 89.2% (95% CI 82–94%) |
+| **1 Hard vs 3 Easy (final)** | 200 | **Hard wins 53.0% (46–60%)** |
+| 1 Normal vs 3 Easy | 96 | Normal wins 43.8% (34–54%) |
+| 1 Hard vs 3 Normal | 48 | Hard wins 47.9% (35–62%); an even share is 25% |
+| 4 Hard (seat fairness) | 48 | seats win 19–29% |
+

@@ -209,7 +209,7 @@ func _draw() -> void:
 	if proximity and not triggered:
 		# sensor antenna instead of a burning fuse; blinks red once armed
 		var tip: Color = Color(1.0, 0.15, 0.15) if armed() and fmod(t * 2.0, 1.0) < 0.5 else owner_bear.color.lightened(0.2)
-		Powerup.draw_remote_antenna(self, Vector2(s * 0.24, -s * 0.98), s / 40.0, t, tip)
+		Powerup.draw_sensor_antenna(self, Vector2(s * 0.24, -s * 0.98), s / 40.0, t, tip)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		if arm_left > 0.0:
 			_draw_countdown(T)
