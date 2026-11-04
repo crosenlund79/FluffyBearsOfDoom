@@ -19,8 +19,8 @@ const ArenaScript = preload("res://scripts/arena.gd")
 
 enum { EASY, NORMAL, HARD }
 
-const THINK_TIME := [0.5, 0.26, 0.13]
-const NOTICE_DANGER := [0.6, 0.93, 1.0]
+const THINK_TIME := Tuning.AI_THINK_TIME
+const NOTICE_DANGER := Tuning.AI_NOTICE_DANGER
 const DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const FAR := 999.0
 const COMPENSATE := [0.15, 0.45, 0.62]  # chance to correctly counter-steer while cursed
@@ -118,7 +118,7 @@ func _think() -> void:
 		var reason := _bomb_reason(me)
 		if reason != "":
 			var esc := _escape_after_bomb(me, danger)
-			var careless: bool = level == EASY and rng.randf() < 0.12
+			var careless: bool = rng.randf() < Tuning.AI_CARELESS_BOMB[level]
 			if not esc.is_empty() or careless or fearless:
 				bear.want_bomb = true
 				path = esc
@@ -234,8 +234,8 @@ func _should_steal(victim, danger: Dictionary) -> bool:
 		return false
 	if victim != steal_victim:
 		steal_victim = victim
-		steal_budget = rng.randf_range(0.5, 2.5) if level == EASY else FAR
-		if level == EASY and rng.randf() < 0.3:
+		steal_budget = rng.randf_range(Tuning.AI_STEAL_BUDGET_EASY[0], Tuning.AI_STEAL_BUDGET_EASY[1]) if level == EASY else FAR
+		if rng.randf() < Tuning.AI_STEAL_SKIP[level]:
 			steal_budget = 0.0
 	if steal_budget <= 0.0:
 		return false
@@ -337,7 +337,7 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 			NORMAL:
 				score = 70.0
 			HARD:
-				score = 40.0 + b.fluff * 0.4
+				score = 40.0 + b.fluff * Tuning.AI_ROB_GREED[level]
 		score -= d * 4.0
 		if score > best_score:
 			best_score = score
