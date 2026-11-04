@@ -161,5 +161,5 @@ const AI_CARELESS_BOMB := [0.05, 0.0, 0.0]    # chance to drop a bomb with no wa
 const AI_STEAL_SKIP := [0.15, 0.0, 0.0]        # chance to ignore a robbable stunned bear
 const AI_STEAL_BUDGET_EASY := [2.6, 3.8]      # Easy steals for this many seconds, then wanders off
 const AI_DANGER_MARGIN := [0.35, 0.5, 0.6]    # seconds of slack kept before a blast when choosing a path
-const AI_EASY_ROB_CHANCE := 0.85            # Easy goes after a stunned bear this often
+const AI_ROB_CHANCE := [0.85, 0.85, 1.0]   # goes after a robbable stunned bear this often (decided per stun)
 const AI_ROB_GREED := [0.0, 0.0, 0.0]         # extra goal score per fluff of a stunned bear (Hard)

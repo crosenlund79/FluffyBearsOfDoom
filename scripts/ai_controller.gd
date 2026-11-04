@@ -333,13 +333,11 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 			continue
 		var score := 0.0
 		match level:
-			EASY:
+			EASY, NORMAL:
 				# decided once per stun (no dithering between robbing and wandering)
 				if not rob_choice.has(b) or rob_choice[b][0] != b.times_stunned:
-					rob_choice[b] = [b.times_stunned, rng.randf() < Tuning.AI_EASY_ROB_CHANCE]
+					rob_choice[b] = [b.times_stunned, rng.randf() < Tuning.AI_ROB_CHANCE[level]]
 				score = 45.0 if rob_choice[b][1] else -FAR
-			NORMAL:
-				score = 70.0
 			HARD:
 				score = 40.0 + b.fluff * Tuning.AI_ROB_GREED[level]
 		score -= d * 4.0
