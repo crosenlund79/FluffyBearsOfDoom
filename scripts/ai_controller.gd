@@ -44,6 +44,7 @@ var clock := 0.0
 var curse_t := 0.0
 var compensating := false
 var hesitate_t := 0.0
+var rob_choice := {}  # (Easy) bear -> [its stun count, whether we go rob it]
 var traps := {}      # Vector2i -> seconds until a rival's proximity bomb covering it is armed
 var bad_spots := {}  # Vector2i -> clock time until which bombing there is pointless
 
@@ -333,7 +334,10 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 		var score := 0.0
 		match level:
 			EASY:
-				score = 45.0 if rng.randf() < 0.5 else -FAR
+				# decided once per stun (no dithering between robbing and wandering)
+				if not rob_choice.has(b) or rob_choice[b][0] != b.times_stunned:
+					rob_choice[b] = [b.times_stunned, rng.randf() < Tuning.AI_EASY_ROB_CHANCE]
+				score = 45.0 if rob_choice[b][1] else -FAR
 			NORMAL:
 				score = 70.0
 			HARD:
