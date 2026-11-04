@@ -155,8 +155,8 @@ const PRINCESS_MAX_TIME := 30.0        # she always leaves after this long, atta
 
 # --- AI decision-making (per level: [Easy, Normal, Hard]) ---------------------
 # Same rules and inputs for everyone; levels differ only in how they decide.
-const AI_THINK_TIME := [0.4, 0.28, 0.24]      # seconds between decisions (Hard ~ a quick human)
-const AI_NOTICE_DANGER := [0.85, 0.93, 0.95]    # chance a decision notices it stands in a blast line
+const AI_THINK_TIME := [0.4, 0.34, 0.24]      # seconds between decisions (Hard ~ a quick human)
+const AI_NOTICE_DANGER := [0.85, 0.88, 0.95]    # chance a decision notices it stands in a blast line
 const AI_CARELESS_BOMB := [0.05, 0.0, 0.0]    # chance to drop a bomb with no way out
 const AI_STEAL_SKIP := [0.15, 0.0, 0.0]        # chance to ignore a robbable stunned bear
 const AI_STEAL_BUDGET_EASY := [2.6, 3.8]      # Easy steals for this many seconds, then wanders off
