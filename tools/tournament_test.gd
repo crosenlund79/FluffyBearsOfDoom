@@ -67,7 +67,7 @@ func _checks() -> void:
 		main.start_tournament(level, "Tester")
 		if runs >= 2:
 			# (test only, and invalid anyway) spare lives so a full ten-round run is exercised
-			main.tournament.lives = 12
+			main.tournament.lives = 40
 			main.tournament.save()
 		var guard := 0
 		while main.tournament.status == "active" and guard < 30:
