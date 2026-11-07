@@ -224,10 +224,10 @@ func show_final(run, rec: Dictionary) -> void:
 	view = "final"
 	_frame("Champion of the Tournament of Doom!")
 	var stage := Control.new()
-	stage.custom_minimum_size = Vector2(1100, 170)
+	stage.custom_minimum_size = Vector2(1100, 215)
 	body.add_child(stage)
 	var holder := Node2D.new()
-	holder.position = Vector2(550, 150)
+	holder.position = Vector2(550, 200)
 	holder.scale = Vector2(2.2, 2.2)
 	stage.add_child(holder)
 	var puppet := BearVisual.Puppet.new()
@@ -238,7 +238,7 @@ func show_final(run, rec: Dictionary) -> void:
 	vis.source = puppet
 	vis.tint = Mode.bear_color(Settings.HUMAN_COLORS[0])
 	holder.add_child(vis)
-	var wob := create_tween().set_loops()
+	var wob := holder.create_tween().set_loops()   # dies with the champion when the screen changes
 	wob.tween_callback(func(): vis.kick(0.3)).set_delay(0.8)
 	var head := _text("%s is the CHAMPION of the Tournament of Doom!" % run.player_name, 26, UiStyle.ROSE_DARK)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -281,6 +281,8 @@ func show_leaderboards(level: String) -> void:
 		var lv: String = Settings.LEVELS[i]
 		var b := _btn(Settings.LEVEL_LABELS[i] + (" ◆" if lv == level else ""), func(): show_leaderboards(lv), 150)
 		tabs.add_child(b)
+		if lv == level:
+			first_button = b   # focus stays on the board being shown
 	body.add_child(tabs)
 	body.add_child(_text("Only complete tournament wins at normal speed count. Each difficulty has its own boards (rules v%d)." % Tournament.RULES_VERSION, 15, UiStyle.INK_SOFT))
 	var boards: Dictionary = Tournament.boards(level)

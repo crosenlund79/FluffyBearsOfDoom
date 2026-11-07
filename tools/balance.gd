@@ -8,6 +8,7 @@ extends Node
 const AiController = preload("res://scripts/ai_controller.gd")
 const Maps = preload("res://scripts/arena_maps.gd")
 const LEVELS := {"easy": 0, "normal": 1, "hard": 2}
+const Personalities = preload("res://scripts/personalities.gd")
 
 var main
 
@@ -21,6 +22,7 @@ func run(m) -> void:
 	var round_index := 1
 	var scale := 16.0
 	var first := 0
+	var names: Array = []   # --names=all: the ten personalities, four per match, rotating
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--matches="):
 			matches = int(a.get_slice("=", 1))
@@ -34,6 +36,8 @@ func run(m) -> void:
 			round_index = int(a.get_slice("=", 1))
 		elif a.begins_with("--speed="):
 			scale = float(a.get_slice("=", 1))
+		elif a.begins_with("--names="):
+			names = Personalities.names()
 		elif a.begins_with("--first="):
 			first = int(a.get_slice("=", 1))   # match index to start at (for parallel shards)
 	Settings.human_count = 0
@@ -51,6 +55,17 @@ func run(m) -> void:
 		Settings.match_seed = base_seed + i
 		Settings.spawn_rotation = i % 4
 		Settings.arena_index = (i / 4) % Maps.MAPS.size()
+		if not names.is_empty():
+			# four different personalities per match; every one meets every other over time
+			var r := RandomNumberGenerator.new()
+			r.seed = base_seed + i
+			var pool := names.duplicate()
+			for k in range(pool.size() - 1, 0, -1):
+				var j := r.randi() % (k + 1)
+				var tmp = pool[k]
+				pool[k] = pool[j]
+				pool[j] = tmp
+			Settings.roster_override = pool.slice(0, 4).map(func(n): return Personalities.roster_entry(n, levels[0]))
 		main.start_game()
 		var g = main.current
 		for k in g.bears.size():
@@ -89,7 +104,7 @@ func _record(g, i: int, levels: Array) -> Dictionary:
 	for k in g.bears.size():
 		var b = g.bears[k]
 		bears.append({
-			"level": levels[k], "fluff": roundi(b.fluff), "rank": ranking.find(b) + 1,
+			"level": levels[k], "name": b.bear_name, "kicks": b.kicks_made, "fluff": roundi(b.fluff), "rank": ranking.find(b) + 1,
 			"stole": roundi(b.stolen_total), "stunned": b.times_stunned, "bombs": b.bombs_placed,
 			"hits": b.bomb_hits, "self_hits": b.self_hits, "pickups": b.pickups,
 			"out": b.eliminated, "out_at": snappedf(b.eliminated_at, 0.1),

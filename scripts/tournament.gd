@@ -104,7 +104,12 @@ func record_round(game, ranking: Array) -> void:
 		if b.is_human:
 			me = b
 	var place := ranking.find(me) + 1
-	var won := place == 1
+	# the normal victory rule: first outright. A tie for first ("It's a fluffy tie!")
+	# is not a win, unless it came from the instant-win threshold or being the last bear stuffed.
+	var alone: bool = game.bears.filter(func(b): return not b.eliminated).size() == 1
+	var instant: bool = Settings.rule("instant_win") > 0.0 and me.fluff >= Settings.rule("instant_win")
+	var tied: bool = ranking.size() > 1 and absf(ranking[1].fluff - me.fluff) < 0.5
+	var won: bool = place == 1 and (not tied or alone or instant)
 	var entry := {"round": round_index + 1, "attempt": attempts, "won": won, "place": place,
 		"time": game.active_time, "lost": me.fluff_lost, "gained": me.fluff_gained,
 		"fluff": roundi(me.fluff), "order": [], "winner": ranking[0].bear_name}

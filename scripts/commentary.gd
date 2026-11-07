@@ -131,12 +131,14 @@ func setup(g, with_feed: bool) -> void:
 		fp.add_child(feed_box)
 		var head2 := HBoxContainer.new()
 		head2.add_theme_constant_override("separation", 4)
-		head2.add_child(UiStyle.label("Events      Speed", 13, UiStyle.ROSE_DARK))
+		var ev := UiStyle.label("Events", 13, UiStyle.ROSE_DARK)
+		ev.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head2.add_child(ev)
 		for x in [1, 2, 4]:
 			var sb := Button.new()
 			sb.text = "%d×" % x
 			sb.focus_mode = Control.FOCUS_NONE
-			sb.custom_minimum_size = Vector2(34, 18)
+			sb.custom_minimum_size = Vector2(30, 18)
 			sb.add_theme_font_size_override("font_size", 12)
 			sb.pressed.connect(func(): set_speed(x))
 			head2.add_child(sb)
@@ -189,6 +191,7 @@ func _watch() -> void:
 		var got: float = b.stolen_total - tr["stolen"]
 		if got >= 25.0:
 			say("theft", 2, {"b": b, "n": roundi(got)})
+			_feed("%s steals %d" % [b.bear_name, roundi(got)])
 			tr["stolen"] = b.stolen_total
 		elif b.stealing == false:
 			tr["stolen"] = b.stolen_total
@@ -199,6 +202,7 @@ func _watch() -> void:
 		var lost: float = b.fluff_lost - tr["window"][0][1]
 		if lost >= 35.0:
 			say("big_loss", 2, {"b": b, "n": roundi(lost)})
+			_feed("%s loses %d" % [b.bear_name, roundi(lost)])
 			tr["window"] = [[_clock, b.fluff_lost]]
 		if b.eliminated and not tr["out"]:
 			tr["out"] = true
@@ -234,6 +238,8 @@ func _on_event(kind: String, data: Dictionary) -> void:
 			_feed("Chain x%d" % data.get("count", 2))
 		"multi_hit":
 			say("multi_hit", 3, {"o": data.get("owner"), "n": data.get("count", 2)})
+			var who = data.get("owner")
+			_feed("%s stuns %d" % [who.bear_name if who != null else "Blast", data.get("count", 2)])
 		"close_escape":
 			say("close_escape", 1, data)
 		"kick":

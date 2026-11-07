@@ -50,6 +50,7 @@ var bomb_hits := 0      # stats: other bears stunned by our bombs
 var self_hits := 0      # stats: times we stunned ourselves
 var bombs_placed := 0   # stats
 var pickups := 0        # stats: power-ups collected
+var kicks_made := 0     # stats: bombs kicked
 var eliminated_at := -1.0   # stats: seconds into the round
 var prox_charges := 0     # proximity bombs left (Proximity Bombs power-up)
 var has_line := false
@@ -609,6 +610,7 @@ func _sweep(axis: int, amount: float, allow_kick := true) -> bool:
 			if not kicked.is_moving():
 				kicked.kick(d)
 				if kicked.is_moving():
+					kicks_made += 1
 					game.event("kick", {"bear": self, "owner": kicked.owner_bear})
 	return hit
 
