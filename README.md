@@ -91,7 +91,8 @@ turns up in exactly three rounds, and the line-ups get nastier (by combination, 
 - **Rules:** 90-second rounds on a fixed arena rotation, instant win at 300 fluff, diseases on,
   whatever the menu says (so runs stay comparable). You pick the opponents' skill (Easy / Normal / Hard).
 - **Winning a round** uses the normal victory rule: most stuffing at the whistle, the instant-win
-  threshold, or the last bear with stuffing. Win to advance.
+  threshold, or the last bear with stuffing. Win to advance. A tie for first ("It's a fluffy
+  tie!") is not a win.
 - **Lives:** you have three. A lost round costs one and is replayed with a fresh layout; losing
   with no lives left ends the run (with a Retry button). Leaving a round, or the game closing
   during one, counts as losing it.
@@ -454,4 +455,25 @@ Measured with `--balance` (150 s rounds, rotating spawns and all three arenas, f
 | 1 Normal vs 3 Easy | 96 | Normal wins 43.8% (34–54%) |
 | 1 Hard vs 3 Normal | 48 | Hard wins 47.9% (35–62%); an even share is 25% |
 | 4 Hard (seat fairness) | 48 | seats win 19–29% |
+| 1 Hard vs 3 Easy, after the personalities were added (Oswald, Harald, Theodor) | 100 | Hard wins 55.0% (45–64%) |
+
+The ten personalities, four per match at Normal, 80 matches (`--balance --names=all`); per match:
+
+| Bear | Win % | Stolen | Bombs | Hits/bomb | Self-stuns | Power-ups | Kicks |
+|---|---|---|---|---|---|---|---|
+| Oswald | 37.5 | 87.9 | 46.3 | 0.048 | 1.12 | 4.7 | 1.0 |
+| Harald | 30.0 | 67.3 | 45.2 | 0.053 | 1.03 | 3.4 | 1.9 |
+| Knuckles | 26.5 | 68.6 | 41.5 | 0.059 | 1.47 | 4.5 | **3.6** |
+| Mabel | 25.7 | 71.5 | 43.4 | 0.055 | 0.86 | 4.2 | 1.7 |
+| Brunhilde | 25.0 | 60.8 | 42.1 | 0.053 | 1.22 | 3.9 | 1.1 |
+| Pip | 24.2 | 57.2 | 37.1 | 0.069 | 1.09 | **6.2** | 1.8 |
+| Vesper | 23.5 | 65.6 | 38.6 | 0.047 | 1.09 | 4.0 | 1.3 |
+| Grimble | 23.1 | 82.4 | **49.3** | 0.049 | 1.04 | 3.7 | 2.5 |
+| Theodor | 20.7 | 67.4 | **35.9** | 0.045 | 0.90 | 5.1 | 2.6 |
+| Balthazar | 12.9 | 53.5 | 46.6 | 0.044 | 1.35 | 4.2 | 1.8 |
+
+With ~30 matches each, win rates differ by less than their noise (except Oswald, the strongest);
+the styles show in kicks, power-ups and bombing. In the tournament itself an AI stand-in for the
+player (Hard, Easy opponents) lost its three lives after 5–8 rounds in three runs: winning ten
+rounds on three lives is a real challenge (`LIVES` in `scripts/tournament.gd`).
 
