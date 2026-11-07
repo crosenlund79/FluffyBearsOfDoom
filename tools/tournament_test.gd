@@ -203,11 +203,13 @@ func _play_round() -> void:
 				placed[bomb] = true
 				var o = bomb.owner_bear
 				# the pose plays on its bear and the bomb drops from its paws, without changing its fuse
-				var fuse_ok: bool = bomb.proximity or bomb.fuse > preload("res://scripts/tuning.gd").BOMB_FUSE - 0.2
+				# (a bomb dropped straight into a blast has its fuse cut at once: that's the chain, not the pose)
+				var fuse_ok: bool = bomb.proximity or bomb.fuse > preload("res://scripts/tuning.gd").BOMB_FUSE - 0.2 or g.flames.has(bomb.cell)
 				if o.visual.place_t > 0.0 and bomb.place_from != Vector2.ZERO and fuse_ok:
 					place_anim_ok += 1
 				elif bomb.t < 0.05:
 					place_anim_bad += 1
+					print("   placement check: owner %s place_t %.2f from %s fuse %.2f" % [o.bear_name, o.visual.place_t, bomb.place_from, bomb.fuse])
 	var c = g.get_node_or_null("Commentary")
 	if c != null:
 		commentary_lines += c.lines_said.size()
