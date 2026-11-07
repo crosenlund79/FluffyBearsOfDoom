@@ -65,6 +65,10 @@ func _checks() -> void:
 	while runs < 4 and won_run == null:
 		runs += 1
 		main.start_tournament(level, "Tester")
+		if runs >= 2:
+			# (test only, and invalid anyway) spare lives so a full ten-round run is exercised
+			main.tournament.lives = 12
+			main.tournament.save()
 		var guard := 0
 		while main.tournament.status == "active" and guard < 30:
 			guard += 1
@@ -81,7 +85,7 @@ func _checks() -> void:
 		if main.tournament.status == "won":
 			won_run = main.tournament
 		elif main.tournament.status == "failed":
-			_expect(main.tournament.lives == 0, "a failed run has no lives left and ends clearly")
+			_expect(main.tournament.lives == 0 and main.tournament.status == "failed", "a failed run has no lives left and ends clearly (Retry offered on the board)")
 	_expect(won_run != null, "a full 10-round tournament is completed (%d runs)" % runs)
 	_expect(max_bears == 4, "every match has exactly four bears")
 	var all: bool = Personalities.names().all(func(n): return seen.get(n, 0) >= 3)
