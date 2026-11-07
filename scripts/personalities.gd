@@ -23,7 +23,7 @@ const ROSTER := [
 		"w": {"aggro": 0.55, "caution": 0.35, "blocks": 0.85}},
 	{"name": "Mabel", "species": "bunny", "color": Color("e0a07a"), "threat": 5,
 		"blurb": "Stuffing thief. Smells a stunned bear a mile off.",
-		"w": {"greed": 1.8, "aggro": 0.8, "pickup": 0.8}},
+		"w": {"greed": 2.0, "aggro": 0.75, "pickup": 0.8, "blocks": 0.85}},
 	{"name": "Grimble", "species": "dino", "color": Color("7f9c88"), "threat": 5,
 		"blurb": "Trap specialist. Loves choke points and sticky floors.",
 		"w": {"trap": 1.0, "aggro": 1.1, "caution": 0.1}},

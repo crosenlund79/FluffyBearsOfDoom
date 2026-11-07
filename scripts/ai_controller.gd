@@ -298,7 +298,7 @@ func _bomb_reason(me: Vector2i) -> String:
 			return "opponent"
 		var near_d: int = absi(bc.x - me.x) + absi(bc.y - me.y)
 		# pressure bombers drop one whenever a rival is close, in line or not
-		if persona["aggro"] >= 1.5 and near_d <= 2 and rng.randf() < 0.35:
+		if persona["aggro"] >= 1.5 and near_d <= 3 and rng.randf() < 0.6:
 			return "opponent"
 		# trappers bomb rivals stuck on sticky or slippery floors next to the blast
 		if persona["trap"] > 0.0 and near_d <= 3 and arena.terrain_at(bc) in [Terrain.HONEY, Terrain.ICE]:
@@ -363,7 +363,8 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 		if not dist.has(c):
 			continue
 		var d: float = dist[c]
-		if d * tpt > b.stun_t + (0.6 if level == EASY else 0.2):
+		# thieves chase stunned bears from further away (they'd rather arrive late than not at all)
+		if d * tpt > b.stun_t + (0.6 if level == EASY else 0.2) + 1.2 * maxf(0.0, persona["greed"] - 1.0):
 			continue
 		var score := 0.0
 		match level:
