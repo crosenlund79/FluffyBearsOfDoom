@@ -423,6 +423,16 @@ the in-game window icon is the game's own either way. Settings and saves go to
   times, draw calls, memory, objects and nodes during an all-Hard match (`--stress`: every hazard and
   ability at once).
 - `--seed=N` reproduces an arena's blocks and power-ups; `--rotate=N` rotates the spawn corners.
+- `godot --headless -- --tournament-test` plays whole Tournaments of Doom at 8× through the real
+  screens (an AI stands in for you), simulating an application restart after every round, and
+  checks: rounds progress, four bears per match, all ten opponents appear, lives/failure/retry,
+  forfeits, the bomb-placement pose, commentary, both leaderboards (order, tie-break, top 10,
+  separate difficulties, personal bests), that accelerated or developer runs never qualify, and an
+  AI spectator match that runs on its own. Your own saves are backed up and restored.
+- `godot -- --shots-demo=DIR [--mode=horror]` screenshots the new screens, a 1× tournament round
+  and a spectator match (needs a display).
+- `godot --headless -- --balance --names=all --levels=normal,normal,normal,normal --matches=N`
+  pits the ten personalities against each other, four per match.
 - `godot --headless -- --rank-test` drives the HUD ranking through ties, a single overtake, a full
   simultaneous reversal, rapid consecutive changes and gradual stealing, and checks that both card
   stacks show the right order with every card settled in its slot.
