@@ -30,7 +30,10 @@ const BY_NAME := {"Player": "bear", "Player 1": "bear", "Oswald": "bunny", "Hara
 static func for_name(n: String) -> String:
 	if n == "Player 2":
 		return BY_NAME[Settings.AI_NAMES[Settings.sitting_out]]
-	return BY_NAME.get(n, "bear")
+	if BY_NAME.has(n):
+		return BY_NAME[n]
+	var p: Dictionary = preload("res://scripts/personalities.gd").find(n)   # the tournament roster
+	return p.get("species", "bear")
 
 
 ## The spec for a species. If its sheet (and every placeholder for it) is missing,

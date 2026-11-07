@@ -25,6 +25,7 @@ const DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const FAR := 999.0
 const COMPENSATE := [0.15, 0.45, 0.62]  # chance to correctly counter-steer while cursed
 const PowerupScript = preload("res://scripts/powerup.gd")
+const Personalities = preload("res://scripts/personalities.gd")
 
 var bear
 var game
@@ -45,6 +46,8 @@ var curse_t := 0.0
 var compensating := false
 var hesitate_t := 0.0
 var rob_choice := {}  # (Easy) bear -> [its stun count, whether we go rob it]
+var persona: Dictionary = {}   # personality weights (personalities.gd); neutral for unnamed bears
+var home := Vector2i.ZERO      # the start corner (territorial bears guard its quarter)
 var traps := {}      # Vector2i -> seconds until a rival's proximity bomb covering it is armed
 var bad_spots := {}  # Vector2i -> clock time until which bombing there is pointless
 
@@ -55,6 +58,8 @@ func _init(b, g, lvl: int) -> void:
 	arena = g.arena
 	level = lvl
 	rng.seed = g.rng.randi()   # follows the match seed
+	persona = Personalities.weights(b.bear_name)
+	home = b.cell()
 	think_t = rng.randf_range(0.2, 0.6)
 
 
@@ -82,7 +87,8 @@ func update(delta: float) -> void:
 
 func _think() -> void:
 	var me: Vector2i = bear.cell()
-	var danger: Dictionary = game.compute_danger(level, bear)
+	# strategists read chain reactions like a Hard bear (from what is on the board)
+	var danger: Dictionary = game.compute_danger(2 if persona["timing"] >= 1.0 else level, bear)
 	traps = game.trap_cells(bear)
 	var fearless: bool = level > EASY and bear.immortal_t > 2.5
 	if fearless:
@@ -90,7 +96,7 @@ func _think() -> void:
 		traps = {}
 
 	# 0. Kick a nearby bomb at a rival.
-	if bear.can_kick and level > EASY and _try_kick(me):
+	if bear.can_kick and (level > EASY or persona["kick"] > 0.0) and _try_kick(me):
 		return
 
 	# 1. Get out of blast lines.
@@ -114,12 +120,16 @@ func _think() -> void:
 		return
 	bear.want_steal = false
 
+	# 2b. A whim (the unpredictable ones): dash somewhere else for a moment.
+	if persona["erratic"] > 0.0 and rng.randf() < persona["erratic"] and _whim(me, danger):
+		return
+
 	# 3. Drop a bomb when it is worth it and we can get away.
 	if bear.can_place_bomb():
 		var reason := _bomb_reason(me)
 		if reason != "":
 			var esc := _escape_after_bomb(me, danger)
-			var careless: bool = rng.randf() < Tuning.AI_CARELESS_BOMB[level]
+			var careless: bool = rng.randf() < Tuning.AI_CARELESS_BOMB[level] + persona["blunder"]
 			if not esc.is_empty() or careless or fearless:
 				bear.want_bomb = true
 				path = esc
@@ -164,9 +174,11 @@ func _try_proximity(me: Vector2i, danger: Dictionary, fearless: bool) -> bool:
 			if near > 4 or near < 2:
 				return false
 		_:
-			# a chokepoint (few exits) on the way between us and a rival, not on top of them
-			if near > 6 or near < 2 or _exits(me) > 2:
-				return false
+			pass
+	if level == HARD or persona["trap"] > 0.0:
+		# a chokepoint (few exits) on the way between us and a rival, not on top of them
+		if near > 6 or near < 2 or _exits(me) > 2:
+			return false
 	var d2 := danger.duplicate()
 	for c in game.blast_cells(me, bear.bomb_range):
 		d2[c] = minf(d2.get(c, FAR), Tuning.PROX_ARM_TIME)
@@ -191,10 +203,19 @@ func _try_kick(me: Vector2i) -> bool:
 			continue
 		var c: Vector2i = n + d
 		for i in 9:
-			if arena.is_solid(c) or arena.bombs.has(c):
+			if arena.is_solid(c):
+				break
+			if arena.bombs.has(c):
+				# kick specialists slide bombs into other bombs next to rivals: a chain
+				if persona["kick"] > 0.0 and i > 0:
+					for b in game.bears:
+						if _targetable(b) and game.blast_cells(c, arena.bombs[c].blast_range).has(b.cell()):
+							path = [n]
+							goal = "kick"
+							return true
 				break
 			for b in game.bears:
-				if _targetable(b) and b.cell() == c and (level == HARD or rng.randf() < 0.5):
+				if _targetable(b) and b.cell() == c and (level == HARD or persona["kick"] > 0.0 or rng.randf() < 0.5):
 					path = [n]
 					goal = "kick"
 					return true
@@ -268,10 +289,23 @@ func _bomb_reason(me: Vector2i) -> String:
 			continue
 		var bc: Vector2i = b.cell()
 		if blast.has(bc):
-			if level == EASY and rng.randf() < 0.5:
+			if level == EASY and rng.randf() < 0.5 / persona["aggro"]:
 				continue
+			if persona["aggro"] < 1.0 and rng.randf() > persona["aggro"]:
+				continue   # the defensive ones hold their fire
+			if persona["patience"] > 0.0 and not _weak(b) and rng.randf() < 0.5 * persona["patience"]:
+				continue   # ...and the patient ones wait for a better moment
 			return "opponent"
-		if level == HARD:
+		var near_d: int = absi(bc.x - me.x) + absi(bc.y - me.y)
+		# pressure bombers drop one whenever a rival is close, in line or not
+		if persona["aggro"] >= 1.5 and near_d <= 2 and rng.randf() < 0.35:
+			return "opponent"
+		# trappers bomb rivals stuck on sticky or slippery floors next to the blast
+		if persona["trap"] > 0.0 and near_d <= 3 and arena.terrain_at(bc) in [Terrain.HONEY, Terrain.ICE]:
+			for dd in DIRS:
+				if blast.has(bc + dd):
+					return "trap"
+		if level == HARD or persona["timing"] + persona["trap"] >= 0.5:
 			var predicted: Vector2i = arena.world_to_cell(b.position + b.velocity * 0.6)
 			if blast.has(predicted):
 				return "opponent"
@@ -336,11 +370,11 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 			EASY, NORMAL:
 				# decided once per stun (no dithering between robbing and wandering)
 				if not rob_choice.has(b) or rob_choice[b][0] != b.times_stunned:
-					rob_choice[b] = [b.times_stunned, rng.randf() < Tuning.AI_ROB_CHANCE[level]]
-				score = 45.0 if rob_choice[b][1] else -FAR
+					rob_choice[b] = [b.times_stunned, rng.randf() < Tuning.AI_ROB_CHANCE[level] * persona["greed"]]
+				score = 45.0 * persona["greed"] if rob_choice[b][1] else -FAR
 			HARD:
-				score = 40.0 + b.fluff * Tuning.AI_ROB_GREED[level]
-		score -= d * 4.0
+				score = (40.0 + b.fluff * Tuning.AI_ROB_GREED[level]) * persona["greed"]
+		score -= d * 4.0 + _home_pen(c)
 		if score > best_score:
 			best_score = score
 			best_cell = c
@@ -350,7 +384,7 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 	if game.chair != null and is_instance_valid(game.chair) and game.chair.fluff > 1.0:
 		var cc: Vector2i = game.chair.cell
 		if dist.has(cc):
-			var cv: float = 40.0 + 0.5 * game.chair.fluff
+			var cv: float = (40.0 + 0.5 * game.chair.fluff) * persona["greed"]
 			if level == EASY:
 				cv = 30.0 if rng.randf() < 0.6 else -FAR
 			var score: float = cv - dist[cc] * 3.0
@@ -360,7 +394,7 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 				best_goal = "loot"
 
 	# Power-ups.
-	if level != EASY or rng.randf() < 0.4:
+	if level != EASY or rng.randf() < 0.4 * persona["pickup"]:
 		for c in game.powerups:
 			if not dist.has(c):
 				continue
@@ -383,7 +417,9 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 					value = 30.0 if bear.fluff_ratio() < 1.3 else 12.0
 				elif kind == PowerupScript.SPEED:
 					value = 30.0 + 10.0 * bear.fluff_ratio()
-			var score: float = value - dist[c] * 4.0
+			if kind == PowerupScript.KICK and persona["kick"] > 0.0 and not bear.can_kick:
+				value += 25.0   # a kicker without kick is incomplete
+			var score: float = value * persona["pickup"] - dist[c] * 4.0 - _home_pen(c)
 			if score > best_score:
 				best_score = score
 				best_cell = c
@@ -396,7 +432,7 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 		var blocks := _count_blocks(game.blast_cells(c, bear.bomb_range))
 		if blocks == 0:
 			continue
-		var score: float = 14.0 + 6.0 * blocks - dist[c] * 3.0
+		var score: float = (14.0 + 6.0 * blocks) * persona["blocks"] - dist[c] * 3.0 - _home_pen(c)
 		if c == goal_cell and goal == "block":
 			score += 4.0  # a little stubbornness avoids dithering
 		if score > best_score:
@@ -419,7 +455,14 @@ func _choose_goal(me: Vector2i, danger: Dictionary) -> void:
 				score = 16.0
 			HARD:
 				score = 10.0 + b.fluff * 0.1 - maxf(bear.fluff_ratio() - 2.5, 0.0) * 8.0
-		score -= dist[c] * 1.5
+		score *= persona["aggro"]
+		if persona["patience"] > 0.0:
+			score += (18.0 if _weak(b) else -10.0) * persona["patience"]
+		if persona["trap"] > 0.0 and arena.terrain_at(c) in [Terrain.HONEY, Terrain.ICE]:
+			score += 8.0 * persona["trap"]
+		if persona["home"] > 0.0 and _home_dist(c) <= 6:
+			score += 12.0 * persona["home"]   # an intruder in her quarter
+		score -= dist[c] * 1.5 + _home_pen(c)
 		if score > best_score:
 			best_score = score
 			best_cell = c
@@ -451,9 +494,9 @@ func _unsafe(c: Vector2i, arrival: float, danger: Dictionary) -> bool:
 	var t: float = danger[c]
 	match level:
 		EASY, NORMAL:
-			return t < arrival + Tuning.AI_DANGER_MARGIN[level]
+			return t < arrival + _margin()
 		_:
-			return t < arrival + Tuning.AI_DANGER_MARGIN[level] and t > arrival - 0.6 - Tuning.FLAME_TIME
+			return t < arrival + _margin() and t > arrival - 0.6 - Tuning.FLAME_TIME
 	return false
 
 
@@ -661,3 +704,39 @@ func _stop_point(dir: Vector2) -> Vector2:
 			break
 		last = path[i]
 	return arena.cell_center(last)
+
+
+# --- personality helpers -----------------------------------------------------------
+
+func _margin() -> float:
+	return maxf(0.1, Tuning.AI_DANGER_MARGIN[level] + persona["caution"])
+
+
+## A bear worth pouncing on: emptier than us, cursed, stunned or immobile.
+func _weak(b) -> bool:
+	return b.is_stunned() or b.fluff < bear.fluff * 0.8 or b.reverse_t > 0.0 or b.diarrhea_t > 0.0
+
+
+func _home_dist(c: Vector2i) -> int:
+	return absi(c.x - home.x) + absi(c.y - home.y)
+
+
+## Territorial bears dislike goals far from their own quarter.
+func _home_pen(c: Vector2i) -> float:
+	if persona["home"] <= 0.0:
+		return 0.0
+	return maxf(0.0, _home_dist(c) - 7.0) * 2.5 * persona["home"]
+
+
+## A whim: run to a random reachable spot nearby (never into danger).
+func _whim(me: Vector2i, danger: Dictionary) -> bool:
+	var search := _dijkstra(me, danger, 6.0)
+	var dist: Dictionary = search[0]
+	var options := dist.keys().filter(func(c): return c != me and not danger.has(c))
+	if options.is_empty():
+		return false
+	var c: Vector2i = options[rng.randi() % options.size()]
+	goal = "whim"
+	goal_cell = c
+	path = _reconstruct(search[1], me, c)
+	return not path.is_empty()

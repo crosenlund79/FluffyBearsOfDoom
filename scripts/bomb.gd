@@ -19,6 +19,8 @@ var rubber := false
 var proximity := false  # arms, then waits for a rival to come close
 var arm_left := 0.0     # seconds until a proximity bomb is armed
 var triggered := false  # a rival tripped it: the short trigger fuse is burning
+var place_from := Vector2.ZERO   # where it left the bear's paws (offset from its cell)
+const PLACE_TIME := 0.12
 var pass_through: Array = []  # bears overlapping it may walk off it
 var move_dir := Vector2i.ZERO
 var bounces := 0
@@ -188,12 +190,15 @@ func _draw() -> void:
 		sy *= 0.9 if horiz else 1.12
 	draw_set_transform(Vector2(0, T * 0.32), 0.0, Vector2(1.0, 0.35))
 	draw_circle(Vector2.ZERO, s * 0.4, Color(0.15, 0.1, 0.08, 0.38))
+	# just placed: it travels from the bear's paws down onto its tile (visual only)
+	var pk := clampf(t / PLACE_TIME, 0.0, 1.0)
+	var drop := place_from * (1.0 - pk * pk) if pk < 1.0 and not is_moving() else Vector2.ZERO
 	# owner ring on the floor
 	var own: Color = owner_bear.color
 	draw_arc(Vector2.ZERO, s * 0.5, 0.0, TAU, 28, Color(own.r, own.g, own.b, 0.95), 4.0)
 	draw_arc(Vector2.ZERO, s * 0.5, 0.0, TAU, 28, Color(own.darkened(0.5), 0.6), 1.5)
 	var twitch := sin(t * 47.0) * 0.08 * final
-	draw_set_transform(Vector2(0, T * 0.3 - hop), twitch + (sin(t * 12.0) * 0.1 if is_moving() else 0.0), Vector2(sx, sy))
+	draw_set_transform(Vector2(0, T * 0.3 - hop) + drop, twitch + (sin(t * 12.0) * 0.1 if is_moving() else 0.0), Vector2(sx, sy))
 	var col := tint
 	if fuse < 0.8 and fmod(t * 10.0, 1.0) < 0.5:
 		col = tint.lerp(Color(1.0, 0.82, 0.82), 0.6)

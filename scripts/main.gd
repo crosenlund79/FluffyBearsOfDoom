@@ -3,6 +3,15 @@ extends Node
 
 const Menu = preload("res://scripts/menu.gd")
 const Game = preload("res://scripts/game.gd")
+const Tournament = preload("res://scripts/tournament.gd")
+const TournamentScreen = preload("res://scripts/tournament_screen.gd")
+const Commentary = preload("res://scripts/commentary.gd")
+const Personalities = preload("res://scripts/personalities.gd")
+const AiController = preload("res://scripts/ai_controller.gd")
+const DEV_FLAGS := ["--seed=", "--rotate=", "--win=", "--feature-test", "--autotest", "--balance", "--perf",
+	"--rank-test", "--tournament-test", "--fat", "--abilities", "--shots-demo="]
+
+var tournament = null   # the Tournament run being played (tournament.gd)
 
 var current: Node
 
@@ -13,6 +22,10 @@ const DESIGN := Vector2(1280, 720)
 
 func _ready() -> void:
 	get_viewport().size_changed.connect(_fit_view)
+	for a in OS.get_cmdline_user_args():
+		for f in DEV_FLAGS:
+			if a.begins_with(f):
+				Settings.dev_flags = true   # tests and cheats never reach the leaderboards
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--mode="):
 			Settings.set_mode(a.get_slice("=", 1))  # dev/test override, not saved
@@ -52,6 +65,18 @@ func _ready() -> void:
 		var bal = load("res://tools/balance.gd").new()
 		add_child(bal)
 		bal.run.call_deferred(self)
+		return
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--shots-demo="):
+			var sd = load("res://tools/shots.gd").new()
+			add_child(sd)
+			sd.run.call_deferred(self, a.get_slice("=", 1))
+			return
+	# `godot --headless -- --tournament-test` plays whole tournaments at 8x and checks the leaderboards.
+	if "--tournament-test" in OS.get_cmdline_user_args():
+		var tt = load("res://tools/tournament_test.gd").new()
+		add_child(tt)
+		tt.run.call_deferred(self)
 		return
 	# `godot -- --perf [--seconds=N] [--stress]` samples frame times, draw calls and memory.
 	if "--perf" in OS.get_cmdline_user_args():
@@ -165,13 +190,33 @@ func _autotest() -> void:
 
 
 func show_menu() -> void:
+	_plain_rules()
 	var m := Menu.new()
 	_swap(m)
 	m.start_requested.connect(start_game)
 	m.mode_changed.connect(show_menu)
+	m.tournament_requested.connect(show_tournament_hub)
+	m.spectate_requested.connect(show_spectate)
+	m.leaderboards_requested.connect(func(): _screen().show_leaderboards("normal"))
+
+
+## Back to the menu's own set-up and normal speed.
+func _plain_rules() -> void:
+	Settings.roster_override = []
+	Settings.match_rules = {}
+	set_speed(1.0)
+
+
+static func set_speed(x: float) -> void:
+	Engine.time_scale = x
+	Engine.physics_ticks_per_second = int(60 * x)   # same 1/60 s steps at any speed
+	Engine.max_physics_steps_per_frame = maxi(8, int(8 * x))
 
 
 func start_game() -> void:
+	if not "--balance" in OS.get_cmdline_user_args() and not "--autotest" in OS.get_cmdline_user_args() and not "--perf" in OS.get_cmdline_user_args():
+		Settings.roster_override = []
+		Settings.match_rules = {}
 	var g := Game.new()
 	_swap(g)
 	g.quit_to_menu.connect(show_menu)
@@ -206,3 +251,146 @@ func _fit_view() -> void:
 		layer.offset = off
 	if current is CanvasItem:
 		current.queue_redraw()
+
+
+func _screen() -> Control:
+	_plain_rules()
+	var sc := TournamentScreen.new(self)
+	_swap(sc)
+	return sc
+
+
+# --- Tournament of Doom ---------------------------------------------------------------------
+
+func show_tournament_hub() -> void:
+	_screen().show_hub()
+
+
+func show_tournament_board() -> void:
+	_screen().show_board(tournament)
+
+
+func start_tournament(level: String, player: String) -> void:
+	tournament = Tournament.new_run(level, player)
+	tournament.save()
+	play_tournament_round()
+
+
+func continue_tournament(run) -> void:
+	tournament = run
+	play_tournament_round()
+
+
+func play_tournament_round() -> void:
+	set_speed(1.0)
+	tournament.prepare_round()
+	var g := Game.new()
+	g.session = TournamentSession.new(self, tournament)
+	_swap(g)
+	g.quit_to_menu.connect(show_menu)
+	_add_commentary(g, false)
+
+
+func submit_result(run) -> Dictionary:
+	var rec: Dictionary = run.submit()
+	Tournament.clear_saved()
+	return rec
+
+
+func _add_commentary(g, feed: bool) -> void:
+	var c := Commentary.new()
+	c.name = "Commentary"
+	g.add_child(c)
+	c.setup(g, feed)
+
+
+class TournamentSession:
+	var main
+	var run
+	var spectator := false
+
+	func _init(m, r) -> void:
+		main = m
+		run = r
+
+	func on_match_end(game, ranking: Array, _instant) -> void:
+		run.record_round(game, ranking)
+
+	func results_note() -> String:
+		var h: Dictionary = run.history[-1]
+		match run.status:
+			"won":
+				return "Round 10 won: you are the CHAMPION!"
+			"failed":
+				return "Round %d lost, and that was your last life. Tournament over." % h["round"]
+		if h["won"]:
+			return "Round %d won! On to round %d of 10." % [h["round"], run.round_index + 1]
+		return "Round %d lost: %d %s left. Try again!" % [h["round"], run.lives, "life" if run.lives == 1 else "lives"]
+
+	func results_buttons() -> Array:
+		return [["Continue", main.show_tournament_board]]
+
+	func pause_buttons() -> Array:
+		return [["Forfeit round", func():
+			run.forfeit_round()
+			main.show_tournament_board()]]
+
+
+# --- AI spectator ---------------------------------------------------------------------------
+
+var spectate_cfg := {}
+
+
+func show_spectate(cfg: Dictionary = {}) -> void:
+	_screen().show_spectate(cfg if not cfg.is_empty() else spectate_cfg)
+
+
+func start_spectator(cfg: Dictionary) -> void:
+	spectate_cfg = cfg
+	var pool: Array = Personalities.names()
+	pool.shuffle()
+	var chosen := []
+	for p in cfg["picks"]:
+		if p != "Random" and not p in chosen:
+			chosen.append(p)
+		else:
+			chosen.append("")
+	for i in chosen.size():
+		if chosen[i] == "":
+			for n in pool:
+				if not n in chosen:
+					chosen[i] = n
+					break
+	Settings.roster_override = chosen.map(func(n): return Personalities.roster_entry(n, cfg["level"]))
+	Settings.match_rules = {"human_count": 0}
+	var keep_speed := Engine.time_scale
+	var g := Game.new()
+	g.session = SpectatorSession.new(self, cfg)
+	_swap(g)
+	g.quit_to_menu.connect(show_menu)
+	_add_commentary(g, true)
+	set_speed(keep_speed)
+	g.start_round.call_deferred()   # nobody to press Space
+
+
+class SpectatorSession:
+	var main
+	var cfg: Dictionary
+	var spectator := true
+
+	func _init(m, c: Dictionary) -> void:
+		main = m
+		cfg = c
+
+	func on_match_end(_game, _ranking: Array, _instant) -> void:
+		pass   # spectator matches never touch the tournament or its leaderboards
+
+	func results_note() -> String:
+		return "An all-AI match. Nobody's records were harmed."
+
+	func results_buttons() -> Array:
+		return [["Watch another", func(): main.start_spectator(cfg)], ["Change line-up", func(): main.show_spectate(cfg)]]
+
+	func pause_buttons() -> Array:
+		return [["Change line-up", func(): main.show_spectate(cfg)]]
+

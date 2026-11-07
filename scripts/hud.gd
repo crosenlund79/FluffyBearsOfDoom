@@ -61,7 +61,7 @@ func setup(g) -> void:
 	timer_label.size = Vector2(200, 42)
 	timer_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	root.add_child(timer_label)
-	var arena_name := UiStyle.label(Maps.MAPS[Settings.arena_index]["name"], 14, UiStyle.INK_SOFT)
+	var arena_name := UiStyle.label(Maps.MAPS[Settings.rule("arena_index")]["name"], 14, UiStyle.INK_SOFT)
 	arena_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	arena_name.position = Vector2(ARENA_RECT.end.x - 230, 4)
 	arena_name.size = Vector2(230, 24)
@@ -351,8 +351,15 @@ func show_pause(paused: bool) -> void:
 		var ap = AudioPanel.new()
 		ap.position = ARENA_RECT.get_center() - Vector2(220, 245)
 		root.add_child(ap)))
-	v.add_child(_button("Restart match", game.request_restart))
-	v.add_child(_button("Back to menu", game.request_menu))
+	if game.session != null:
+		for e in game.session.pause_buttons():
+			v.add_child(_button(e[0], e[1]))
+	else:
+		v.add_child(_button("Restart match", game.request_restart))
+	v.add_child(_button("Back to menu", func():
+		if game.session != null and game.session.has_method("pause_buttons") and not game.session.spectator:
+			game.session.run.forfeit_round()   # leaving a tournament round loses it
+		game.request_menu()))
 	resume.grab_focus()
 
 
@@ -372,7 +379,7 @@ func show_results(ranking: Array, instant_winner = null) -> void:
 	results_panel.add_child(v)
 	var winner = ranking[0]
 	var tie: bool = instant_winner == null and ranking.size() > 1 and absf(ranking[1].fluff - winner.fluff) < 0.5
-	var title := UiStyle.label("Instant win: %d fluff reached!" % int(Settings.instant_win) if instant_winner != null else "Time's up!", 24, UiStyle.INK_SOFT)
+	var title := UiStyle.label("Instant win: %d fluff reached!" % int(Settings.rule("instant_win")) if instant_winner != null else "Time's up!", 24, UiStyle.INK_SOFT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(title)
 	var head_text: String = "It's a fluffy tie!" if tie else "%s is the fluffiest!" % winner.bear_name
@@ -426,8 +433,20 @@ func show_results(ranking: Array, instant_winner = null) -> void:
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 16)
-	var again := _button("Rematch", game.request_restart)
-	buttons.add_child(again)
+	var again: Button
+	if game.session != null:
+		var note := UiStyle.label(game.session.results_note(), 20, UiStyle.ROSE_DARK)
+		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		v.add_child(note)
+		for e in game.session.results_buttons():
+			var b := _button(e[0], e[1])
+			buttons.add_child(b)
+			if again == null:
+				again = b
+	else:
+		again = _button("Rematch", game.request_restart)
+		buttons.add_child(again)
 	buttons.add_child(_button("Menu", game.request_menu))
 	v.add_child(buttons)
 	again.grab_focus()

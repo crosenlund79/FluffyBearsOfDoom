@@ -8,7 +8,7 @@ var now_playing: Label
 
 
 func _ready() -> void:
-	size = Vector2(440, 570)
+	size = Vector2(440, 640)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	add_child(v)
@@ -78,6 +78,28 @@ func _ready() -> void:
 		Settings.save())
 	iw.add_child(iwo)
 	v.add_child(iw)
+	var com := CheckBox.new()
+	com.text = "Commentary (tournament and Watch AI)"
+	com.button_pressed = Settings.commentary
+	com.toggled.connect(func(on):
+		Settings.commentary = on
+		Settings.save())
+	v.add_child(com)
+	var lt := HBoxContainer.new()
+	lt.add_theme_constant_override("separation", 12)
+	var ltl := UiStyle.label("Lighting", 18)
+	ltl.custom_minimum_size = Vector2(140, 0)
+	lt.add_child(ltl)
+	var lto := OptionButton.new()
+	var lchoices := ["high", "low", "off"]
+	for c in ["High", "Low (bombs and blasts)", "Off"]:
+		lto.add_item(c)
+	lto.selected = maxi(lchoices.find(Settings.lighting), 0)
+	lto.item_selected.connect(func(idx):
+		Settings.lighting = lchoices[idx]
+		Settings.save())
+	lt.add_child(lto)
+	v.add_child(lt)
 	var keys := Button.new()
 	keys.text = "Controls (remap keys)..."
 	keys.pressed.connect(func():

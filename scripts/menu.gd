@@ -3,6 +3,9 @@ extends Control
 
 signal start_requested
 signal mode_changed
+signal tournament_requested
+signal spectate_requested
+signal leaderboards_requested
 
 const UiStyle = preload("res://scripts/ui_style.gd")
 const StitchPanel = preload("res://scripts/stitch_panel.gd")
@@ -197,6 +200,16 @@ func _ready() -> void:
 		btn.pressed.connect(b[1])
 		brow.add_child(btn)
 	v.add_child(brow)
+	var tour_row := HBoxContainer.new()
+	tour_row.add_theme_constant_override("separation", 10)
+	tour_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	for b in [["Tournament", func(): tournament_requested.emit()], ["Watch AI", func(): spectate_requested.emit()], ["Leaderboards", func(): leaderboards_requested.emit()]]:
+		var btn := Button.new()
+		btn.text = b[0]
+		btn.custom_minimum_size = Vector2(140, 40)
+		btn.pressed.connect(b[1])
+		tour_row.add_child(btn)
+	v.add_child(tour_row)
 
 	var np := NowPlaying.new()
 	np.position = Vector2(54, 664)

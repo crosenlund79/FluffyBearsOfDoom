@@ -76,6 +76,85 @@ stuffing (the survivor wins; among equals, whoever lasted longer ranks higher), 
 reaches the instant-win threshold (default 300; Settings → *Instant win at*, or `INSTANT_WIN_FLUFF`
 in `scripts/tuning.gd`; *Off* plays to the timer).
 
+## Tournament of Doom
+**Menu → Tournament.** Ten rounds of you against three of the ten named AI bears. Each opponent
+turns up in exactly three rounds, and the line-ups get nastier (by combination, not by stats):
+
+| Round | Opponents | Round | Opponents |
+|---|---|---|---|
+| 1 | Oswald, Theodor, Pip | 6 | Knuckles, Grimble, Brunhilde |
+| 2 | Theodor, Pip, Brunhilde | 7 | Harald, Vesper, Mabel |
+| 3 | Oswald, Mabel, Pip | 8 | Knuckles, Balthazar, Grimble |
+| 4 | Theodor, Grimble, Brunhilde | 9 | Harald, Vesper, Balthazar |
+| 5 | Oswald, Harald, Mabel | 10 | Knuckles, Balthazar, Vesper |
+
+- **Rules:** 90-second rounds on a fixed arena rotation, instant win at 300 fluff, diseases on,
+  whatever the menu says (so runs stay comparable). You pick the opponents' skill (Easy / Normal / Hard).
+- **Winning a round** uses the normal victory rule: most stuffing at the whistle, the instant-win
+  threshold, or the last bear with stuffing. Win to advance.
+- **Lives:** you have three. A lost round costs one and is replayed with a fresh layout; losing
+  with no lives left ends the run (with a Retry button). Leaving a round, or the game closing
+  during one, counts as losing it.
+- **Between rounds:** round result (winner, rankings, everyone's stuffing gained/lost, duration),
+  your lives and running totals, standings (4/2/1/0 points per round), the next opponents and a
+  ten-round progression board.
+- **Autosave** after every round (`user://tournament.cfg`): *Continue* on the Tournament screen.
+- **Finishing** shows the champion screen: total time, stuffing collected and lost, personal bests
+  and any new leaderboard places.
+
+### The ten opponents
+They reuse the four bear rigs with their own colour, and all share one tactical AI (bombs, blast
+lines, escapes, stuns, stealing, power-ups, kicked and proximity bombs, sticky/slippery floors and
+every hazard). Personality is a set of weights in `scripts/personalities.gd`, never extra speed or
+hidden information:
+
+| Bear | Plays like |
+|---|---|
+| Oswald | balanced and a little cautious; takes the chances he's given |
+| Harald | pressure bomber: bombs whenever a rival is close, takes risks, blunders now and then |
+| Theodor | defensive: big safety margins, holds his fire |
+| Mabel | thief: goes for every stunned bear and every chair |
+| Grimble | trapper: choke-point and proximity traps, bombs bears stuck on honey or ice |
+| Balthazar | strategist: reads chain reactions, predicts where rivals run, traps them |
+| Pip | power-up magpie with sudden whims; careless |
+| Brunhilde | territorial: stays in her quarter and attacks intruders |
+| Knuckles | kicker: hunts the Kick power-up, kicks bombs at rivals and into other bombs (chains) |
+| Vesper | patient hunter: waits, then strikes at weakened, cursed or stunned bears |
+
+### Leaderboards
+**Menu → Leaderboards** (or from the Tournament screen). Two boards per difficulty, top 10 each,
+stored in `user://leaderboards.cfg`:
+
+- **Fastest Tournament:** total *active* gameplay time over every round you played (lost rounds
+  included); pre-round dances, pauses, results and menus don't count. Shown as m:ss.cc.
+- **Least Stuffing Lost:** every bit of stuffing taken from you (stolen, blown out, spilled) over
+  every round you played. Each loss is counted once, when it happens; stuffing you win back later
+  doesn't erase it. Ties go to the faster time.
+
+Each entry has your name (editable on the Tournament screen), date, time, stuffing lost and
+collected, result, difficulty, theme and rules version. Only complete tournament wins at normal
+speed qualify: any sped-up clock or developer/test switch (`--seed`, `--win`, the test modes)
+marks the run invalid. Difficulties and rule versions never share a board.
+
+## Watch AI (spectator mode)
+**Menu → Watch AI.** Pick four opponents (or Random) and their skill; the match starts by itself.
+Rank cards show names, places and stuffing; an event feed (bottom right) logs the big moments;
+speed 1× / 2× / 4× with the buttons or the keys 1, 2, 4. The standings appear at the end with
+*Watch another* / *Change line-up*. Spectator matches never touch tournaments or leaderboards.
+
+## Commentary, bomb placement and lighting
+- **Commentary** (tournament and Watch AI; Settings → Commentary): short reactive lines in a panel
+  under the left card stack, about chain reactions, close escapes, theft, big losses, kicks,
+  power-up hoards, self-stuns, lead changes, comebacks, eliminations, the last bear standing, the
+  hazards and the winner, plus a word on each bear's style in quiet moments. Big moments come
+  first; minor ones wait for cooldowns and lines aren't repeated.
+- **Placing a bomb** is now visible: the bear dips, leans and puts its paws down for 0.14 s while
+  the bomb drops from its paws onto the tile (0.12 s). Purely visual: no delay, fuse unchanged.
+- **Lighting** (Settings → Lighting: High / Low / Off): a soft ambient tone, a glow on every bomb
+  (pulsing faster as its fuse runs out, red on an armed proximity bomb), a brief flash from each
+  explosion, and in High warm lamps (the arena corners in Normal, flickering pumpkins with the odd
+  brown-out in Horror). Custom keeps the light neutral so custom art keeps its colours.
+
 ## Time of Doom: the closing arena
 From 60% of the round the arena closes in **one tile at a time**, walking clockwise around the
 outermost playable ring, then the next ring in: five rings (180 tiles), the last one shut at 97% of

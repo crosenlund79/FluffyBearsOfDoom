@@ -241,6 +241,21 @@ func bump(axis: int, impact: float, dir: float) -> void:
 	ear_wob_v += dir * 12.0 * k
 
 
+## Bomb placement: a quick dip, lean and paws-down (about 0.14 s). Purely visual:
+## the bear keeps moving, and repeated placements simply restart it.
+const PLACE_TIME := 0.14
+var place_t := 0.0
+
+func place_bomb() -> void:
+	place_t = PLACE_TIME
+	squash_v += 3.5
+
+
+## 0 -> 1 -> 0 over the placement pose.
+func _place_k() -> float:
+	return sin(clampf(1.0 - place_t / PLACE_TIME, 0.0, 1.0) * PI) if place_t > 0.0 else 0.0
+
+
 func kick(amount: float) -> void:
 	squash_v += amount * 10.0
 	belly_v.y += amount * 120.0
@@ -289,6 +304,7 @@ func _spring(x: float, v: float, target: float, k: float, zeta: float, dt: float
 
 
 func _process(delta: float) -> void:
+	place_t = maxf(0.0, place_t - delta)
 	if source == null:
 		return
 	if Settings.bear_outlines != _outlined:
@@ -373,7 +389,8 @@ func _process(delta: float) -> void:
 	var bsx := 0.62 + 0.38 * pow(gb, 0.9)
 	var bsy := (0.68 + 0.32 * pow(gb, 0.75)) * (1.0 - 0.22 * sag)
 	bsx = lerpf(bsx, 0.8, sag * 0.6)  # an empty bear flattens like a pillowcase
-	var s := squash + breathe
+	var pk := _place_k()
+	var s := squash + breathe + 0.13 * pk   # crouch to set the bomb down
 	if stunned:
 		s += 0.08 + 0.05 * minf(g, 4.0)  # a big bear collapses into a heap
 	var sx := bsx * (1.0 + s)
@@ -425,6 +442,8 @@ func _process(delta: float) -> void:
 			rot = steal_dir.angle() - PI * 0.5 + sin(t * 16.0 + i * 1.7) * 0.35
 		elif stunned:
 			rot = -side * (1.2 + sin(t * 3.0 + i) * 0.1)
+		elif pk > 0.0:
+			rot = lerpf(rot, -side * 0.05, pk)   # both paws down, setting it on the floor
 		arms[i].rotation = rot
 		arms[i].scale = Vector2(1.0, ARM_LENGTH) * unit * (0.85 + 0.1 * minf(g, 4.0))   # short, stubby arms
 
@@ -516,8 +535,9 @@ func _process(delta: float) -> void:
 	_update_accessories(body_hw, body_hh, body_y, sx, s, moving, stunned)
 
 	# Whole rig: lean + stun flop, pivoting at the feet. Hop on bouncy floors.
-	rotation = lean + flop + taunt_rot
-	position = Vector2(-flop * 10.0, 14.0 - hop) + taunt_off
+	var pf: Vector2 = source.facing
+	rotation = lean + flop + taunt_rot + pk * 0.16 * (signf(pf.x) if absf(pf.x) > 0.0 else 1.0)
+	position = Vector2(-flop * 10.0, 14.0 - hop + 3.0 * pk) + taunt_off
 	shadow_w = body_hw * 1.15 + 4.0
 	modulate.a = 1.0
 	if dead:   # empty, flat and faded: unmistakably out

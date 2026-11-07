@@ -124,7 +124,7 @@ func _draw() -> void:
 	if bear.is_human:
 		var hc: Color = bear.color.darkened(0.15)
 		draw_rect(r.grow(2.0), hc, false, 5.0)
-		var tag: String = "YOU" if Settings.human_count <= 1 else ("P1" if bear.bear_name.ends_with("1") else "P2")
+		var tag: String = "YOU" if Settings.rule("human_count") <= 1 else ("P1" if bear.bear_name.ends_with("1") else "P2")
 		var tw := 44.0
 		var tab := Rect2(SIZE.x * 0.5 - tw * 0.5, -13, tw, 16)
 		draw_rect(tab, hc)
@@ -165,7 +165,7 @@ func _draw() -> void:
 	draw_string(font, Vector2(0, 126), str(score), HORIZONTAL_ALIGNMENT_CENTER, SIZE.x, 34,
 		UiStyle.ROSE_DARK if blink else UiStyle.INK)
 	# small fluff bar, towards the instant-win line when that's on
-	var goal: float = Settings.instant_win if Settings.instant_win > 0.0 else Tuning.START_FLUFF * 4.0
+	var goal: float = Settings.rule("instant_win") if Settings.rule("instant_win") > 0.0 else Tuning.START_FLUFF * 4.0
 	var bar := Rect2(14, 133, SIZE.x - 28, 8)
 	draw_rect(bar, UiStyle.BAR)
 	draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(bear.fluff / goal, 0.0, 1.0), bar.size.y)), bear.color.darkened(0.08))

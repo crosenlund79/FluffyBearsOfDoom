@@ -4,6 +4,10 @@ extends Node2D
 
 signal quit_to_menu
 signal restart_requested
+## Gameplay moments for commentary, the spectator feed and the tournament:
+## kind = "chain", "close_escape", "kick", "multi_hit", "self_hit", "princess",
+## "clown", "duck", "shuffle", "doom" (data: bear / owner / count ...).
+signal game_event(kind: String, data: Dictionary)
 
 const Tuning = preload("res://scripts/tuning.gd")
 const Terrain = preload("res://scripts/terrain.gd")
@@ -45,6 +49,12 @@ var time_left := 150.0
 var countdown := 3.0
 var rng := RandomNumberGenerator.new()
 var match_seed := 0
+var session = null          # tournament / spectator session (main.gd), or null for an ordinary match
+var ambient := Color.WHITE   # lighting's ambient tone (lighting.gd)
+var lighting
+var final_order: Array = []   # the result once the round is over
+var active_time := 0.0      # seconds actually played this round (not the dance, pauses or the results)
+var speed_tampered := false # the clock was sped up or a developer switch used: no leaderboard records
 var pu_plan
 var reserve_drops: Array = []   # [{"at": seconds into the round, "kind": k}]
 
@@ -96,17 +106,17 @@ func _ready() -> void:
 	Settings.apply_input_bindings()
 	fx_tex = Assets.tex("effects/effects")
 	fluff_tex = Assets.tex("objects/fluff")
-	time_left = Tuning.ROUND_TIMES[Settings.round_time_index]
+	time_left = Tuning.ROUND_TIMES[Settings.rule("round_time_index")]
 	round_duration = time_left
 
 	arena = ArenaScript.new()
 	arena.position = ARENA_ORIGIN
 	arena.scale = Vector2.ONE * Tuning.ARENA_SCALE
 	add_child(arena)
-	arena.setup(Maps.MAPS[Settings.arena_index], rng)
+	arena.setup(Maps.MAPS[Settings.rule("arena_index")], rng)
 	# seeded, controlled power-up distribution (see powerup_plan.gd)
 	pu_plan = PowerupPlan.new()
-	pu_plan.build(rng, arena.block_cells(), _spawn_cells(), Settings.diseases)
+	pu_plan.build(rng, arena.block_cells(), _spawn_cells(), Settings.rule("diseases"))
 	arena.hidden_powerups = pu_plan.hidden
 	_schedule_reserve()
 
@@ -145,7 +155,7 @@ func _ready() -> void:
 		if r["controller"] == "human":
 			b.is_human = true
 			b.controller = HumanController.new(b, r["schemes"])
-			b.ctrl_label = "you" if Settings.human_count == 1 else ("WASD" if r["schemes"][0] == "p1" else "Arrows")
+			b.ctrl_label = "you" if Settings.rule("human_count") == 1 else ("WASD" if r["schemes"][0] == "p1" else "Arrows")
 			b.ctrl_label = Species.label(b.species) + " · " + b.ctrl_label
 		else:
 			b.controller = AiController.new(b, self, Settings.LEVELS.find(r["controller"]))
@@ -153,6 +163,9 @@ func _ready() -> void:
 		bears.append(b)
 	Music.play_context("gameplay")
 	_setup_mode_atmosphere()
+	lighting = preload("res://scripts/lighting.gd").new()
+	add_child(lighting)
+	lighting.setup(self)
 
 	hud = HudScript.new()
 	add_child(hud)
@@ -197,7 +210,7 @@ func _process(delta: float) -> void:
 	_flicker -= delta
 	if _flicker <= 0.0 and rng.randf() < delta * 0.35:
 		_flicker = rng.randf_range(0.05, 0.18)
-	world_tint.color = Mode.world_modulate() * (0.6 if _flicker > 0.0 else 1.0)
+	world_tint.color = Mode.world_modulate() * ambient * (0.6 if _flicker > 0.0 else 1.0)
 	world_tint.color.a = 1.0
 
 
@@ -298,6 +311,9 @@ func _physics_process(delta: float) -> void:
 				Sfx.play("go")
 		State.PLAYING:
 			time_left -= delta
+			active_time += delta
+			if Engine.time_scale != 1.0 or Engine.physics_ticks_per_second != 60 or Settings.dev_flags:
+				speed_tampered = true
 			_update_ducks(delta)
 			_update_crane(delta)
 			if doom != null:
@@ -370,6 +386,10 @@ func _spawn_bomb(bear, c: Vector2i, proximity := false) -> void:
 	bombs.append(b)
 	arena.bombs[c] = b
 	bear.active_bombs += 1
+	# the bear visibly sets it down: a short pose, and the bomb drops from its paws
+	if bear.visual != null:
+		bear.visual.place_bomb()
+	b.place_from = bear.position + Vector2(bear.facing.x * 8.0, -16.0) - b.position
 
 
 ## Cells a blast from `origin` would cover (stops at walls, includes the first block).
@@ -570,10 +590,30 @@ func _apply_blast(origin: Vector2i, hit: Array, segs: Array, chain: Array, confe
 	_confetti(arena.cell_center(origin), confetti)
 	for i in range(1, hit.size(), 2):
 		_confetti(arena.cell_center(hit[i]), 2)
+	event("blast", {"cell": origin, "size": hit.size()})
+	var chained := 0
 	for other in chain:
 		if is_instance_valid(other) and not other.exploded:
 			other.fuse = minf(other.fuse, 0.06)
+			chained += 1
+	if chained > 0:
+		event("chain", {"owner": owner, "count": chained + 1})
+	# a whisker away: a bear brushing the blast whose tile stayed clear
+	var hitset := {}
+	for c in hit:
+		hitset[c] = true
+	for b in bears:
+		if b.eliminated or b.is_stunned() or hitset.has(b.cell()):
+			continue
+		for c in hit:
+			if b.position.distance_to(arena.cell_center(c)) < arena.T * 0.8:
+				event("close_escape", {"bear": b, "owner": owner})
+				break
 	_hit_bears(hit, origin, owner, knock)
+
+
+func event(kind: String, data: Dictionary = {}) -> void:
+	game_event.emit(kind, data)
 
 
 func _update_flames(delta: float) -> void:
@@ -594,9 +634,11 @@ func _hit_bears(cells: Array, origin: Vector2i, owner, knock: bool) -> void:
 	var zone := {}
 	for c in cells:
 		zone[c] = true
+	var victims := 0
 	for b in bears:
 		if not zone.has(b.cell()) or b.is_stunned() or b.immune_t > 0.0:
 			continue
+		victims += 1
 		b.last_hit_by = owner
 		b.stun(arena.cell_center(origin))
 		if b.is_stunned():
@@ -607,6 +649,9 @@ func _hit_bears(cells: Array, origin: Vector2i, owner, knock: bool) -> void:
 				owner.bomb_hits += 1
 			elif owner == b:
 				b.self_hits += 1
+				event("self_hit", {"bear": b})
+	if victims >= 2:
+		event("multi_hit", {"owner": owner, "count": victims})
 	# the princess is driven off by a blast on her tile
 	if princess != null and is_instance_valid(princess) and princess.on_ground() and zone.has(princess.cell()):
 		princess.blasted()
@@ -753,11 +798,13 @@ func start_clown() -> void:
 		return
 	clown = clown_box
 	clown_box.trigger()
+	event("clown")
 	hud.toast("Something is rattling...", Color(0.7, 0.1, 0.12))
 
 
 ## The clown's mallet lands on `bear`.
 func clown_hit(bear, at: Vector2) -> void:
+	event("clown_hit", {"bear": bear})
 	arena.add_shake(10.0)
 	Sfx.play("clown_hammer")
 	Sfx.play("impact", randf_range(0.9, 1.0), -1.0)
@@ -781,6 +828,7 @@ func start_princess() -> void:
 	princess = PrincessHunt.new()
 	bear_layer.add_child(princess)   # y-sorted with the bears
 	princess.setup(self)
+	event("princess")
 
 
 ## Her one shot. A blank against an immortal/immune bear; otherwise a long
@@ -792,6 +840,7 @@ func on_princess_shot(p, b, blank: bool) -> void:
 		return
 	Sfx.play("shotgun_hit")
 	Sfx.play("impact", 0.85, -2.0)
+	event("princess_shot", {"bear": b})
 	var was: bool = b.is_stunned()
 	b.last_hit_by = null
 	b.stun(p.position)
@@ -1010,6 +1059,7 @@ func start_duck_parade() -> void:
 	parade = DuckParade.new()
 	duck_layer.add_child(parade)
 	parade.setup(self, walls[rng.randi() % walls.size()])
+	event("duck")
 	hud.banner("Doom Duck Parade!", 1.6)
 
 
@@ -1101,6 +1151,15 @@ func compute_danger(level: int, asker = null) -> Dictionary:
 			continue   # an untripped proximity bomb with nobody around to trip it
 		for c in blast_cells(b.cell, b.blast_range):
 			d[c] = minf(d.get(c, 999.0), times[b])
+		if b.is_moving():
+			# a sliding bomb: it may go off anywhere along its path
+			var c2: Vector2i = b.cell
+			for _k in 8:
+				c2 += b.move_dir
+				if arena.is_solid(c2) or arena.bombs.has(c2):
+					break
+				for c in blast_cells(c2, b.blast_range):
+					d[c] = minf(d.get(c, 999.0), times[b])
 	# Time of Doom: a flashing ring is about to become solid.
 	if doom != null:
 		var w: Dictionary = doom.warning_cells()
@@ -1280,7 +1339,7 @@ func infect(b) -> void:
 
 ## Reverse Controls is contagious: bumping into a cursed bear passes it on.
 func _update_contagion() -> void:
-	if state != State.PLAYING or not Settings.diseases:
+	if state != State.PLAYING or not Settings.rule("diseases"):
 		return
 	var reach: float = Tuning.INFECT_DIST * arena.T
 	for a in bears:
@@ -1381,6 +1440,7 @@ var shuffle_t := 0.0
 var shuffle_plan := {}   # Vector2i -> terrain applied while the shuffle is active
 
 func biome_shuffle() -> void:
+	event("shuffle")
 	Sfx.play("shuffle")
 	var pick: Array = SHUFFLE_BIOMES[rng.randi() % SHUFFLE_BIOMES.size()]
 	var biome: int = pick[0]
@@ -1516,10 +1576,10 @@ func _update_shuffles(delta: float) -> void:
 
 ## A bear stuffed past the threshold wins on the spot.
 func _check_instant_win() -> void:
-	if Settings.instant_win <= 0.0:
+	if Settings.rule("instant_win") <= 0.0:
 		return
 	for b in bears:
-		if b.fluff >= Settings.instant_win:
+		if b.fluff >= Settings.rule("instant_win"):
 			hud.banner("%s is stuffed to bursting!" % b.bear_name, 2.0)
 			_end_match(b)
 			return
@@ -1568,6 +1628,10 @@ func _end_match(instant_winner = null) -> void:
 	if instant_winner != null:   # the bear that hit the threshold is the winner, full stop
 		ranking.erase(instant_winner)
 		ranking.push_front(instant_winner)
+	final_order = ranking
+	event("match_end", {"winner": ranking[0], "ranking": ranking})
+	if session != null:
+		session.on_match_end(self, ranking, instant_winner)
 	# a human who didn't win hears one of the supplied "you lost" stings instead
 	var humans := bears.filter(func(b): return b.is_human)
 	if not humans.is_empty() and not ranking[0].is_human and Sfx.has_recording("defeat"):

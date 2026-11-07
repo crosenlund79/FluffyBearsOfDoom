@@ -25,6 +25,12 @@ var diseases := true      # Reverse Controls and Bomb Diarrhea can drop (off = n
 var instant_win: float = preload("res://scripts/tuning.gd").INSTANT_WIN_FLUFF   # fluff that ends a round at once (0 = off)
 var match_seed := 0       # (not saved) fixed seed for the arena + power-ups; 0 = random
 var spawn_rotation := 0   # (not saved) shifts which bear starts in which corner (AI testing)
+var match_rules := {}     # (not saved) rule overrides for one match (tournament): arena_index, round_time_index, instant_win, diseases
+var roster_override: Array = []   # (not saved) tournament / spectator line-up; empty = the menu's set-up
+var commentary := true    # tournament and spectator commentary
+var lighting := "high"    # "high", "low" or "off": 2D lighting quality
+var player_name := "Player"   # shown on tournament leaderboards
+var dev_flags := false    # (not saved) a developer/test switch was used: no leaderboard records
 var key_overrides := {}   # action -> [[physical keycode, location], ...] chosen in Settings > Controls
 const MODES := ["normal", "horror", "custom"]
 var mode := "normal"  # "normal", "horror" or "custom": same gameplay, different look (and sound)
@@ -121,7 +127,14 @@ func _bind_keys(action: String) -> void:
 
 
 ## The four bears of the next match: [{name, color, controller, schemes}].
+## A match rule: the tournament's fixed value if one is set, else the menu setting.
+func rule(key: String):
+	return match_rules.get(key, get(key))
+
+
 func roster() -> Array:
+	if not roster_override.is_empty():
+		return roster_override.slice(0, 4)   # strictly four bears
 	var out := []
 	if human_count == 0:  # demo / smoke test: a Hard AI plays the player's bear
 		out.append({"name": "Player", "color": HUMAN_COLORS[0], "controller": "hard", "schemes": []})
@@ -147,7 +160,7 @@ func apply_input_bindings() -> void:
 		jb.button_index = GLOBAL_PADS[a]
 		jb.device = -1
 		InputMap.action_add_event(a, jb)
-	var solo := human_count <= 1
+	var solo: bool = rule("human_count") <= 1
 	for p in 2:
 		for a in ACTIONS:
 			var action := "p%d_%s" % [p + 1, a]
@@ -217,7 +230,8 @@ func _set_bus(bus: String, v: float) -> void:
 func save() -> void:
 	var cf := ConfigFile.new()
 	for k in ["master_volume", "music_volume", "sfx_volume", "muted", "shuffle_music", "human_count",
-			"ai_levels", "sitting_out", "arena_index", "round_time_index", "mode", "bear_outlines", "instant_win", "key_overrides", "diseases"]:
+			"ai_levels", "sitting_out", "arena_index", "round_time_index", "mode", "bear_outlines", "instant_win", "key_overrides", "diseases",
+			"commentary", "lighting", "player_name"]:
 		cf.set_value("settings", k, get(k))
 	cf.save(SAVE_PATH)
 

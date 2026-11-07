@@ -21,7 +21,16 @@ var game
 var arena
 var controller
 
-var fluff: float = Tuning.START_FLUFF
+var fluff: float = Tuning.START_FLUFF:
+	set(v):
+		# every change is booked once: losses are never erased by later gains
+		if v < fluff:
+			fluff_lost += fluff - v
+		elif v > fluff:
+			fluff_gained += v - fluff
+		fluff = v
+var fluff_lost := 0.0     # stats: stuffing lost this round (stolen, blown out, spilled)
+var fluff_gained := 0.0   # stats: stuffing collected this round
 var velocity := Vector2.ZERO
 var facing := Vector2.DOWN
 
@@ -597,7 +606,10 @@ func _sweep(axis: int, amount: float, allow_kick := true) -> bool:
 		if absf(position[perp] - kicked.position[perp]) < 14.0:
 			var d := Vector2i.ZERO
 			d[axis] = 1 if amount > 0.0 else -1
-			kicked.kick(d)
+			if not kicked.is_moving():
+				kicked.kick(d)
+				if kicked.is_moving():
+					game.event("kick", {"bear": self, "owner": kicked.owner_bear})
 	return hit
 
 
